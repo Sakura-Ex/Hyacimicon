@@ -1,0 +1,374 @@
+{
+  "schema_version": 1,
+  "game_version": "4.7.0",
+  "metadata": {
+    "public_source": "https://wiki.biligame.com/sr/货币战争",
+    "public_revision": "98543",
+    "retrieved_on": "2026-11-11",
+    "local_client_build": "20261029-0309-V4.7Live",
+    "validation_status": "部分验证",
+    "assumptions": [
+      "商店刷新费用、购买经验比例、基础金币、失败扣血和未在 Wiki 明确列出的经济常量使用模拟假设值。",
+      "抽象战斗胜率只用于比较运营策略，不代表战斗引擎结果。",
+      "节点顺序使用 5 奖励、9 战斗、3 遭遇、3 首领的公开统计模板，具体顺序待实测。",
+      "角色强度使用费用和星级折算；羁绊强度使用通用占位公式，具体角色与羁绊数值待数据仓库接入。"
+    ]
+  },
+  "difficulties": [
+    {
+      "id": "training",
+      "name": "训练",
+      "base_enemy_rating": 3.0,
+      "rating_per_node": 2.2,
+      "affix_count": 0
+    },
+    {
+      "id": "standard",
+      "name": "标准",
+      "base_enemy_rating": 4.2,
+      "rating_per_node": 2.8,
+      "affix_count": 2
+    },
+    {
+      "id": "advanced",
+      "name": "进阶",
+      "base_enemy_rating": 5.4,
+      "rating_per_node": 3.4,
+      "affix_count": 4
+    },
+    {
+      "id": "expert",
+      "name": "专家",
+      "base_enemy_rating": 6.8,
+      "rating_per_node": 4.0,
+      "affix_count": 6
+    },
+    {
+      "id": "apex",
+      "name": "极限",
+      "base_enemy_rating": 8.2,
+      "rating_per_node": 4.6,
+      "affix_count": 8
+    }
+  ],
+  "units": [
+    {"id": "huohuo", "name": "藿藿", "cost": 1, "position": "flex", "tags": ["治疗", "辅助"], "traits": ["仙舟", "治疗", "能量"]},
+    {"id": "herta", "name": "黑塔", "cost": 1, "position": "flex", "tags": ["输出"], "traits": ["群攻", "银河学者"]},
+    {"id": "feixiao", "name": "飞霄", "cost": 1, "position": "front", "tags": ["输出"], "traits": ["狼狩", "追击"]},
+    {"id": "qingque", "name": "青雀", "cost": 1, "position": "front", "tags": ["输出"], "traits": ["仙舟", "战技点"]},
+    {"id": "gallagher", "name": "加拉赫", "cost": 1, "position": "flex", "tags": ["治疗"], "traits": ["击破", "治疗", "盛会之星"]},
+    {"id": "jade", "name": "翡翠", "cost": 1, "position": "back", "tags": ["输出", "辅助"], "traits": ["公司", "群攻"]},
+    {"id": "dan_heng_imbibitor", "name": "丹恒•饮月", "cost": 2, "position": "front", "tags": ["输出"], "traits": ["仙舟", "列车同行", "战技点"]},
+    {"id": "aventurine", "name": "砂金", "cost": 2, "position": "front", "tags": ["护盾", "输出"], "traits": ["公司", "护盾", "追击"]},
+    {"id": "sparkle", "name": "花火", "cost": 2, "position": "back", "tags": ["辅助"], "traits": ["战技点", "盛会之星", "量子同频"]},
+    {"id": "ruan_mei", "name": "阮•梅", "cost": 2, "position": "back", "tags": ["辅助"], "traits": ["击破", "银河学者"]},
+    {"id": "tribbie", "name": "缇宝", "cost": 2, "position": "flex", "tags": ["辅助", "输出"], "traits": ["昼之半神", "群攻", "量子同频"]},
+    {"id": "kafka", "name": "卡芙卡", "cost": 2, "position": "flex", "tags": ["输出", "辅助"], "traits": ["持续伤害", "星核猎手"]},
+    {"id": "jingliu", "name": "镜流", "cost": 3, "position": "back", "tags": ["输出"], "traits": ["燃血", "狼狩"]},
+    {"id": "huangquan", "name": "黄泉", "cost": 3, "position": "front", "tags": ["输出"], "traits": ["减益", "巡海游侠"]},
+    {"id": "sunday", "name": "星期日", "cost": 3, "position": "flex", "tags": ["辅助"], "traits": ["列车同行", "盛会之星", "能量"]},
+    {"id": "fugue", "name": "忘归人", "cost": 3, "position": "back", "tags": ["辅助", "输出"], "traits": ["仙舟", "击破"]},
+    {"id": "ratio", "name": "真理医生", "cost": 3, "position": "front", "tags": ["输出"], "traits": ["星间旅人", "追击", "银河学者"]},
+    {"id": "himeko", "name": "姬子", "cost": 3, "position": "back", "tags": ["输出"], "traits": ["击破", "列车同行"]},
+    {"id": "the_herta", "name": "大黑塔", "cost": 4, "position": "front", "tags": ["输出"], "traits": ["群攻", "银河学者"]},
+    {"id": "robin", "name": "知更鸟", "cost": 4, "position": "back", "tags": ["辅助", "输出"], "traits": ["盛会之星", "追击"]},
+    {"id": "luocha", "name": "罗刹", "cost": 4, "position": "back", "tags": ["治疗", "辅助"], "traits": ["星间旅人", "治疗"]},
+    {"id": "silver_wolf", "name": "银狼", "cost": 4, "position": "flex", "tags": ["辅助", "输出"], "traits": ["星核猎手", "量子同频"]},
+    {"id": "bronya", "name": "布洛妮娅", "cost": 5, "position": "front", "tags": ["辅助", "输出"], "traits": ["大守护者", "燃血", "贝洛伯格"]},
+    {"id": "topaz_numby", "name": "托帕&账账", "cost": 5, "position": "back", "tags": ["输出", "辅助"], "traits": ["公司", "追击"]},
+    {"id": "jingyuan", "name": "景元", "cost": 5, "position": "front", "tags": ["输出"], "traits": ["仙舟", "群攻"]},
+    {"id": "black_swan", "name": "黑天鹅", "cost": 5, "position": "back", "tags": ["输出", "辅助"], "traits": ["命运卜者", "持续伤害", "盛会之星"]},
+    {"id": "firefly", "name": "流萤", "cost": 5, "position": "front", "tags": ["输出"], "traits": ["击破", "星核猎手"]},
+    {"id": "cyrene", "name": "昔涟", "cost": 5, "position": "front", "tags": ["辅助", "输出"], "traits": ["夜之半神", "挚爱之人", "昼之半神"]}
+  ],
+  "affixes": [
+    {
+      "id": "boss_boost",
+      "name": "首领强化",
+      "description": "首领敌人获得强化，速度提高60%，生命上限提高30%。",
+      "effect": {"enemy_rating_multiplier": 1.1}
+    },
+    {
+      "id": "minion_boost",
+      "name": "随从强化",
+      "description": "普通和精英敌人获得强化，速度提高30%，生命上限提高20%。",
+      "effect": {"enemy_rating_multiplier": 1.06}
+    },
+    {
+      "id": "plane1_boost",
+      "name": "第一位面强化",
+      "description": "第一位面中的敌人获得强化，速度提高20%，生命上限提高20%。",
+      "effect": {"plane_enemy_rating_multipliers": [1.06, 1.0, 1.0]}
+    },
+    {
+      "id": "plane2_boost",
+      "name": "第二位面强化",
+      "description": "第二位面中的敌人获得强化，速度提高40%，生命上限提高25%。",
+      "effect": {"plane_enemy_rating_multipliers": [1.0, 1.08, 1.0]}
+    },
+    {
+      "id": "plane3_boost",
+      "name": "第三位面强化",
+      "description": "第三位面中的敌人获得强化，速度提高60%，生命上限提高30%。",
+      "effect": {"plane_enemy_rating_multipliers": [1.0, 1.0, 1.1]}
+    },
+    {
+      "id": "bad_start",
+      "name": "开局不利",
+      "description": "游戏开始时，小队生命值减少20点。",
+      "effect": {"initial_health_delta": -20}
+    },
+    {
+      "id": "growth_trouble",
+      "name": "成长的烦恼",
+      "description": "在你达到8级后，每次购买经验会损失1金币。",
+      "effect": {"xp_extra_cost_after_level": 8, "xp_extra_cost": 1}
+    },
+    {
+      "id": "weak_equipment",
+      "name": "软弱无力",
+      "description": "没有穿戴3件装备的角色及其忆灵，造成的伤害为原伤害的80%。",
+      "effect": {"team_power_multiplier": 0.9}
+    },
+    {
+      "id": "inactive_traits",
+      "name": "形单影只",
+      "description": "角色拥有未激活羁绊时，造成的伤害降低。",
+      "effect": {"team_power_multiplier": 0.9}
+    },
+    {
+      "id": "rusty_stock",
+      "name": "库藏生锈",
+      "description": "未被穿戴的装备会强化敌人。",
+      "effect": {"enemy_rating_multiplier": 1.04, "team_power_multiplier": 0.97}
+    },
+    {
+      "id": "low_cost_aesthetic",
+      "name": "低费审美",
+      "description": "3费及以下角色造成105%伤害，4费及以上角色造成80%伤害。",
+      "effect": {"cost_power_multipliers": [1.05, 1.05, 1.05, 0.8, 0.8]}
+    },
+    {
+      "id": "high_cost_aesthetic",
+      "name": "高费审美",
+      "description": "3费及以下角色造成80%伤害，4费及以上角色造成105%伤害。",
+      "effect": {"cost_power_multipliers": [0.8, 0.8, 0.8, 1.05, 1.05]}
+    },
+    {
+      "id": "star_bias",
+      "name": "区别对待",
+      "description": "1/2/3星及以上队员造成80%/90%/105%伤害。",
+      "effect": {"star_power_multipliers": [0.8, 0.9, 1.05]}
+    },
+    {
+      "id": "thick_hide",
+      "name": "皮糙肉厚",
+      "description": "未被击破时，敌方目标受到的伤害降低30%。",
+      "effect": {"enemy_rating_multiplier": 1.12}
+    },
+    {
+      "id": "lost_luck",
+      "name": "丢失幸运",
+      "description": "我方小队的幸运一击率降低25%。",
+      "effect": {"team_power_multiplier": 0.92}
+    },
+    {
+      "id": "extra_strike",
+      "name": "额外打击",
+      "description": "空缺装备栏会让角色受到额外真实伤害。",
+      "effect": {"team_power_multiplier": 0.94}
+    }
+  ],
+  "environments": [
+    {
+      "id": "talent_entry",
+      "name": "人才引进",
+      "description": "开局拥有1个随机4费角色。",
+      "effect": {"starting_unit_cost": 4, "starting_unit_count": 1}
+    },
+    {
+      "id": "talent_reserve",
+      "name": "人才储备",
+      "description": "开局补给替换为3个随机3费角色。",
+      "effect": {"starting_unit_cost": 3, "starting_unit_count": 3}
+    },
+    {
+      "id": "first_prize",
+      "name": "头彩",
+      "description": "第一个投资策略是棱彩品质。",
+      "effect": {"first_strategy_rarity": "prismatic"}
+    },
+    {
+      "id": "silver_age",
+      "name": "白银时代",
+      "description": "本局的投资策略均为白银品质，因此敌人难度不会由于高品质策略提高。",
+      "effect": {"strategy_rarity_mode": "silver"}
+    },
+    {
+      "id": "golden_age",
+      "name": "黄金时代",
+      "description": "本局的投资策略均为黄金品质。",
+      "effect": {"strategy_rarity_mode": "gold"}
+    },
+    {
+      "id": "rainbow_age",
+      "name": "彩虹时代",
+      "description": "本局的投资策略均为棱彩品质。",
+      "effect": {"strategy_rarity_mode": "prismatic"}
+    },
+    {
+      "id": "currency_issue",
+      "name": "增发货币",
+      "description": "第一/二/三位面开始时，获得6/8/12金币。",
+      "effect": {"plane_gold": [6, 8, 12]}
+    },
+    {
+      "id": "overheated_economy",
+      "name": "经济过热",
+      "description": "奖励节点替换为次元扑满主题并提升战利品收益。",
+      "effect": {"reward_multiplier": 1.25}
+    },
+    {
+      "id": "rear_sabotage",
+      "name": "敌后破坏",
+      "description": "开局时使一个已生成的敌人词缀失效。",
+      "effect": {"remove_random_affix": true}
+    },
+    {
+      "id": "evolution_algorithm",
+      "name": "进化算法",
+      "description": "进入新节点时，场上角色持续获得强度与伤害减免。",
+      "effect": {"team_power_per_node": 0.04}
+    }
+  ],
+  "investments": [
+    {
+      "id": "task_force_funding",
+      "name": "特战资金",
+      "rarity": "silver",
+      "planes": [1],
+      "description": "进入首领节点时，获得7枚金币。",
+      "effect": {"boss_gold": 7}
+    },
+    {
+      "id": "xp_arrival",
+      "name": "经验到账",
+      "rarity": "silver",
+      "planes": [1],
+      "description": "获得10经验值。",
+      "effect": {"xp": 10}
+    },
+    {
+      "id": "free_lunch",
+      "name": "免费午餐",
+      "rarity": "silver",
+      "planes": [2, 3],
+      "description": "获得11次免费刷新。",
+      "effect": {"free_rerolls": 11}
+    },
+    {
+      "id": "deposit_return",
+      "name": "存款回报",
+      "rarity": "silver",
+      "planes": [1],
+      "description": "每次进入新节点时，如果上个节点没有花费金币，则获得2次免费刷新。",
+      "effect": {"idle_node_free_rerolls": 2}
+    },
+    {
+      "id": "final_payment",
+      "name": "尾款交付",
+      "rarity": "silver",
+      "planes": [1, 2],
+      "description": "进入最后一个补给阶段后，获得30金币。",
+      "effect": {"last_supply_gold": 30}
+    },
+    {
+      "id": "victory_after_victory",
+      "name": "胜利，还是胜利",
+      "rarity": "silver",
+      "planes": [1],
+      "description": "使当前连胜数变为4。获得4金币。",
+      "effect": {"set_streak": 4, "gold": 4}
+    },
+    {
+      "id": "growth_fund",
+      "name": "成长基金",
+      "rarity": "silver",
+      "planes": [1, 2],
+      "description": "在你到达9级时，提供40金币。",
+      "effect": {"level_goal": 9, "level_goal_gold": 40}
+    },
+    {
+      "id": "lying_flat",
+      "name": "躺平",
+      "rarity": "silver",
+      "planes": [1],
+      "description": "无法在商店购买角色和刷新，持续3个节点；随后获得20金币。",
+      "effect": {"lock_purchase_nodes": 3, "deferred_gold": 20}
+    },
+    {
+      "id": "long_termism",
+      "name": "长期主义",
+      "rarity": "gold",
+      "planes": [2],
+      "description": "现在及接下来3次进入新节点时，每次获得7金币。",
+      "effect": {"node_gold": 7, "node_gold_steps": 3}
+    },
+    {
+      "id": "gas_station",
+      "name": "加油站",
+      "rarity": "gold",
+      "planes": [1],
+      "description": "现在及每次进入新节点时获得1次免费刷新，立刻获得8金币。",
+      "effect": {"gold": 8, "free_rerolls": 1, "node_free_rerolls": 1}
+    },
+    {
+      "id": "delayed_income",
+      "name": "延迟收益",
+      "rarity": "gold",
+      "planes": [1, 2, 3],
+      "description": "在战斗开始100行动值后，我方小队伤害增幅提高40%。",
+      "effect": {"team_power_multiplier": 1.15}
+    },
+    {
+      "id": "fixed_finance",
+      "name": "固定理财",
+      "rarity": "gold",
+      "planes": [1],
+      "description": "现在获得4经验值和2次免费刷新，之后每个位面开始时重复获得。",
+      "effect": {"xp": 4, "free_rerolls": 2, "plane_xp": 4, "plane_free_rerolls": 2}
+    },
+    {
+      "id": "streamline",
+      "name": "开源节流",
+      "rarity": "prismatic",
+      "planes": [1],
+      "description": "获得10金币，利息上限提升至9；未花费金币的节点获得最大利息。",
+      "effect": {"gold": 10, "interest_cap": 9, "idle_node_gold_from_interest": true}
+    },
+    {
+      "id": "probability_event",
+      "name": "概率事件",
+      "rarity": "prismatic",
+      "planes": [1, 2, 3],
+      "description": "刷新时有45%概率获得一次免费刷新。",
+      "effect": {"free_reroll_chance": 0.45}
+    },
+    {
+      "id": "non_equivalent_exchange",
+      "name": "不等价交换",
+      "rarity": "prismatic",
+      "planes": [1, 2, 3],
+      "description": "交换你的小队生命值和金币。",
+      "effect": {"swap_health_gold": true}
+    },
+    {
+      "id": "business_espionage",
+      "name": "商业间谍",
+      "rarity": "prismatic",
+      "planes": [1],
+      "description": "购买经验花费减少1金币，升级时刷新商店。",
+      "effect": {"xp_cost_delta": -1}
+    }
+  ]
+}

@@ -12,9 +12,19 @@ hsr-currency-wars-ai/
 │   ├── development/                    # 通用开发、协作与目录约定
 │   └── modules/
 │       ├── README.md                   # 模块目录
-│       └── account-generation/         # 账号与遗器数据的设计资料
-│           ├── README.md               # 模块总览和阅读入口
-│           └── design.md               # 现有数据设计与首个样例约定
+│       ├── account-generation/         # 账号与遗器数据的设计资料
+│       │   ├── README.md               # 模块总览和阅读入口
+│       │   └── design.md               # 现有数据设计与首个样例约定
+│       └── operations-simulation/      # 不含作战过程的运营模拟
+│           ├── README.md               # 模块范围、运行和验证入口
+│           ├── design.md               # 状态、规则、接口和扩展方式
+│           └── data-provenance.md      # 版本、来源与验证状态
+├── examples/
+│   └── operations/                     # 运营模拟运行示例
+├── research/
+│   └── operations/                     # 运营环境、市场、投资和基础策略
+├── tests/
+│   └── operations/                     # 运营规则与回放测试
 ├── AGENTS.md                           # 项目协作规则
 ├── README.md                           # 英文项目入口
 ├── README.zh-CN.md                     # 简体中文项目入口
