@@ -186,7 +186,6 @@ class GameRules:
     interest_step_gold: int
     interest_cap: int
     base_battle_gold: int
-    battle_temperature: float
     shop_odds: tuple[tuple[float, float, float, float, float], ...]
     xp_to_next_level: tuple[int, ...]
     card_copies_by_cost: tuple[int, int, int, int, int]
@@ -238,7 +237,8 @@ class NodeResult:
     node_index: int
     node_type: NodeType
     won: bool
-    win_probability: float
+    battle_progress: int
+    battle_provider: str
     team_power: float
     enemy_rating: float
     health_delta: int
@@ -266,7 +266,8 @@ class RunObservation:
     active_units: tuple[UnitInstance, ...]
     roster: tuple[UnitInstance, ...]
     team_power: float
-    win_probability: float
+    last_battle_progress: int | None
+    last_battle_provider: str | None
     selected_investments: tuple[str, ...]
     investment_offers: tuple[str, ...]
     affixes: tuple[str, ...]

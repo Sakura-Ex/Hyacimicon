@@ -3,6 +3,7 @@
 import random
 from dataclasses import dataclass
 
+from .battle_progress import FixedBattleProgressProvider
 from .environment import OperationEnvironment
 from .market import MarketActionError
 from .models import Investment, RulePack
@@ -49,6 +50,7 @@ def run_greedy(
     environment_id: str | None,
     seed: int,
     affix_ids: tuple[str, ...] | None = None,
+    battle_progress: int = 100,
 ) -> OperationEnvironment:
     """运行一局贪心运营策略，返回完整可回放环境。"""
 
@@ -59,6 +61,7 @@ def run_greedy(
         difficulty_id=difficulty_id,
         environment_id=environment_id,
         affix_ids=affix_ids,
+        battle_progress=FixedBattleProgressProvider(battle_progress),
     )
     while not env.ended:
         _choose_investment(env)
@@ -74,6 +77,7 @@ def run_batch(
     environment_id: str | None,
     runs: int,
     seed: int,
+    battle_progress: int = 100,
 ) -> SimulationSummary:
     """用连续随机种子评估贪心策略。"""
 
@@ -85,6 +89,7 @@ def run_batch(
             difficulty_id=difficulty_id,
             environment_id=environment_id,
             seed=seed + offset,
+            battle_progress=battle_progress,
         )
         for offset in range(runs)
     ]

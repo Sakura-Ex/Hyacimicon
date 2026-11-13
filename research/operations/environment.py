@@ -1,9 +1,14 @@
 """不含战斗过程的整局运营环境。"""
 
-import math
 import random
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from .battle_progress import (
+    BattleContext,
+    BattleProgressProvider,
+    FixedBattleProgressProvider,
+)
 from .investments import InvestmentActionError, InvestmentEngine
 from .market import Market
 from .models import (
@@ -45,6 +50,7 @@ class OperationEnvironment:
     difficulty_id: str
     environment_id: str | None = None
     affix_ids: tuple[str, ...] | None = None
+    battle_progress: BattleProgressProvider = field(default_factory=FixedBattleProgressProvider)
     market: Market = field(init=False)
     investments: InvestmentEngine = field(init=False)
     health: int = field(init=False)
@@ -67,6 +73,8 @@ class OperationEnvironment:
     results: list[NodeResult] = field(init=False, default_factory=list)
     ended: bool = field(init=False, default=False)
     won: bool = field(init=False, default=False)
+    last_battle_progress: int | None = field(init=False, default=None)
+    last_battle_provider: str | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         if self.difficulty_id not in self.pack.difficulties:
@@ -124,15 +132,21 @@ class OperationEnvironment:
         node_type = self.pack.rules.node_types[self.node_index]
         return NodeDefinition(self.node_index, self._plane_for_node(self.node_index), node_type)
 
+    @property
+    def node_template(self) -> tuple[NodeDefinition, ...]:
+        """返回整局节点模板，供网页显示路线。"""
+
+        return tuple(
+            NodeDefinition(index, self._plane_for_node(index), node_type)
+            for index, node_type in enumerate(self.pack.rules.node_types)
+        )
+
     def observe(self) -> RunObservation:
         """返回策略可见状态。"""
 
         active_units = self.active_units()
         team_power = self.team_power()
         node = self.current_node if not self.ended else None
-        win_probability = (
-            0.0 if node is None else self.win_probability(team_power, self.enemy_rating(node))
-        )
         return RunObservation(
             node_index=self.node_index,
             node_type=NodeType.BOSS if node is None else node.node_type,
@@ -150,7 +164,8 @@ class OperationEnvironment:
             active_units=active_units,
             roster=self.market.roster.instances(),
             team_power=team_power,
-            win_probability=win_probability,
+            last_battle_progress=self.last_battle_progress,
+            last_battle_provider=self.last_battle_provider,
             selected_investments=tuple(
                 investment.investment_id for investment in self.investments.selected
             ),
@@ -188,13 +203,13 @@ class OperationEnvironment:
     def sell_unit(self, unit_id: str, star: int) -> None:
         """出售角色并把卡牌归还牌池。"""
 
-        self._ensure_active()
+        self._ensure_market_phase()
         self.gold = self.market.sell_unit(unit_id, star, self.gold)
 
     def buy_xp(self, purchase_count: int = 1) -> tuple[int, ...]:
         """购买经验，返回本次达到的等级。"""
 
-        self._ensure_active()
+        self._ensure_market_phase()
         extra_cost = sum(
             affix.effect.xp_extra_cost
             for affix in self.affixes
@@ -232,8 +247,26 @@ class OperationEnvironment:
         node = self.current_node
         team_power = self.team_power()
         enemy_rating = self.enemy_rating(node)
-        probability = self.win_probability(team_power, enemy_rating)
-        won = self.rng.random() < probability
+        battle = self.battle_progress.resolve(
+            BattleContext(
+                node_index=node.index,
+                node_type=node.node_type,
+                plane=node.plane,
+                health=self.health,
+                gold=self.gold,
+                level=self.market.level,
+                streak=self.streak,
+                team_power=team_power,
+                enemy_rating=enemy_rating,
+                active_units=self.active_units(),
+                difficulty_id=self.difficulty_id,
+                affix_ids=tuple(affix.affix_id for affix in self.affixes),
+                investment_ids=tuple(
+                    investment.investment_id for investment in self.investments.selected
+                ),
+            )
+        )
+        won = battle.progress_percent == 100
 
         old_health = self.health
         old_gold = self.gold
@@ -263,7 +296,8 @@ class OperationEnvironment:
             node_index=self.node_index,
             node_type=node.node_type,
             won=won,
-            win_probability=probability,
+            battle_progress=battle.progress_percent,
+            battle_provider=battle.provider_id,
             team_power=team_power,
             enemy_rating=enemy_rating,
             health_delta=self.health - old_health,
@@ -271,6 +305,8 @@ class OperationEnvironment:
             streak_after=self.streak,
         )
         self.results.append(result)
+        self.last_battle_progress = battle.progress_percent
+        self.last_battle_provider = battle.provider_id
 
         is_final_node = self.node_index == len(self.pack.rules.node_types) - 1
         if self.health <= 0 or is_final_node:
@@ -312,7 +348,7 @@ class OperationEnvironment:
         trait_power = sum(
             min(2.0, (count - 1) * 0.45) for count in trait_counts.values() if count >= 2
         )
-        affix_team_multiplier = math.prod(
+        affix_team_multiplier = self._product(
             affix.effect.team_power_multiplier for affix in self.affixes
         )
         return (
@@ -333,7 +369,7 @@ class OperationEnvironment:
             NodeType.ENCOUNTER: 1.2,
             NodeType.BOSS: 1.5,
         }[node.node_type]
-        affix_multiplier = math.prod(
+        affix_multiplier = self._product(
             affix.effect.enemy_rating_multiplier
             * affix.effect.plane_enemy_rating_multipliers[node.plane - 1]
             for affix in self.affixes
@@ -341,27 +377,24 @@ class OperationEnvironment:
         base = difficulty.base_enemy_rating + node.index * difficulty.rating_per_node
         return max(0.1, base * node_multiplier * affix_multiplier + self.enemy_rating_adjustment)
 
-    def win_probability(self, team_power: float, enemy_rating: float) -> float:
-        """用平滑比较器把阵容强度差转换为抽象胜率。"""
-
-        ratio = team_power / enemy_rating
-        exponent = self.pack.rules.battle_temperature * (ratio - 1.0)
-        if exponent >= 0:
-            return 1.0 / (1.0 + math.exp(-exponent))
-        exp_value = math.exp(exponent)
-        return exp_value / (1.0 + exp_value)
-
     def _unit_power(self, unit: UnitInstance) -> float:
         definition = self.pack.units.get(unit.unit_id)
         if definition is None:
             raise ValueError(f"未知角色：{unit.unit_id}")
-        affix_cost = math.prod(
+        affix_cost = self._product(
             affix.effect.cost_power_multipliers[definition.cost - 1] for affix in self.affixes
         )
-        affix_star = math.prod(
+        affix_star = self._product(
             affix.effect.star_power_multipliers[min(unit.star, 3) - 1] for affix in self.affixes
         )
         return definition.cost * (1.0 + (unit.star - 1) * 1.5) * affix_cost * affix_star
+
+    @staticmethod
+    def _product(values: Iterable[float]) -> float:
+        result = 1.0
+        for value in values:
+            result *= value
+        return result
 
     def _apply_investment(self, investment: Investment) -> None:
         effect = investment.effect

@@ -36,7 +36,6 @@ DEFAULT_RULES = GameRules(
     interest_step_gold=10,
     interest_cap=5,
     base_battle_gold=5,
-    battle_temperature=2.5,
     shop_odds=(
         (1.0, 0.0, 0.0, 0.0, 0.0),
         (1.0, 0.0, 0.0, 0.0, 0.0),

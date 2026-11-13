@@ -14,6 +14,12 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--runs", type=int, default=1)
     parser.add_argument(
+        "--battle-progress",
+        type=int,
+        default=100,
+        help="战斗节点进度（0-100），100 表示胜利",
+    )
+    parser.add_argument(
         "--affix",
         action="append",
         default=None,
@@ -29,6 +35,7 @@ def main() -> None:
             environment_id=args.environment,
             seed=args.seed,
             affix_ids=None if args.affix is None else tuple(args.affix),
+            battle_progress=args.battle_progress,
         )
         payload = {
             "won": environment.won,
@@ -45,7 +52,8 @@ def main() -> None:
                     "node_index": result.node_index,
                     "node_type": result.node_type,
                     "won": result.won,
-                    "win_probability": round(result.win_probability, 4),
+                    "battle_progress": result.battle_progress,
+                    "battle_provider": result.battle_provider,
                     "team_power": round(result.team_power, 3),
                     "enemy_rating": round(result.enemy_rating, 3),
                     "health_delta": result.health_delta,
@@ -63,6 +71,7 @@ def main() -> None:
             environment_id=args.environment,
             runs=args.runs,
             seed=args.seed,
+            battle_progress=args.battle_progress,
         )
         payload = {
             "runs": summary.runs,
