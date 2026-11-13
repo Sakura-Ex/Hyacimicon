@@ -72,6 +72,11 @@ class EnvironmentTests(unittest.TestCase):
 
         with self.assertRaisesRegex(OperationActionError, "投资策略"):
             env.reroll_shop()
+        with self.assertRaisesRegex(OperationActionError, "投资策略"):
+            env.buy_xp()
+        first_unit = env.market.roster.instances()[0]
+        with self.assertRaisesRegex(OperationActionError, "投资策略"):
+            env.sell_unit(first_unit.unit_id, first_unit.star)
 
     def test_same_seed_and_actions_reproduce_run(self):
         first = run_greedy(

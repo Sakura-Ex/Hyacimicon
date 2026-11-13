@@ -28,7 +28,8 @@ hsr-currency-wars-ai/
 │       ├── allocation.py                # 推荐关联选择与金数配装搜索
 │       ├── relics.py                    # 账号遗器目标与投入分配搜索
 │       └── generator.py                 # 原始账号生成入口与库存组装
-├── research/operations/                 # 运营环境、市场、投资和基础策略
+├── research/operations/                 # 运营环境、市场、投资、网页会话和基础策略
+│   └── web/                             # 无外部依赖的本地操作与检查页面
 ├── examples/
 │   ├── account_generation/             # IDE 调用示例
 │   └── operations/                     # 运营模拟运行示例
