@@ -79,7 +79,7 @@ hsr-currency-wars-ai/
 | `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入。满足结算条件时，根据战斗结果更新血量、奖励和资源。 |
 | `core/battle/` | 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。 |
 | `core/decision/` | 从可见局面和可用资源构造模型输入，通过整局环境评估候选操作，输出运营或战斗建议。 |
-| `bindings/python/battle/` | 用 PyO3 暴露战斗核心的 Python 接口，转换输入、输出和错误。 |
+| `research/bindings/battle/` | 用 PyO3 暴露战斗核心的 Python 接口，供研究和训练调用，转换输入、输出和错误。 |
 | `research/training/`、`research/evaluation/` | 调用共用接口采集轨迹、训练模型、回放对局和比较策略，记录实验与评估结果。 |
 
 原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入并调用 `core/battle/`。候选操作在整局状态的副本上试算，返回评估结果。实际对局达到正式结算条件时，环境把结果记入当前整局状态一次。研究工具与玩家应用通过这些接口接入。原始账号字段和游戏规则在各自模块文档中维护。
@@ -108,13 +108,13 @@ Python 账号生成器在仓库根目录运行 `uv run --locked python -m unitte
 | 目录 | 包和入口 | 依赖 |
 | --- | --- | --- |
 | `core/battle/` | Cargo 包 `battle-core`。`src/lib.rs` 提供战斗接口，`src/main.rs` 保留 CLI，用于本地调试、按种子回放和批量验证。 | CLI 和其他 Rust 调用方使用战斗库的公开接口。 |
-| `bindings/python/battle/` | Cargo 包 `battle-native`，Python 导入名 `battle_native`。在此维护 PyO3 的 `src/lib.rs` 和使用 Maturin 的 `pyproject.toml`。`#[pymodule]` 导出名和库目标名都用 `battle_native`，库类型为 `cdylib`。 | `battle-native` 依赖 PyO3，并以 `battle-core = { path = "../../../core/battle" }` 依赖战斗库。 |
+| `research/bindings/battle/` | Cargo 包 `battle-native`，Python 导入名 `battle_native`。在此维护 PyO3 的 `src/lib.rs` 和使用 Maturin 的 `pyproject.toml`。`#[pymodule]` 导出名和库目标名都用 `battle_native`，库类型为 `cdylib`。 | `battle-native` 依赖 PyO3，并以 `battle-core = { path = "../../../core/battle" }` 依赖战斗库。 |
 
 [PR #8](https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8) 当前在 `crates/battle-core/` 开发。合并前迁到 `core/battle/`，包名改为 `battle-core`，同时更新 Cargo workspace、CI 路径、测试及文档引用。Python 绑定按后续接入计划实现。
 
 绑定包负责 Python 调用所需的参数和结果转换。战斗规则和每局状态由 `battle-core` 管理。训练接口可在核心支持逐步决策后暴露 `reset` 和 `step`，交换可见观测、合法操作、所选操作和结束状态。CLI 与绑定使用同一套输入输出约定和验证样例。
 
-绑定接入 Cargo workspace 后，根清单登记两个成员，并将 `core/battle` 保留为默认成员。战斗核心 CI 从根目录指定包名构建和测试。Python 绑定的构建从 `bindings/python/battle/` 执行，Maturin 调用 Cargo 一起编译战斗核心，再安装 Python 扩展或生成 wheel。根目录的 Python 账号生成包继续由现有 Hatch 配置构建。
+绑定接入 Cargo workspace 后，根清单登记两个成员，并将 `core/battle` 保留为默认成员。战斗核心 CI 从根目录指定包名构建和测试。Python 绑定从 `research/bindings/battle/` 用 Maturin 构建，Cargo 会一起编译战斗核心。接入绑定时，在仓库根目录的 Hatch wheel 配置中排除 `research/bindings/battle/`，并核对账号生成包的构建产物。绑定的 wheel 由该目录下的 Maturin 配置单独构建。
 
 | 用途 | 命令 |
 | --- | --- |
