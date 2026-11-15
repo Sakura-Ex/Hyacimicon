@@ -1,176 +1,40 @@
-# 项目目录与文件职责
+# 项目目录与模块职责
 
-日期：2026-11-11。本页约定模块放置、文件职责、依赖关系，以及示例、测试、文档和数据的组织方式，供新增模块和目录调整时使用。系统模块职责见[系统设计与技术方案](../project/architecture.md)。
+按业务职责设置模块目录。`core/` 放研究工具和玩家应用共用的实现，`research/` 放账号生成、Python 绑定、训练和评估，`apps/` 放面向玩家的应用。模块通过公开接口调用，规则和状态由对应模块维护。数据流见[账号数据流](../modules/account-generation/data-flow.md#处理流程)和[系统设计](../project/architecture.md#架构与模块交互)。
 
-## 当前目录
+## 模块目录
 
-```text
-hsr-currency-wars-ai/
-├── research/account_generation/         # 原始账号配置生成
-│   ├── __init__.py                      # 对外接口
-│   ├── data/                            # 随模块安装的账号参考资料 JSON
-│   ├── relics/                          # 遗器规则与生成
-│   │   ├── __init__.py
-│   │   ├── models.py                    # 请求、成品与生成统计
-│   │   ├── rules.py                     # 部位、主副词条与档位数值
-│   │   ├── single.py                    # 单件搜索、评分与共用搜索预算
-│   │   └── sets.py                      # 六件联合搜索与理论上限
-│   ├── characters/                      # 角色原始配置与生成
-│   │   ├── __init__.py
-│   │   ├── models.py                    # 角色条件、参考资料与原始配置
-│   │   ├── references.py                # 推荐配装、队伍与行迹资料读取
-│   │   └── generator.py                 # 角色组装与五档适配
-│   └── accounts/                        # 账号资源分配与库存组装
-│       ├── __init__.py
-│       ├── models.py                    # 账号条件、统一库存与投入统计
-│       ├── rules.py                     # 金数分类与唯一光锥约定
-│       ├── references.py                # 账号参考资料与分类覆盖
-│       ├── allocation.py                # 推荐关联选择与金数配装搜索
-│       ├── relics.py                    # 账号遗器目标与投入分配搜索
-│       └── generator.py                 # 原始账号生成入口与库存组装
-├── examples/account_generation/         # IDE 调用示例
-├── tests/account_generation/            # 生成与规则测试
-├── pyproject.toml                       # Python 包与检查工具配置
-├── uv.lock                              # 依赖锁文件
-├── docs/
-│   ├── README.md                       # 文档总入口
-│   ├── project/                        # 项目目标、架构、计划和规则
-│   ├── game-data/                      # 共用游戏数值与 ID 对照
-│   │   ├── README.md                   # 游戏数值入口
-│   │   ├── character-data.md           # 货币战争角色 ID 与基础数值
-│   │   ├── light-cone-data.md          # 光锥 ID 与基础数值
-│   │   └── relic-data.md               # 遗器词条与套装 ID 对照
-│   ├── development/                    # 通用开发、协作与目录约定
-│   └── modules/
-│       ├── README.md                   # 模块目录
-│       └── account-generation/         # 账号与遗器数据的设计资料
-│           ├── README.md               # 模块总览和阅读入口
-│           ├── data-flow.md            # 数据流与模块职责
-│           ├── account-generation.md   # 账号生成条件、库存与 IDE 示例
-│           ├── character-generation.md # 完整角色配置接口与示例
-│           ├── relic-quality.md        # 五档遗器质量目标
-│           ├── character-relics.md     # 角色六件遗器接口与示例
-│           ├── relic-generation.md     # 单件生成接口与使用方法
-│           └── design.md               # 数据设计与账号样例约定
-├── AGENTS.md                           # 项目协作规则
-├── README.md                           # 英文项目入口
-├── README.zh-CN.md                     # 简体中文项目入口
-├── .gitignore                          # 本地产物与配置的忽略规则
-└── LICENSE                            # GPL-3.0-only 许可证全文
-```
-
-当前账号生成模块按遗器、角色、账号三个职责组织。账号使用角色与遗器实现，角色使用遗器实现，对外接口集中由 `research.account_generation` 导出。
-
-## 模块放置
-
-先根据模块的用途、输入输出和调用方，确定它在现有设计中的归属，再选择代码位置。研究与训练工具放在 `research/`。其他业务模块在开发时根据已确认的职责和技术方案确定目录，并在本页登记位置及理由。
-
-目录按业务职责组织；测试和示例跟随模块归属安排。新增目录承载实际代码或资料。模块增加、职责拆分或文件迁移时，同步更新当前目录和相关文档引用。
-
-## 按数据流安排模块目录
-
-以下是目录规划。先按[账号数据流](../modules/account-generation/data-flow.md#处理流程)和[系统设计](../project/architecture.md#架构与模块交互)确定模块负责的数据和调用方向，再按所在模块的语言配置构建入口。模块实际接入时创建目录，并更新上方的当前目录树。
-
-| 目录 | 负责的数据或流程 |
-| --- | --- |
-| `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。沿用现有 Python 包。 |
-| `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
-| `core/account/` | 统一玩家接入与程序生成的原始账号数据，按规则补试用、转换配置，输出生效配置和可用资源。 |
-| `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入。满足结算条件时，根据战斗结果更新血量、奖励和资源。 |
-| `core/battle/` | 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。 |
-| `core/decision/` | 从可见局面和可用资源构造模型输入，通过整局环境评估候选操作，输出运营或战斗建议。 |
-| `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口。先接入战斗模拟，后续接入局面模拟。 |
-| `research/training/`、`research/evaluation/` | 调用共用接口采集轨迹、训练模型、回放对局和比较策略，记录实验与评估结果。 |
-
-原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入并调用 `core/battle/`。候选操作在整局状态的副本上试算，返回评估结果。实际对局达到正式结算条件时，环境把结果记入当前整局状态一次。研究工具与玩家应用通过这些接口接入。原始账号字段和游戏规则在各自模块文档中维护。
-
-## Python 与 Rust 共存
-
-先按模块职责划分研究工具和共用核心，再安排语言目录和构建入口。账号生成、训练和实验评估属于研究工具。战斗引擎由研究工具和玩家应用共用，按模拟核心维护。上方目录树记录当前已有文件，下表也给出后续 Rust 模块的放置约定。
-
-| 内容 | 放置位置 |
-| --- | --- |
-| Python 研究、账号生成和训练代码 | `research/<模块>/`，按职责划分包 |
-| Python 测试和示例 | `tests/<模块>/` 和 `examples/<模块>/`，模块名与对应 Python 包一致 |
-| Rust 共用核心 | 使用对应的业务目录，例如 `core/battle/`。每个 Cargo workspace 成员有自己的 `Cargo.toml`，根清单的 `members` 声明其目录。库入口为 `src/lib.rs`，小型 CLI 可用同一 crate 的 `src/main.rs`，负责参数、输入输出和调用库接口 |
-| Rust 测试和示例 | crate 内的单元测试随源码，集成测试和测试样例放在 `tests/`、`tests/fixtures/`，可运行示例及其样例输入放在 `examples/` |
-| 依赖和工具链 | 根目录的 `pyproject.toml`、`uv.lock` 管理 Python 包和依赖。Rust 接入后，根目录的 `Cargo.toml`、`Cargo.lock`、`rust-toolchain.toml` 管理 Cargo workspace、依赖和工具链 |
-| 模块文档 | `docs/modules/<模块>/`，按业务职责维护入口、接口和运行说明 |
-
-研究专用的 Rust 辅助代码由对应研究模块维护，实际接入时登记源码位置和 Cargo workspace 配置。当前 `pyproject.toml` 将 `research/` 作为 Python 包纳入 wheel。若在该目录内增加 Rust 源码，包配置应明确 Python wheel 包含哪些文件，并验证构建产物。
-
-跨语言接入时，把调用代码放在调用侧模块。核心规则和状态由拥有它们的模块维护。接口提供方维护一份输入输出约定和用于验证的最小样例，两侧引用同一份样例核对字段、单位和结果。CLI 和语言绑定沿用同一接口约定，连接方式见[系统设计与技术方案](../project/architecture.md#调用入口与连接方式)。
-
-Python 账号生成器在仓库根目录运行 `uv run --locked python -m unittest discover -s tests -v`。Rust 模块接入后，在根目录用 `cargo test --locked -p <crate-name>` 验证对应 crate。CI 按源码、测试、依赖、工具链和工作流的改动选择对应检查。改动跨语言契约或共享测试样例时，运行两侧相关测试。
-
-### Rust 模拟核心与 Python 绑定
-
-| 目录 | 包和入口 | 依赖 |
+| 目录 | 状态 | 职责与依赖 |
 | --- | --- | --- |
-| `core/battle/` | Cargo 包 `battle-core`。`src/lib.rs` 提供战斗接口，`src/main.rs` 保留 CLI，用于本地调试、按种子回放和批量验证。 | CLI 和其他 Rust 调用方使用战斗库的公开接口。 |
-| `core/run/` | 规划中的局面与整局模拟 Rust 库。通过公开接口提供当前观测、合法操作、状态推进和模拟结算。 | 需要结算战斗时，通过 `battle-core` 的公开接口调用战斗模拟。 |
-| `research/sim_native/` | Cargo 包 `sim-native`，Python 导入名 `sim_native`。在同一目录维护 `Cargo.toml`、Maturin 的 `pyproject.toml` 和 PyO3 的 `src/lib.rs`。`#[pymodule]` 导出名和库目标名都用 `sim_native`，库类型为 `cdylib`。 | 依赖 PyO3 和模拟核心。战斗接入时添加 `battle-core = { path = "../../core/battle" }`。 |
+| `research/account_generation/` | 已有 | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
+| `core/account/` | 规划 | 将程序生成的账号配置与玩家接入的数据转换为生效配置和可用资源。 |
+| `core/battle/` | 待迁移 | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
+| `core/run/` | 规划 | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后组装战斗输入，调用 `core/battle/`，并在满足条件时结算结果。 |
+| `core/decision/` | 规划 | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
+| `research/sim_native/` | 规划 | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
+| `research/training/`、`research/evaluation/` | 规划 | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
+| `apps/player/` | 规划 | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
 
-[PR #8](https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8) 当前在 `crates/battle-core/` 开发。合并前迁到 `core/battle/`，包名改为 `battle-core`，同时更新 Cargo workspace、CI 路径、测试及文档引用。Python 绑定按后续接入计划实现。
+候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
 
-Python 侧通过 `sim_native.battle` 调用战斗模拟。绑定负责参数、结果和错误的转换，战斗规则和战斗状态由 `battle-core` 管理。在核心支持逐步决策后，可暴露 `reset` 和 `step`，交换可见观测、合法操作、所选操作和结束状态。CLI 与绑定使用同一套输入输出约定和验证样例。
+战斗库当前在 [PR #8](https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8) 的 `crates/battle-core/` 开发，合并前迁到 `core/battle/`，Cargo 包名改为 `battle-core`。
 
-局面模拟接入时，将 `core/run` 登记为 Cargo workspace 成员，并在 `sim-native` 的 `Cargo.toml` 中添加指向 `../../core/run` 的路径依赖。用 PyO3 在现有扩展中注册 `run`，Python 侧通过 `sim_native.run` 读取观测与合法操作，并提交操作推进模拟。局面规则、状态推进和战斗结果结算由 `core/run/` 负责。训练和评估安装同一个 `sim_native` wheel，按需调用两个接口。
+## Python 模拟绑定
 
-战斗绑定接入后，根清单登记 `core/battle` 和 `research/sim_native`，并将 `core/battle` 保留为默认成员。Rust 核心各自从仓库根目录指定包名构建和测试。Maturin 从 `research/` 运行，显式指定 `sim_native/Cargo.toml`。它读取绑定目录的 `pyproject.toml`，Cargo 会编译绑定所依赖的 Rust 库。接入绑定时，在仓库根目录的 Hatch wheel 配置中排除 `research/sim_native/`，并核对账号生成包的构建产物。
+`research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
 
-| 用途 | 命令 |
+- 战斗接入时，`sim-native` 通过 `../../core/battle` 路径依赖 `battle-core`，把战斗接口暴露为 `sim_native.battle`。
+- 局面模拟接入时，`sim-native` 增加指向 `../../core/run` 的路径依赖，在同一个扩展中暴露 `sim_native.run`。局面观测、合法操作、状态推进和结果结算由 `core/run/` 提供。
+
+各 Rust crate 加入仓库根目录的 Cargo workspace。战斗绑定接入时，根清单将 `core/battle` 设为默认成员。两个 Python 接口共用一个 Maturin wheel。构建、安装和验证步骤见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
+
+## 配套目录
+
+| 位置 | 职责 |
 | --- | --- |
-| 在仓库根目录构建和测试战斗核心 | `cargo build --locked -p battle-core`、`cargo test --locked -p battle-core` |
-| 在 `research/` 下构建并安装绑定，先激活 Python 虚拟环境 | `maturin develop --locked --manifest-path sim_native/Cargo.toml` |
-| 在 `research/` 下检查战斗接口 | `python -c "from sim_native import battle"`。局面模拟接入后，再用 `python -c "from sim_native import run"` 检查。 |
-| 在 `research/` 下构建 Python wheel | `maturin build --locked --release --manifest-path sim_native/Cargo.toml` |
+| `tests/<模块>/`、`examples/<模块>/` | Python 模块的自动测试和调用示例，目录名与模块对应。 |
+| Rust crate 内的 `tests/`、`tests/fixtures/` 和 `examples/` | 对应 crate 的集成测试、测试样例和可运行示例。单元测试放在源码旁。 |
+| `docs/project/`、`docs/game-data/`、`docs/development/`、`docs/modules/<模块>/` | 分别存放项目架构与规则、共用游戏数值、开发规范、模块设计与使用说明。 |
+| `local-data/`、`runs/`、`checkpoints/` | 本地输入、运行记录和模型权重等产物，跨仓库资料按 [AGENTS.md](../../AGENTS.md) 的分工维护。 |
 
-## 各类文件的职责
-
-| 位置 | 存放内容 | 维护要求 |
-| --- | --- | --- |
-| 业务代码目录 | 可复用的实现、数据类型和模块接口 | 按职责命名，明确输入输出与依赖 |
-| `research/` | 数据生成、搜索实验、模型训练和评估等研究工具 | 复用已有规则与模块接口，保存实验的复现条件 |
-| Python 的 `examples/`、Rust crate 的 `examples/` | 按功能归类的调用和调试示例 | 通过公开接口调用业务代码，说明运行环境和参数 |
-| Python 的 `tests/`、Rust crate 的 `tests/` | 按功能归类的自动验证与最小测试样例 | 围绕模块行为验证，使用项目实际的导入和依赖配置 |
-| `docs/` | 项目总览、共用游戏数值、开发约定和模块资料 | 通过各层入口组织页面，随实现更新路径和状态 |
-| 根目录 | 项目入口、包与构建配置、依赖锁文件、协作约定和许可证 | 在各自工具规定的位置集中维护 |
-| 已忽略的本地目录 | 临时输入、生成结果、日志、模型权重和调试产物 | 通过参数或配置指定位置，保留需要复现的版本与参数 |
-
-示例与测试按对应业务模块的名称归类。业务模块因技术需要进一步分层时，测试按其对外行为组织，保持名称和定位清楚。
-
-## 模块内部组织与依赖
-
-每个文件承担明确职责。数据类型表达输入、状态与结果；规则代码维护计算和合法性；业务逻辑组合这些对象完成任务；来源适配处理外部格式和单位。根据实际内容命名文件，内容增长后按职责拆分。
-
-模块通过公开接口传递结构化数据。状态和规则由对应模块维护，其他调用方通过接口使用已有结果。外部读取、文件保存和任务管理放在负责这些操作的位置，计算逻辑接收已经准备好的输入。
-
-跨模块调用应能从导入或接口声明看出依赖方向。需要共用实现时，先确认其职责和使用场景，再放入双方可以依赖的位置。依赖关系和状态维护要求遵循[开发与测试约定](development-guide.md)。
-
-## 数据与生成产物
-
-`research/account_generation/data/` 保存账号生成的内置参考资料，随模块安装。资料包含角色索引、推荐配装、队伍与行迹条件、光锥分类和遗器套装索引。生成结果记录游戏版本。
-
-调用方可通过资料目录参数切换快照。测试使用经过整理的最小样例，保留验证需要的字段、数值和依据。原始资料、核对记录和训练样本按 [AGENTS.md](../../AGENTS.md) 的仓库分工管理。
-
-本地运行产物可使用 `.gitignore` 中已有的 `local-data/`、`runs/`、`checkpoints/` 等目录。需要长期保存的实验记录和数据批次按数据仓库约定归档；可复现的输入与结果注明代码版本、数据版本、参数和随机种子。
-
-## 开发环境与验证入口
-
-依赖和构建配置随所属语言与模块维护，并通过对应锁文件固定版本。IDE、示例和测试使用同一套项目依赖与导入方式。
-
-各模块在使用说明中登记依赖安装、运行和验证命令；IDE 选择对应的解释器或工具链。示例与测试通过同一套模块接口运行，格式和静态检查覆盖实际的源码、示例与测试目录。
-
-增加其他技术栈时，在对应配置和使用说明中登记安装、运行、构建及验证入口。模块接口和具体参数保存在各自文档中，本页维护位置与职责约定。
-
-## 新增或迁移模块
-
-1. 说明模块解决的问题、输入输出、所属层和依赖，检查已有目录与实现。
-2. 在确定的位置添加实际文件，公开供调用方使用的接口。
-3. 按需要补充调用示例和行为验证；迁移时同步修改导入、包配置、运行入口及文档链接。
-4. 核对实现与目录说明的一致性，执行与改动相关的检查，并更新文档索引和当前目录。
-
-## 文档目录
-
-项目级说明放在 `docs/project/`，共用开发约定放在 `docs/development/`，游戏数值和 ID 对照放在 `docs/game-data/`，具体模块资料放在 `docs/modules/<模块>/`。各层 `README.md` 提供阅读入口，模块细节随内容增长在模块目录内拆分。写作与索引维护方式见[文档写作规范](documentation-guidelines.md)。
+Python 项目和 Cargo workspace 各自在仓库根目录维护共用配置和锁文件。各模块的文档、示例和测试通过对应模块的公开接口组织。
