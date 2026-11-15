@@ -112,7 +112,7 @@ hsr-currency-wars-ai/
 
 增加其他技术栈时，在对应配置和使用说明中登记安装、运行、构建及验证入口。模块接口和具体参数保存在各自文档中，本页维护位置与职责约定。
 
-基础战斗内核位于 `core/battle/`，作为独立 Cargo 包构建。安装 Rustup 后，进入该目录，由其中的 `rust-toolchain.toml` 选择固定工具链。运行 `cargo fmt --all -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`；CLI 与合成场景用法见[战斗模块入口](../modules/battle-simulation/README.md)。构建产物留在已忽略的 `core/battle/target/`，批次 ledger 和本机验证日志不提交。Windows/Linux 检查配置位于 `.github/workflows/battle-core.yml`，实际通过状态以对应提交的 CI 结果为准。
+基础战斗内核位于 `core/battle/`，作为独立 Cargo 包构建。安装 Rustup 后，进入该目录，由其中的 `rust-toolchain.toml` 选择固定工具链。运行 `cargo fmt --all -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`；CLI 与合成场景用法见[战斗模块入口](../modules/battle-simulation/README.md)。构建产物留在已忽略的 `core/battle/target/`，批次 ledger 和本机验证日志不提交。
 
 ## 新增或迁移模块
 
