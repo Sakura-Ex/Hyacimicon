@@ -79,7 +79,7 @@ hsr-currency-wars-ai/
 | `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入。满足结算条件时，根据战斗结果更新血量、奖励和资源。 |
 | `core/battle/` | 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。 |
 | `core/decision/` | 从可见局面和可用资源构造模型输入，通过整局环境评估候选操作，输出运营或战斗建议。 |
-| `research/bindings/battle/` | 用 PyO3 暴露战斗核心的 Python 接口，供研究和训练调用，转换输入、输出和错误。 |
+| `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口。先接入战斗模拟，后续接入局面模拟。 |
 | `research/training/`、`research/evaluation/` | 调用共用接口采集轨迹、训练模型、回放对局和比较策略，记录实验与评估结果。 |
 
 原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入并调用 `core/battle/`。候选操作在整局状态的副本上试算，返回评估结果。实际对局达到正式结算条件时，环境把结果记入当前整局状态一次。研究工具与玩家应用通过这些接口接入。原始账号字段和游戏规则在各自模块文档中维护。
@@ -103,24 +103,28 @@ hsr-currency-wars-ai/
 
 Python 账号生成器在仓库根目录运行 `uv run --locked python -m unittest discover -s tests -v`。Rust 模块接入后，在根目录用 `cargo test --locked -p <crate-name>` 验证对应 crate。CI 按源码、测试、依赖、工具链和工作流的改动选择对应检查。改动跨语言契约或共享测试样例时，运行两侧相关测试。
 
-### 战斗核心与 Python 绑定
+### Rust 模拟核心与 Python 绑定
 
 | 目录 | 包和入口 | 依赖 |
 | --- | --- | --- |
 | `core/battle/` | Cargo 包 `battle-core`。`src/lib.rs` 提供战斗接口，`src/main.rs` 保留 CLI，用于本地调试、按种子回放和批量验证。 | CLI 和其他 Rust 调用方使用战斗库的公开接口。 |
-| `research/bindings/battle/` | Cargo 包 `battle-native`，Python 导入名 `battle_native`。在此维护 PyO3 的 `src/lib.rs` 和使用 Maturin 的 `pyproject.toml`。`#[pymodule]` 导出名和库目标名都用 `battle_native`，库类型为 `cdylib`。 | `battle-native` 依赖 PyO3，并以 `battle-core = { path = "../../../core/battle" }` 依赖战斗库。 |
+| `core/run/` | 规划中的局面与整局模拟 Rust 库。通过公开接口提供当前观测、合法操作、状态推进和模拟结算。 | 需要结算战斗时，通过 `battle-core` 的公开接口调用战斗模拟。 |
+| `research/sim_native/` | Cargo 包 `sim-native`，Python 导入名 `sim_native`。在同一目录维护 `Cargo.toml`、Maturin 的 `pyproject.toml` 和 PyO3 的 `src/lib.rs`。`#[pymodule]` 导出名和库目标名都用 `sim_native`，库类型为 `cdylib`。 | 依赖 PyO3 和模拟核心。战斗接入时添加 `battle-core = { path = "../../core/battle" }`。 |
 
 [PR #8](https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8) 当前在 `crates/battle-core/` 开发。合并前迁到 `core/battle/`，包名改为 `battle-core`，同时更新 Cargo workspace、CI 路径、测试及文档引用。Python 绑定按后续接入计划实现。
 
-绑定包负责 Python 调用所需的参数和结果转换。战斗规则和每局状态由 `battle-core` 管理。训练接口可在核心支持逐步决策后暴露 `reset` 和 `step`，交换可见观测、合法操作、所选操作和结束状态。CLI 与绑定使用同一套输入输出约定和验证样例。
+Python 侧通过 `sim_native.battle` 调用战斗模拟。绑定负责参数、结果和错误的转换，战斗规则和战斗状态由 `battle-core` 管理。在核心支持逐步决策后，可暴露 `reset` 和 `step`，交换可见观测、合法操作、所选操作和结束状态。CLI 与绑定使用同一套输入输出约定和验证样例。
 
-绑定接入 Cargo workspace 后，根清单登记两个成员，并将 `core/battle` 保留为默认成员。战斗核心 CI 从根目录指定包名构建和测试。Python 绑定从 `research/bindings/battle/` 用 Maturin 构建，Cargo 会一起编译战斗核心。接入绑定时，在仓库根目录的 Hatch wheel 配置中排除 `research/bindings/battle/`，并核对账号生成包的构建产物。绑定的 wheel 由该目录下的 Maturin 配置单独构建。
+局面模拟接入时，将 `core/run` 登记为 Cargo workspace 成员，并在 `sim-native` 的 `Cargo.toml` 中添加指向 `../../core/run` 的路径依赖。用 PyO3 在现有扩展中注册 `run`，Python 侧通过 `sim_native.run` 读取观测与合法操作，并提交操作推进模拟。局面规则、状态推进和战斗结果结算由 `core/run/` 负责。训练和评估安装同一个 `sim_native` wheel，按需调用两个接口。
+
+战斗绑定接入后，根清单登记 `core/battle` 和 `research/sim_native`，并将 `core/battle` 保留为默认成员。Rust 核心各自从仓库根目录指定包名构建和测试。Maturin 从 `research/` 运行，显式指定 `sim_native/Cargo.toml`。它读取绑定目录的 `pyproject.toml`，Cargo 会编译绑定所依赖的 Rust 库。接入绑定时，在仓库根目录的 Hatch wheel 配置中排除 `research/sim_native/`，并核对账号生成包的构建产物。
 
 | 用途 | 命令 |
 | --- | --- |
 | 在仓库根目录构建和测试战斗核心 | `cargo build --locked -p battle-core`、`cargo test --locked -p battle-core` |
-| 在已激活的 Python 虚拟环境中构建并安装绑定 | `maturin develop --locked`，用 `python -c "import battle_native"` 检查导入 |
-| 为 Python 安装环境构建 wheel | `maturin build --locked --release` |
+| 在 `research/` 下构建并安装绑定，先激活 Python 虚拟环境 | `maturin develop --locked --manifest-path sim_native/Cargo.toml` |
+| 在 `research/` 下检查战斗接口 | `python -c "from sim_native import battle"`。局面模拟接入后，再用 `python -c "from sim_native import run"` 检查。 |
+| 在 `research/` 下构建 Python wheel | `maturin build --locked --release --manifest-path sim_native/Cargo.toml` |
 
 ## 各类文件的职责
 
