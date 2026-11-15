@@ -78,17 +78,19 @@ a cross-language decimal canonicalization or tolerance around the deadline.
 
 ## Running
 
-From the repository workspace, use Cargo with the checked-in lockfile:
+Run Cargo from `core/battle/` with the checked-in lockfile. From the repository root:
 
 ```text
-cargo test --locked -p battle-core
-cargo run --locked -p battle-core --bin hcwa-battle -- validate SCENARIO.json
-cargo run --locked -p battle-core --bin hcwa-battle -- simulate SCENARIO.json SEED
-cargo run --release --locked -p battle-core --bin hcwa-battle -- batch SCENARIO.json TRIALS SEED
+cd core/battle
+cargo test --locked
+cargo run --locked --bin hcwa-battle -- validate examples/duel.json
+cargo run --locked --bin hcwa-battle -- simulate examples/team-waves.json 17
+cargo run --release --locked --bin hcwa-battle -- batch examples/duel.json 10000 20261114
 ```
 
 The CLI writes JSON to stdout and errors to stderr with exit code 2. Redirect
 results to a local output path; do not commit generated ledgers or player inputs.
+Scenario and output paths are relative to the current directory.
 Examples use artificial units and are marked as synthetic. Their frequencies
 test the engine, not a named character's real-game win probability.
 

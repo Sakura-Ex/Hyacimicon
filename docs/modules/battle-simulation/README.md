@@ -30,17 +30,18 @@ HP当作玩家整局HP。预算耗尽按当前显式规则判败；程序行动�
 
 ## 安装与运行
 
-安装Rust工具链后，在仓库根目录运行。`rust-toolchain.toml`固定本模块验证使用
-的Rust版本，Cargo.lock固定依赖。
+安装Rust工具链后，从仓库根目录进入`core/battle/`运行。该目录的`rust-toolchain.toml`固定
+Rust版本，`Cargo.lock`固定依赖。
 
 ```powershell
-cargo test --locked -p battle-core
-cargo run --locked -p battle-core --bin hcwa-battle -- validate core/battle/examples/duel.json
-cargo run --locked -p battle-core --bin hcwa-battle -- simulate core/battle/examples/team-waves.json 17
-cargo run --release --locked -p battle-core --bin hcwa-battle -- batch core/battle/examples/duel.json 10000 20261114
+cd core/battle
+cargo test --locked
+cargo run --locked --bin hcwa-battle -- validate examples/duel.json
+cargo run --locked --bin hcwa-battle -- simulate examples/team-waves.json 17
+cargo run --release --locked --bin hcwa-battle -- batch examples/duel.json 10000 20261114
 ```
 
-输出为JSON，错误写入stderr并返回退出码2。可将结果重定向到已忽略的`runs/`
+场景和输出路径相对当前目录解析。输出为JSON，错误写入stderr并返回退出码2。可将结果重定向到仓库根目录下已忽略的`../../runs/`
 目录。示例全部使用人工单位与参数；`duel.json`是理论胜率50%的暴击对决，
 `team-waves.json`展示双波队伍，`revival-budget.json`展示声明的复活罚时和预算。
 这些结果用于验证基础内核，不能当作真实角色的游戏胜率。
