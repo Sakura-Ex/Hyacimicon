@@ -31,6 +31,7 @@ See the [documentation hub](docs/README.md) for project plans, design, and devel
 | --- | --- |
 | [StarRailRes](https://github.com/Mar-7th/StarRailRes) | Game reference data |
 | [TurnBasedGameData](https://github.com/DimbreathBot/TurnBasedGameData) | Game reference data |
+| [HSR_Nous](https://github.com/pzc2004/HSR_Nous) | Battle formulas and synthetic test vectors ([MIT](core/battle/src/math.rs)) |
 
 ## License
 

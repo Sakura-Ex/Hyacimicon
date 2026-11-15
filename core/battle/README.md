@@ -102,11 +102,10 @@ reports that cap without changing the simulated state or batch counts.
 
 ## Reuse and validation
 
-The pure math implementation ports the MIT-licensed HSR_Nous rulebook at commit
-`f8935ddb407b297732fbd3c624d55897e3e648b9`. Attribution and its license are retained
-in `math.rs` and `THIRD_PARTY_NOTICES.md`. The profile does not adopt that engine's
-known budget or checkpoint defects. Serde, SHA-2 and rand_chacha provide parsing,
-fingerprints and reproducible random streams; versions are fixed by Cargo.lock.
+Formula sources and attribution are listed in the repository's
+[acknowledgements](../../README.md#references-and-acknowledgements).
+Serde, SHA-2 and rand_chacha provide parsing, fingerprints and reproducible random
+streams; versions are fixed by Cargo.lock.
 
 Validation separates hand-computed arithmetic and state-transition tests,
 upstream formula parity, deterministic seed replay, statistical smoke checks, and
