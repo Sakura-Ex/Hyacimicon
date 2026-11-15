@@ -4,6 +4,24 @@
 
 ## 模块目录
 
+下图展示模块到位后的目录结构。各模块的当前状态见下表。
+
+```text
+hsr-currency-wars-ai/
+├── core/
+│   ├── account/
+│   ├── battle/
+│   ├── run/
+│   └── decision/
+├── research/
+│   ├── account_generation/
+│   ├── sim_native/
+│   ├── training/
+│   └── evaluation/
+└── apps/
+    └── player/
+```
+
 | 目录 | 状态 | 职责与依赖 |
 | --- | --- | --- |
 | `research/account_generation/` | 已有 | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
