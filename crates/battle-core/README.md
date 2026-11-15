@@ -51,14 +51,30 @@ The following semantics define `basic_v1` and are exposed rather than inferred:
   state. New enemies are scheduled relative to the current time. No wave gets a
   fresh budget. An event exactly at the AV deadline is not executed.
 - After an action's effects settle, terminal elimination is checked before the
-  next budget check. A completed final-wave elimination is victory. Budget
-  exhaustion is defeat under this declared deadline profile; a safety action
-  limit or cancellation is incomplete and excluded from outcome frequencies.
+  elapsed-budget check, followed by cancellation and the safety action limit.
+  A completed final-wave elimination is victory. Already exhausted AV is defeat
+  even if that action also reached the action limit or cancellation is requested.
+  Otherwise a safety limit or cancellation is incomplete and excluded from
+  outcome frequencies. A future action beyond the deadline does not turn an
+  earlier safety stop into a loss.
 
 All quantities are finite; malformed values, unsupported effects, illegal costs,
 ambiguous identities and arithmetic failure are errors. The core never substitutes
 zero for an unknown game value. `run_hp_loss` is unknown because node combat and
 shared run settlement have different owners.
+
+Effective `healing_bonus`, `incoming_healing_bonus` and `shield_bonus` accept
+finite values in `[-1, 1e12]`. Healing uses the additive multiplier
+`1 + outgoing + incoming`; it must be nonnegative for every possible recipient
+of a declared healing action. Validation uses the same formula as execution,
+checks self-only heals only against the actor, and checks enemy teams per wave.
+Shield grants use the actor's shield bonus. Negative modifiers represent resolved
+panels; this does not add dynamic debuff mechanics.
+
+JSON parsing enables `serde_json/float_roundtrip` so serializing a valid Rust
+scenario and reading it back preserves its floating-point values, fingerprint,
+and AV boundary behavior. This preserves the input precision; it does not define
+a cross-language decimal canonicalization or tolerance around the deadline.
 
 ## Running
 

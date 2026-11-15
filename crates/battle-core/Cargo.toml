@@ -9,7 +9,7 @@ description = "Deterministic, explicit-input battle simulation and Monte Carlo e
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
 sha2 = "0.10"
 rand_chacha = "=0.9.0"
 rand_core = "=0.9.3"

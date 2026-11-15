@@ -522,12 +522,8 @@ pub fn simulate_cancellable(
                     .map(|u| CombatUnit::new(u, false, state.now)),
             );
         }
-        if cancel() {
-            return Ok(state.finish(seed, Outcome::Incomplete, Termination::Cancelled, cleared));
-        }
-        if state.actions >= input.scenario().max_actions {
-            return Ok(state.finish(seed, Outcome::Incomplete, Termination::ActionLimit, cleared));
-        }
+        // Settled battle outcomes precede requests to stop further execution.
+        // Only elapsed budget counts here; do not forecast the next action.
         if state.now + state.penalty >= input.scenario().max_av {
             return Ok(state.finish(
                 seed,
@@ -535,6 +531,12 @@ pub fn simulate_cancellable(
                 Termination::AvBudgetExhausted,
                 cleared,
             ));
+        }
+        if cancel() {
+            return Ok(state.finish(seed, Outcome::Incomplete, Termination::Cancelled, cleared));
+        }
+        if state.actions >= input.scenario().max_actions {
+            return Ok(state.finish(seed, Outcome::Incomplete, Termination::ActionLimit, cleared));
         }
         let ultimate = state
             .units

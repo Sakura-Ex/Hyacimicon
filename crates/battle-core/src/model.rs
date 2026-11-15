@@ -264,11 +264,15 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
         (s.defense_reduction, "defense_reduction"),
         (s.defense_ignore, "defense_ignore"),
         (s.independent_multiplier, "independent_multiplier"),
+    ] {
+        bounded(value, 0.0, 1e12, name)?;
+    }
+    for (value, name) in [
         (s.healing_bonus, "healing_bonus"),
         (s.incoming_healing_bonus, "incoming_healing_bonus"),
         (s.shield_bonus, "shield_bonus"),
     ] {
-        bounded(value, 0.0, 1e12, name)?;
+        bounded(value, -1.0, 1e12, name)?;
     }
     for (value, name) in [
         (s.damage_bonus, "damage_bonus"),
@@ -376,6 +380,38 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
     }
     Ok(())
 }
+/// Validate every potential healing pair on one coexisting team. Target choice
+/// may change with HP and deaths, so initial HP alone cannot narrow recipients.
+fn validate_healing_targets(team: &[Unit]) -> Result<(), String> {
+    for actor in team {
+        for action in &actor.actions {
+            for effect in &action.effects {
+                if let Effect::Heal { target, .. } = effect {
+                    let recipients = match target {
+                        Target::SelfUnit => std::slice::from_ref(actor),
+                        Target::AllyLowestHp | Target::AllAllies => team,
+                        _ => return Err("support requires ally targets".into()),
+                    };
+                    for recipient in recipients {
+                        crate::math::heal(
+                            1.0,
+                            actor.stats.healing_bonus,
+                            recipient.stats.incoming_healing_bonus,
+                        )
+                        .map_err(|error| {
+                            format!(
+                                "invalid healing from {} to {}: {error}",
+                                actor.id, recipient.id
+                            )
+                        })?;
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Validate once before running any trials; unsupported mechanisms fail closed.
 pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
     use sha2::{Digest, Sha256};
@@ -428,6 +464,10 @@ pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
                 return Err("unit ids must be globally unique".into());
             }
         }
+    }
+    validate_healing_targets(&scenario.allies)?;
+    for wave in &scenario.waves {
+        validate_healing_targets(wave)?;
     }
     let encoded = serde_json::to_vec(&scenario).map_err(|e| e.to_string())?;
     Ok(ValidatedScenario {
