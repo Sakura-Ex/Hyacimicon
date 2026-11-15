@@ -76,12 +76,13 @@ hsr-currency-wars-ai/
 | `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。沿用现有 Python 包。 |
 | `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
 | `core/account/` | 统一玩家接入与程序生成的原始账号数据，按规则补试用、转换配置，输出生效配置和可用资源。 |
-| `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入，再用战斗结果结算血量、奖励和资源。 |
+| `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入。满足结算条件时，根据战斗结果更新血量、奖励和资源。 |
 | `core/battle/` | 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。 |
 | `core/decision/` | 从可见局面和可用资源构造模型输入，通过整局环境评估候选操作，输出运营或战斗建议。 |
+| `bindings/python/battle/` | 用 PyO3 暴露战斗核心的 Python 接口，转换输入、输出和错误。 |
 | `research/training/`、`research/evaluation/` | 调用共用接口采集轨迹、训练模型、回放对局和比较策略，记录实验与评估结果。 |
 
-原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入，调用 `core/battle/`，再将结算后的状态交回调用方。研究工具与玩家应用通过这些接口接入。已有的原始账号字段和游戏规则仍在各自模块文档中维护。
+原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入并调用 `core/battle/`。候选操作在整局状态的副本上试算，返回评估结果。实际对局达到正式结算条件时，环境把结果记入当前整局状态一次。研究工具与玩家应用通过这些接口接入。原始账号字段和游戏规则在各自模块文档中维护。
 
 ## Python 与 Rust 共存
 
@@ -101,6 +102,25 @@ hsr-currency-wars-ai/
 跨语言接入时，把调用代码放在调用侧模块。核心规则和状态由拥有它们的模块维护。接口提供方维护一份输入输出约定和用于验证的最小样例，两侧引用同一份样例核对字段、单位和结果。CLI 和语言绑定沿用同一接口约定，连接方式见[系统设计与技术方案](../project/architecture.md#调用入口与连接方式)。
 
 Python 账号生成器在仓库根目录运行 `uv run --locked python -m unittest discover -s tests -v`。Rust 模块接入后，在根目录用 `cargo test --locked -p <crate-name>` 验证对应 crate。CI 按源码、测试、依赖、工具链和工作流的改动选择对应检查。改动跨语言契约或共享测试样例时，运行两侧相关测试。
+
+### 战斗核心与 Python 绑定
+
+| 目录 | 包和入口 | 依赖 |
+| --- | --- | --- |
+| `core/battle/` | Cargo 包 `battle-core`。`src/lib.rs` 提供战斗接口，`src/main.rs` 保留 CLI，用于本地调试、按种子回放和批量验证。 | CLI 和其他 Rust 调用方使用战斗库的公开接口。 |
+| `bindings/python/battle/` | Cargo 包 `battle-native`，Python 导入名 `battle_native`。在此维护 PyO3 的 `src/lib.rs` 和使用 Maturin 的 `pyproject.toml`。`#[pymodule]` 导出名和库目标名都用 `battle_native`，库类型为 `cdylib`。 | `battle-native` 依赖 PyO3，并以 `battle-core = { path = "../../../core/battle" }` 依赖战斗库。 |
+
+[PR #8](https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8) 当前在 `crates/battle-core/` 开发。合并前迁到 `core/battle/`，包名改为 `battle-core`，同时更新 Cargo workspace、CI 路径、测试及文档引用。Python 绑定按后续接入计划实现。
+
+绑定包负责 Python 调用所需的参数和结果转换。战斗规则和每局状态由 `battle-core` 管理。训练接口可在核心支持逐步决策后暴露 `reset` 和 `step`，交换可见观测、合法操作、所选操作和结束状态。CLI 与绑定使用同一套输入输出约定和验证样例。
+
+绑定接入 Cargo workspace 后，根清单登记两个成员，并将 `core/battle` 保留为默认成员。战斗核心 CI 从根目录指定包名构建和测试。Python 绑定的构建从 `bindings/python/battle/` 执行，Maturin 调用 Cargo 一起编译战斗核心，再安装 Python 扩展或生成 wheel。根目录的 Python 账号生成包继续由现有 Hatch 配置构建。
+
+| 用途 | 命令 |
+| --- | --- |
+| 在仓库根目录构建和测试战斗核心 | `cargo build --locked -p battle-core`、`cargo test --locked -p battle-core` |
+| 在已激活的 Python 虚拟环境中构建并安装绑定 | `maturin develop --locked`，用 `python -c "import battle_native"` 检查导入 |
+| 为 Python 安装环境构建 wheel | `maturin build --locked --release` |
 
 ## 各类文件的职责
 
