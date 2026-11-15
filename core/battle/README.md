@@ -81,10 +81,10 @@ a cross-language decimal canonicalization or tolerance around the deadline.
 From the repository workspace, use Cargo with the checked-in lockfile:
 
 ```text
-cargo test --locked -p hcwa-battle-core
-cargo run --locked -p hcwa-battle-core --bin hcwa-battle -- validate SCENARIO.json
-cargo run --locked -p hcwa-battle-core --bin hcwa-battle -- simulate SCENARIO.json SEED
-cargo run --release --locked -p hcwa-battle-core --bin hcwa-battle -- batch SCENARIO.json TRIALS SEED
+cargo test --locked -p battle-core
+cargo run --locked -p battle-core --bin hcwa-battle -- validate SCENARIO.json
+cargo run --locked -p battle-core --bin hcwa-battle -- simulate SCENARIO.json SEED
+cargo run --release --locked -p battle-core --bin hcwa-battle -- batch SCENARIO.json TRIALS SEED
 ```
 
 The CLI writes JSON to stdout and errors to stderr with exit code 2. Redirect

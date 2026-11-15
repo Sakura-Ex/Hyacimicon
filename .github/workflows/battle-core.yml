@@ -2,9 +2,9 @@ name: Rust battle core
 
 on:
   push:
-    paths: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/battle-core/**", ".github/workflows/battle-core.yml"]
+    paths: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "core/battle/**", ".github/workflows/battle-core.yml"]
   pull_request:
-    paths: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "crates/battle-core/**", ".github/workflows/battle-core.yml"]
+    paths: ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "core/battle/**", ".github/workflows/battle-core.yml"]
 
 permissions:
   contents: read
@@ -26,4 +26,4 @@ jobs:
       - name: Test core and CLI
         run: cargo test --locked --workspace
       - name: Run 10000-trial synthetic smoke test
-        run: cargo run --release --locked -p hcwa-battle-core --bin hcwa-battle -- batch crates/battle-core/examples/duel.json 10000 20261114 > battle-smoke.json
+        run: cargo run --release --locked -p battle-core --bin hcwa-battle -- batch core/battle/examples/duel.json 10000 20261114 > battle-smoke.json

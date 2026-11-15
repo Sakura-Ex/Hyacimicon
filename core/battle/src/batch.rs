@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 pub const MAX_TRIALS: u32 = 1_000_000;
+// 保留种子派生域，保证既有批次种子在包名调整后仍能回放。
 pub const SEED_DERIVATION: &str =
     "sha256(hcwa-battle-core/batch-seed/v1\\0 || master_u64_le || index_u64_le)[0..8] as u64_le";
 const SEED_DOMAIN: &[u8] = b"hcwa-battle-core/batch-seed/v1\0";

@@ -1,8 +1,8 @@
 mod common;
 use common::*;
-use hcwa_battle_core::batch::{run_batch, BatchRequest};
-use hcwa_battle_core::engine::{simulate, simulate_cancellable};
-use hcwa_battle_core::model::*;
+use battle_core::batch::{run_batch, BatchRequest};
+use battle_core::engine::{simulate, simulate_cancellable};
+use battle_core::model::*;
 
 fn boundary_scenario() -> Scenario {
     let mut ally = unit("ally", 123.45000000000009);

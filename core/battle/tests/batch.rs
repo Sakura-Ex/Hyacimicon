@@ -1,6 +1,6 @@
-use hcwa_battle_core::batch::{derive_trial_seed, run_batch, wilson_interval, BatchRequest};
-use hcwa_battle_core::engine::simulate;
-use hcwa_battle_core::model::*;
+use battle_core::batch::{derive_trial_seed, run_batch, wilson_interval, BatchRequest};
+use battle_core::engine::simulate;
+use battle_core::model::*;
 
 fn stats(attack: f64, speed: f64) -> Stats {
     Stats {

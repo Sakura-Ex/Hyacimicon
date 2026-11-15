@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use hcwa_battle_core::{
+use battle_core::{
     engine::{simulate, simulate_cancellable},
     model::*,
 };

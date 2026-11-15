@@ -1,4 +1,4 @@
-use hcwa_battle_core::{
+use battle_core::{
     batch::{run_batch, BatchRequest},
     engine::{simulate, RNG_ALGORITHM},
     model::{validate, Scenario},

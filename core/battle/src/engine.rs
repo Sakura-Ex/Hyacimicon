@@ -61,6 +61,7 @@ struct State<'a> {
 }
 fn stream(seed: u64, domain: &[u8]) -> ChaCha8Rng {
     let mut hash = Sha256::new();
+    // 保留随机流派生域，保证既有种子的回放结果一致。
     hash.update(b"hcwa-battle-core/rng/v1\0");
     hash.update(domain);
     hash.update(seed.to_le_bytes());

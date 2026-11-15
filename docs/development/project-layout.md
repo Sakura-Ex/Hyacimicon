@@ -6,7 +6,7 @@
 
 ```text
 hsr-currency-wars-ai/
-├── crates/battle-core/                  # 显式输入基础战斗内核与批次 CLI
+├── core/battle/                         # 显式输入基础战斗内核与批次 CLI
 │   ├── src/                            # 输入校验、数学、状态执行、批次及 CLI
 │   ├── tests/                          # 行为、数学、批次及 CLI 验证，含合成向量
 │   └── examples/                       # 人工构造的 JSON 场景，不是真实账号
@@ -69,7 +69,7 @@ hsr-currency-wars-ai/
 
 ## 模块放置
 
-先根据模块的用途、输入输出和调用方，确定它在现有设计中的归属，再选择代码位置。研究与训练工具放在 `research/`。其他业务模块在开发时根据已确认的职责和技术方案确定目录，并在本页登记位置及理由。
+先根据模块的用途、输入输出和调用方，确定它在现有设计中的归属，再选择代码位置。模拟与决策核心按业务职责放在 `core/`，当前战斗内核位于 `core/battle/`，Cargo 包名为 `battle-core`。研究与训练工具放在 `research/`。其他业务模块在开发时根据已确认的职责和技术方案确定目录，并在本页登记位置及理由。
 
 目录按业务职责组织；测试和示例跟随模块归属安排。新增目录承载实际代码或资料。模块增加、职责拆分或文件迁移时，同步更新当前目录和相关文档引用。
 
@@ -78,6 +78,7 @@ hsr-currency-wars-ai/
 | 位置 | 存放内容 | 维护要求 |
 | --- | --- | --- |
 | 业务代码目录 | 可复用的实现、数据类型和模块接口 | 按职责命名，明确输入输出与依赖 |
+| `core/` | 模拟与决策核心，当前包含 `battle/` 战斗内核 | 按业务职责划分模块，通过根 Cargo workspace 构建 Rust 包 |
 | `research/` | 数据生成、搜索实验、模型训练和评估等研究工具 | 复用已有规则与模块接口，保存实验的复现条件 |
 | `examples/` | 按功能归类的调用和调试示例 | 通过公开接口调用业务代码，说明运行环境和参数 |
 | `tests/` | 按功能归类的自动验证与最小测试样例 | 围绕模块行为验证，使用项目实际的导入和依赖配置 |
@@ -111,7 +112,7 @@ hsr-currency-wars-ai/
 
 增加其他技术栈时，在对应配置和使用说明中登记安装、运行、构建及验证入口。模块接口和具体参数保存在各自文档中，本页维护位置与职责约定。
 
-基础战斗内核位于 `crates/battle-core/`，通过根 Cargo workspace 构建。安装 Rustup 后，由 `rust-toolchain.toml` 选择固定工具链。在根目录运行 `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets -- -D warnings` 和 `cargo test --locked --workspace`；CLI 与合成场景用法见[战斗模块入口](../modules/battle-simulation/README.md)。构建产物留在已忽略的 `target/`，批次 ledger 和本机验证日志不提交。Windows/Linux 检查配置位于 `.github/workflows/battle-core.yml`，实际通过状态以对应提交的 CI 结果为准。
+基础战斗内核位于 `core/battle/`，通过根 Cargo workspace 构建。安装 Rustup 后，由 `rust-toolchain.toml` 选择固定工具链。在根目录运行 `cargo fmt --all -- --check`、`cargo clippy --locked --workspace --all-targets -- -D warnings` 和 `cargo test --locked --workspace`；CLI 与合成场景用法见[战斗模块入口](../modules/battle-simulation/README.md)。构建产物留在已忽略的 `target/`，批次 ledger 和本机验证日志不提交。Windows/Linux 检查配置位于 `.github/workflows/battle-core.yml`，实际通过状态以对应提交的 CI 结果为准。
 
 ## 新增或迁移模块
 

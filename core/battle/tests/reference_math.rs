@@ -1,5 +1,5 @@
 //! Synthetic vectors evaluated by the pinned MIT HSR_Nous expression engine.
-use hcwa_battle_core::math::{damage, heal, shield, DamageInput};
+use battle_core::math::{damage, heal, shield, DamageInput};
 use serde_json::Value;
 fn close(actual: f64, expected: f64) {
     assert!(

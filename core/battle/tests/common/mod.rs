@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 //! Artificial fixtures. Values are chosen for hand calculation, not game kits.
-use hcwa_battle_core::model::*;
+use battle_core::model::*;
 
 pub fn damage(amount: f64, target: Target) -> Effect {
     Effect::Damage {

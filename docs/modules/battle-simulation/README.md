@@ -1,6 +1,6 @@
 # 基础战斗模拟
 
-`crates/battle-core`提供独立于窗口的Rust库和`hcwa-battle`命令行入口。
+`core/battle`提供独立于窗口的Rust库和`hcwa-battle`命令行入口。
 输入已经合成的有效面板、动作和规则参数，返回战斗结果、事件记录或多次模拟统计。
 Tauri可直接调用同一Rust库；账号转换与整局环境后续从各自模块接入。
 
@@ -15,7 +15,7 @@ Tauri可直接调用同一Rust库；账号转换与整局环境后续从各自�
 | 批次评估 | 独立种子、逐局记录、胜败频率、95% Wilson区间、按种子重放 |
 
 当前支持的规则契约为`basic_v1`，详细执行顺序见
-[核心说明](../../../crates/battle-core/README.md#architecture-and-execution-contract)。
+[核心说明](../../../core/battle/README.md#architecture-and-execution-contract)。
 它不会从角色名称自动补技能，也不推断后台机制、追击、召唤物、持续伤害、
 韧性击破状态变化或装备羁绊。已知未支持的机制放入`unsupported_mechanics`，
 入口会拒绝。完整账号配置到战斗输入的转换仍待实现。
@@ -34,10 +34,10 @@ HP当作玩家整局HP。预算耗尽按当前显式规则判败；程序行动�
 的Rust版本，Cargo.lock固定依赖。
 
 ```powershell
-cargo test --locked -p hcwa-battle-core
-cargo run --locked -p hcwa-battle-core --bin hcwa-battle -- validate crates/battle-core/examples/duel.json
-cargo run --locked -p hcwa-battle-core --bin hcwa-battle -- simulate crates/battle-core/examples/team-waves.json 17
-cargo run --release --locked -p hcwa-battle-core --bin hcwa-battle -- batch crates/battle-core/examples/duel.json 10000 20261114
+cargo test --locked -p battle-core
+cargo run --locked -p battle-core --bin hcwa-battle -- validate core/battle/examples/duel.json
+cargo run --locked -p battle-core --bin hcwa-battle -- simulate core/battle/examples/team-waves.json 17
+cargo run --release --locked -p battle-core --bin hcwa-battle -- batch core/battle/examples/duel.json 10000 20261114
 ```
 
 输出为JSON，错误写入stderr并返回退出码2。可将结果重定向到已忽略的`runs/`
@@ -69,7 +69,7 @@ AV边界结果一致。此约定不包含跨语言JSON规范化或截止点的�
 
 测试覆盖手算公式、状态转换、边界预算、资源合法性、未知与错误输入、取消、
 批次分母和完整种子重放；另外用固定上游表达式生成的18个合成向量核对公式迁移。
-来源与许可记录见[第三方说明](../../../crates/battle-core/THIRD_PARTY_NOTICES.md)。
+来源与许可记录见[第三方说明](../../../core/battle/THIRD_PARTY_NOTICES.md)。
 CI在Windows和Linux运行格式、静态检查、测试及合成10000次模拟。
 
 后续接入完整角色时，先完成账号/试用及模式参数的有效配置合成，逐项实现所需

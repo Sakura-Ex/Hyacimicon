@@ -1,5 +1,5 @@
 //! Small hand-checkable fixtures, independent of private game-data tables.
-use hcwa_battle_core::math::{damage, heal, shield, DamageInput};
+use battle_core::math::{damage, heal, shield, DamageInput};
 use serde_json::json;
 
 fn baseline() -> DamageInput {
