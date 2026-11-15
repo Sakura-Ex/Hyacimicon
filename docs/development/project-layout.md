@@ -67,6 +67,22 @@ hsr-currency-wars-ai/
 
 目录按业务职责组织；测试和示例跟随模块归属安排。新增目录承载实际代码或资料。模块增加、职责拆分或文件迁移时，同步更新当前目录和相关文档引用。
 
+## 按数据流安排模块目录
+
+以下是目录规划。先按[账号数据流](../modules/account-generation/data-flow.md#处理流程)和[系统设计](../project/architecture.md#架构与模块交互)确定模块负责的数据和调用方向，再按所在模块的语言配置构建入口。模块实际接入时创建目录，并更新上方的当前目录树。
+
+| 目录 | 负责的数据或流程 |
+| --- | --- |
+| `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。沿用现有 Python 包。 |
+| `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
+| `core/account/` | 统一玩家接入与程序生成的原始账号数据，按规则补试用、转换配置，输出生效配置和可用资源。 |
+| `core/run/` | 维护整局状态，提供可见局面和合法操作，校验操作并组装战斗输入，再用战斗结果结算血量、奖励和资源。 |
+| `core/battle/` | 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。 |
+| `core/decision/` | 从可见局面和可用资源构造模型输入，通过整局环境评估候选操作，输出运营或战斗建议。 |
+| `research/training/`、`research/evaluation/` | 调用共用接口采集轨迹、训练模型、回放对局和比较策略，记录实验与评估结果。 |
+
+原始账号先由 `core/account/` 转为生效配置。`core/decision/` 用它和可见局面做决策，`core/run/` 用它组装战斗输入，调用 `core/battle/`，再将结算后的状态交回调用方。研究工具与玩家应用通过这些接口接入。已有的原始账号字段和游戏规则仍在各自模块文档中维护。
+
 ## Python 与 Rust 共存
 
 先按模块职责划分研究工具和共用核心，再安排语言目录和构建入口。账号生成、训练和实验评估属于研究工具。战斗引擎由研究工具和玩家应用共用，按模拟核心维护。上方目录树记录当前已有文件，下表也给出后续 Rust 模块的放置约定。
@@ -75,7 +91,7 @@ hsr-currency-wars-ai/
 | --- | --- |
 | Python 研究、账号生成和训练代码 | `research/<模块>/`，按职责划分包 |
 | Python 测试和示例 | `tests/<模块>/` 和 `examples/<模块>/`，模块名与对应 Python 包一致 |
-| Rust 共用核心 | `crates/<crate>/`，每个 crate 有自己的 `Cargo.toml`。库入口为 `src/lib.rs`，小型 CLI 可用同一 crate 的 `src/main.rs`，负责参数、输入输出和调用库接口 |
+| Rust 共用核心 | 使用对应的业务目录，例如 `core/battle/`。每个 Cargo workspace 成员有自己的 `Cargo.toml`，根清单的 `members` 声明其目录。库入口为 `src/lib.rs`，小型 CLI 可用同一 crate 的 `src/main.rs`，负责参数、输入输出和调用库接口 |
 | Rust 测试和示例 | crate 内的单元测试随源码，集成测试和测试样例放在 `tests/`、`tests/fixtures/`，可运行示例及其样例输入放在 `examples/` |
 | 依赖和工具链 | 根目录的 `pyproject.toml`、`uv.lock` 管理 Python 包和依赖。Rust 接入后，根目录的 `Cargo.toml`、`Cargo.lock`、`rust-toolchain.toml` 管理 Cargo workspace、依赖和工具链 |
 | 模块文档 | `docs/modules/<模块>/`，按业务职责维护入口、接口和运行说明 |
