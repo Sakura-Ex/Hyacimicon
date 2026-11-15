@@ -70,6 +70,18 @@ PR 正文使用以下结构：
 
 通过 PR 向主分支合并改动，使用 squash merge 将一个 PR 中的提交合并为一次提交。新增必需检查时，其名称应与仓库中实际运行的检查任务一致。
 
+## 用机器人发布 PR 评论
+
+工作流 [Post PR comment](../../.github/workflows/post-pr-comment.yml) 合入默认分支后，有仓库写入权限的协作者可以在 **Actions → Post PR comment → Run workflow** 输入 PR 编号和评论正文。工作流在当前仓库检查 PR，再以 `github-actions[bot]` 身份发布一条普通评论。运行日志会显示评论链接。
+
+多行 Markdown（包括 Mermaid）可保存到 `comment.md`。在仓库根目录用已登录的 GitHub CLI 提交文件：
+
+```powershell
+gh workflow run post-pr-comment.yml -f 'pr_number=8' -F 'body=@comment.md'
+```
+
+`pr_number` 填实际要评论的 PR 编号。发布使用工作流内置的 `GITHUB_TOKEN`，权限限定在 PR 写入。
+
 ## 分支命名
 
 手动创建的分支建议命名为 `feat/<主题>`、`fix/<主题>`、`docs/<主题>`。Codex 创建的分支使用 `codex/<主题>`。
