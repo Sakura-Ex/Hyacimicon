@@ -1,10 +1,10 @@
 mod common;
 
-use common::*;
 use battle_core::{
     engine::{simulate, simulate_cancellable},
     model::*,
 };
+use common::*;
 
 fn run(input: Scenario) -> BattleResult {
     simulate(
