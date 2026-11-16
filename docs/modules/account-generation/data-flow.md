@@ -1,6 +1,6 @@
 # 账号数据流与模块职责
 
-状态：设计约定。持有角色的原始配置及单件和六件遗器生成已实现；账号级金数、统一五星配装和集中分配已实现；玩家数据接入和实际配置转换待实现。本文用于对接账号生成、模型输入和战斗模拟。
+状态：设计约定。持有角色的原始配置及单件和六件遗器生成已实现；账号级金数、统一五星配装和集中分配已实现；玩家数据接入已支持 reliquary-archiver v4，实际配置转换待实现。本文用于对接账号生成、模型输入和战斗模拟。
 
 ## 处理流程
 
@@ -35,9 +35,9 @@ flowchart LR
 | 模型输入编码 | 生效配置、可见局面及挑战条件 | 模型使用的结构化输入 |
 | 战斗输入组装 | 生效配置、局内星级与装备、双方状态和环境 | 战斗模拟所需输入 |
 
-账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入独立开发。完整角色和遗器生成通过 Python 参数调用，当前入口见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
+账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。完整角色和遗器生成通过 Python 参数调用，当前入口见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
 
-程序生成和玩家导入后续共用 `core/account/` 的 [Rust 原始账号模型](../account/README.md)。模型与统一格式序列化已实现，来源适配、Python 生成结果接入及玩法配置转换待实现。原始账号保存完整库存和可缺省的装备关系；导入报告与生成统计由各自入口单独保存。
+程序生成和玩家导入共用 `core/account/` 的 [Rust 原始账号模型](../account/README.md)。模型、统一格式序列化和 reliquary-archiver 导入已实现，Python 生成结果接入及玩法配置转换待实现。原始账号保存完整库存和可缺省的装备关系；导入报告与生成统计由各自入口单独保存。
 
 ## 生成与实际配置的分工
 

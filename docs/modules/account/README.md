@@ -1,24 +1,27 @@
-# Rust 原始账号模型
+# Rust 原始账号与导入
 
-状态：统一数据模型与 Serde 序列化已实现。玩家导入、Python 生成结果接入、玩法配置转换和 Python 绑定待实现。
+状态：统一数据模型、Serde 序列化及 reliquary-archiver v4 导入已实现。Python 生成结果接入、玩法配置转换和 Python 绑定待实现。
 
-`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。当前接收项目统一格式；来源适配器后续负责将 reliquary-archiver 等输入转换为该格式。整体流程见[账号数据流](../account-generation/data-flow.md)。
+`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
 ## 目录与入口
 
 ```text
 core/account/
 ├── Cargo.toml
+├── data/reliquary-traces-v4.json  # 已固定版本的行迹绑定
 ├── src/
 │   ├── lib.rs          # 公开类型
 │   ├── raw.rs          # 账号标识、版本与完整库存
 │   ├── character.rs    # 角色、行迹与装备引用
 │   ├── equipment.rs    # 光锥、遗器实例和部位
-│   └── stats.rs        # 统一主副词条键
-├── examples/raw_account.rs
+│   ├── stats.rs        # 统一主副词条键
+│   └── import/reliquary/  # 来源字段、行迹与装备转换
+├── examples/           # 统一格式读取与实际文件导入
 └── tests/
     ├── raw_account.rs
-    └── fixtures/raw_account.json
+    ├── reliquary_import.rs
+    └── fixtures/       # 人工构造的最小样例
 ```
 
 所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，当前成员为 `core/account`。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
@@ -53,13 +56,13 @@ core/account/
 
 百分比副词条使用比例值，例如 `0.0324` 表示 3.24%；固定生命、攻击、防御和速度使用实际值，保留小数精度。主词条保存已经区分固定值与百分比的键，最终数值在配置转换中按品质、强化等级和快照查询。属性键约定见[遗器数据](../../game-data/relic-data.md#字段与单位)。
 
-来源适配器需先完成主词条歧义处理、百分比换算和行迹绑定。尚未确认技能等级是否包含星魂加级时，保留来源记录，返回具体缺项，待口径确认后形成统一行迹数据。锁定、弃置、预览词条等来源字段由适配器另行保存；当前副词条由 `substats` 表达。
+reliquary-archiver v4 适配器已完成主词条歧义处理、百分比换算和行迹绑定。来源技能等级直接取账号技能树，保留基础等级。锁定、弃置、预览与重掷词条等来源字段保存在导入结果的 `source_data` 中；当前副词条由 `substats` 表达。字段依据与支持范围见[导入说明](reliquary-import.md)。
 
 ## 接入与转换
 
-本阶段的数据类型表达字段与单位。Serde 检查字段类型、已知枚举和必需字段；结构体拒绝未知字段，帮助发现尚未适配的来源字段。字段有值时按实际内容保存。
+统一数据类型表达字段与单位。Serde 检查统一格式的字段类型、已知枚举和必需字段；统一结构体拒绝未知字段。来源适配器保留原始 JSON 中的扩展信息，并报告尚待适配的字段。
 
-引用完整性、重复占用、数值范围、有限数值、行迹完整性、资料匹配和格式版本兼容性检查待接入接口实现。直接构造或反序列化成功表示已取得该数据结构，后续转换入口仍需完成这些检查。
+reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突、等级与突破范围、当前词条和行迹绑定。缺失的行迹信息保持未知并写入报告。直接构造或反序列化 `RawAccount` 时仍需由对应入口检查；完整规则合法性、游戏资料兼容性与玩法约束由后续转换处理。
 
 导入报告在原始账号之外保存错误、缺失字段和未知编码。生成器继续在自己的结果中保存生成参数、随机种子、投入评分与搜索统计，并在接入时提供 `RawAccount`。试用补齐、练度保底、星魂附加等级与生效属性计算由后续配置转换完成。
 
@@ -74,4 +77,4 @@ cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings
 ```
 
-样例为人工构造的统一格式数据，覆盖空装、部分配装、闲置装备、同种光锥多个实例、多形态、不同遗器品质和强化等级，以及未知行迹信息。数值用于验证模型表达和序列化；规则合法性与 reliquary-archiver 实际文件导入将在相应功能接入时验证。
+测试样例为人工构造数据，覆盖空装、部分配装、闲置装备、同种光锥多个实例、多形态、不同遗器品质和强化等级，以及未知行迹信息。reliquary-archiver 实际文件导入结果见[导入验证](reliquary-import.md#验证结果)。

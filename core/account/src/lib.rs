@@ -8,6 +8,7 @@
 
 pub mod character;
 pub mod equipment;
+pub mod import;
 pub mod raw;
 pub mod stats;
 
