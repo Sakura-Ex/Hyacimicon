@@ -6,16 +6,16 @@
 
 ```text
 hsr-currency-wars-ai/
-├── core/account/                        # Rust 账号模型、导入与实际配置设计
+├── core/account/                        # Rust 账号模型、导入与静态配置转换
 │   ├── Cargo.toml                       # account-core crate
 │   ├── data/                            # 行迹绑定及版本化基础数据、试用和映射模板
-│   ├── src/                             # 账号类型、来源导入、参考数据及配置计划
+│   ├── src/                             # 账号类型、来源导入、参考数据及静态计算
 │   │   ├── raw/                         # 原始账号、角色与装备实例
-│   │   ├── playable/                    # 实际配置、属性与映射计划
+│   │   ├── playable/                    # 生效配置、静态属性与保底映射
 │   │   ├── reference/                   # 版本化资料类型与载入
 │   │   └── import/                      # 来源适配器
-│   ├── tests/                           # 模型样例与序列化验证
-│   └── examples/                        # 统一格式读取示例
+│   ├── tests/                           # 导入、转换、序列化与数值验证
+│   └── examples/                        # 原始账号读取、导入与静态配置转换
 ├── research/account_generation/         # 原始账号配置生成
 │   ├── __init__.py                      # 对外接口
 │   ├── data/                            # 随模块安装的账号参考资料 JSON
@@ -55,6 +55,7 @@ hsr-currency-wars-ai/
 │   ├── development/                    # 通用开发、协作与目录约定
 │   └── modules/
 │       ├── README.md                   # 模块目录
+│       ├── account/                    # Rust 账号模型、导入与静态配置说明
 │       └── account-generation/         # 账号与遗器数据的设计资料
 │           ├── README.md               # 模块总览和阅读入口
 │           ├── data-flow.md            # 数据流与模块职责
