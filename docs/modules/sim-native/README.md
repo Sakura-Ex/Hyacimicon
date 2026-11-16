@@ -1,25 +1,25 @@
 # Python 模拟绑定使用说明
 
-`sim_native` 供训练和评估调用 Rust 模拟。战斗接口 `sim_native.battle` 先接入，局面接口 `sim_native.run` 随整局模拟接入。模块位置和依赖见[项目目录与模块职责](../../development/project-layout.md#python-模拟绑定)。
+`sim_native` 供训练和评估调用 Rust 模拟，包含战斗接口 `sim_native.battle` 和整局接口 `sim_native.run`。模块位置和依赖见[项目目录与模块职责](../../development/project-layout.md#python-模拟绑定)。
 
 当前处于规划阶段。以下命令待相应绑定实现后执行，构建、导入和打包结果待验证。
 
 ## 本地安装
 
-安装 Maturin 和仓库指定的 Rust 工具链，激活用于训练或评估的 Python 虚拟环境。在仓库的 `research/` 下运行：
+安装 Maturin 和 Rust 工具链，激活用于训练或评估的 Python 虚拟环境。在仓库的 `research/sim_native/` 下运行：
 
 ```powershell
-maturin develop --locked --manifest-path sim_native/Cargo.toml
+maturin develop --locked
 ```
 
-Maturin 读取绑定目录的 `pyproject.toml`，通过 Cargo 构建绑定及其 Rust 依赖，并将扩展安装到当前虚拟环境。
+Maturin 读取当前目录的 `pyproject.toml` 和 `Cargo.toml`，通过根 Cargo workspace 的锁文件构建绑定及其 Rust 依赖，并将扩展安装到当前虚拟环境。
 
 ## 构建 wheel
 
-在同一 `research/` 目录运行：
+在同一 `research/sim_native/` 目录运行：
 
 ```powershell
-maturin build --locked --release --manifest-path sim_native/Cargo.toml
+maturin build --locked --release
 ```
 
 ## 接入后的验证
