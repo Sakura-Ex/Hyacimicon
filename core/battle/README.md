@@ -21,6 +21,13 @@ Existing private-data adapters are not bundled in this public core.
 outcome ledgers and frequency estimates. CLI and future Tauri commands use the
 same Rust functions. There is no second set of frontend combat formulae.
 
+The private `scheduler` module owns natural elapsed AV and revival penalties,
+normal-action selection, clock advancement and action-time shifts. `engine` keeps
+combat eligibility, immediate ultimate priority and terminal checks in their
+existing order. Units retain absolute `next_av` values, and `basic_v1` arithmetic,
+tie order, traces and RNG streams are unchanged. This internal split introduces
+no Cycle rules or public scheduler API.
+
 The following semantics define `basic_v1` and are exposed rather than inferred:
 
 - Initial normal actions occur at `10000 / speed`. Ties follow stable input order

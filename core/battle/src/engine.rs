@@ -1,5 +1,9 @@
 //! Single-owner event loop for the explicit basic_v1 contract.
-use crate::{math, model::*};
+use crate::{
+    math,
+    model::*,
+    scheduler::{self, AdvanceResult, Timeline},
+};
 use rand_chacha::ChaCha8Rng;
 use rand_core::{RngCore, SeedableRng};
 use sha2::{Digest, Sha256};
@@ -48,8 +52,7 @@ impl CombatUnit {
 struct State<'a> {
     input: &'a ValidatedScenario,
     units: Vec<CombatUnit>,
-    now: f64,
-    penalty: f64,
+    timeline: Timeline,
     actions: u32,
     wave: usize,
     sp: [u8; 2],
@@ -89,8 +92,7 @@ impl<'a> State<'a> {
         Self {
             input,
             units,
-            now: 0.0,
-            penalty: 0.0,
+            timeline: Timeline::default(),
             actions: 0,
             wave: 0,
             sp: [s.ally_skill_points.initial, s.enemy_skill_points.initial],
@@ -119,7 +121,7 @@ impl<'a> State<'a> {
         }
         self.events.push(Event {
             index: self.events.len() as u32,
-            av: self.now,
+            av: self.timeline.now(),
             kind: kind.into(),
             actor: self.units[actor].spec.id.clone(),
             target: target.map(|i| self.units[i].spec.id.clone()),
@@ -223,9 +225,11 @@ impl<'a> State<'a> {
                 self.units[target].spec.stats.max_hp * r.hp_fraction,
                 "revival hp",
             )?;
-            self.units[target].next_av =
-                finite(self.now + self.units[target].interval(), "revival schedule")?;
-            self.penalty = finite(self.penalty + r.av_penalty, "revival penalty")?;
+            self.units[target].next_av = finite(
+                self.timeline.now() + self.units[target].interval(),
+                "revival schedule",
+            )?;
+            self.timeline.add_penalty(r.av_penalty)?;
             self.emit(
                 "revive",
                 target,
@@ -388,7 +392,8 @@ impl<'a> State<'a> {
                 for recipient in self.targets(actor, target)? {
                     let before = self.units[recipient].next_av;
                     self.units[recipient].next_av = finite(
-                        (before - fraction * self.units[recipient].interval()).max(self.now),
+                        self.timeline
+                            .shifted(before, fraction, self.units[recipient].interval()),
                         "action advance",
                     )?;
                     self.emit(
@@ -425,8 +430,10 @@ impl<'a> State<'a> {
                     );
                 }
             }
-            self.units[actor].next_av =
-                finite(self.now + self.units[actor].interval(), "normal schedule")?;
+            self.units[actor].next_av = finite(
+                self.timeline.now() + self.units[actor].interval(),
+                "normal schedule",
+            )?;
         }
         let side = self.side(actor);
         self.sp[side] -= action.sp_cost;
@@ -458,8 +465,8 @@ impl<'a> State<'a> {
             ruleset: "basic_v1".into(),
             outcome,
             termination,
-            elapsed_av: self.now,
-            penalty_av: self.penalty,
+            elapsed_av: self.timeline.now(),
+            penalty_av: self.timeline.penalty(),
             actions: self.actions,
             waves_cleared,
             ally_skill_points: self.sp[0],
@@ -525,12 +532,12 @@ pub fn simulate_cancellable(
             state.units.extend(
                 input.scenario().waves[state.wave]
                     .iter()
-                    .map(|u| CombatUnit::new(u, false, state.now)),
+                    .map(|u| CombatUnit::new(u, false, state.timeline.now())),
             );
         }
         // Settled battle outcomes precede requests to stop further execution.
         // Only elapsed budget counts here; do not forecast the next action.
-        if state.now + state.penalty >= input.scenario().max_av {
+        if state.timeline.exhausted(input.scenario().max_av) {
             return Ok(state.finish(
                 seed,
                 Outcome::Defeat,
@@ -554,17 +561,16 @@ pub fn simulate_cancellable(
             state.act(actor, action, false)?;
             continue;
         }
-        let actor = state
-            .units
-            .iter()
-            .enumerate()
-            .filter(|(_, u)| u.alive())
-            .min_by(|(ia, a), (ib, b)| a.next_av.total_cmp(&b.next_av).then(ia.cmp(ib)))
-            .map(|(i, _)| i)
-            .ok_or("no living units after terminal check")?;
-        let time = state.units[actor].next_av;
-        if time + state.penalty >= input.scenario().max_av {
-            state.now = (input.scenario().max_av - state.penalty).max(state.now);
+        let (actor, time) = scheduler::next_normal(
+            state
+                .units
+                .iter()
+                .enumerate()
+                .filter(|(_, u)| u.alive())
+                .map(|(i, u)| (i, u.next_av)),
+        )
+        .ok_or("no living units after terminal check")?;
+        if state.timeline.advance_to(time, input.scenario().max_av)? == AdvanceResult::Deadline {
             return Ok(state.finish(
                 seed,
                 Outcome::Defeat,
@@ -572,10 +578,6 @@ pub fn simulate_cancellable(
                 cleared,
             ));
         }
-        if time < state.now {
-            return Err("action clock moved backwards".into());
-        }
-        state.now = time;
         let action = state
             .choose(actor, false)
             .ok_or("no affordable normal action despite validated fallback")?;
