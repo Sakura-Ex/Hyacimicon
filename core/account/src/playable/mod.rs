@@ -12,14 +12,29 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    LightConeInstance, RelicInstance, TraceConfig,
+    LightConeInstance, RelicInstance,
     reference::{Element, EnergyCapacity, RelicGroupTemplate, TrialRelics},
 };
 
-use self::attributes::AttributeValues;
-
 /// 实际游玩配置的序列化格式版本。
 pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 1;
+
+/// 玩法中角色与光锥的统一等级。
+pub const PLAYABLE_LEVEL: u8 = 80;
+/// 玩法中角色与光锥的统一进阶。
+pub const PLAYABLE_PROMOTION: u8 = 6;
+/// 试用与默认映射光锥的统一叠影。
+pub const TEMPLATE_LIGHT_CONE_SUPERIMPOSITION: u8 = 1;
+/// 遗器整圈映射所要求的强化等级。
+pub const RELIC_MAPPING_LEVEL: u8 = 15;
+/// 无特殊基础暴击率时使用的数值。
+pub const BASE_CRIT_RATE: f64 = 0.05;
+/// 角色统一基础暴击伤害。
+pub const BASE_CRIT_DAMAGE: f64 = 0.5;
+/// 玩法基础幸运率。
+pub const BASE_LUCKY_RATE: f64 = 0.05;
+/// 玩法基础幸运伤害。
+pub const BASE_LUCKY_DAMAGE: f64 = 1.0;
 
 /// 一次配置转换使用的账号资源模式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,16 +88,12 @@ pub enum EquipmentOrigin {
     },
 }
 
-/// 已确定等级、突破和叠影的生效光锥。
+/// 使用统一等级与进阶的生效光锥。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlayableLightCone {
     /// 光锥种类 ID。
     pub light_cone_id: String,
-    /// 生效等级。
-    pub level: u8,
-    /// 生效突破。
-    pub promotion: u8,
     /// 生效叠影。
     pub superimposition: u8,
     /// 库存实例或角色专用模板来源。
@@ -127,14 +138,14 @@ pub enum PlayableRelics {
     },
 }
 
-/// 同时保存生效基础行迹和星魂计算后的技能等级。
+/// 星魂加级后的技能等级与节点解锁状态。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlayableTraces {
-    /// 映射或试用展开后的基础等级、真实节点解锁状态。
-    pub base: TraceConfig,
     /// 技能 ID 到包含星魂附加等级的最终技能等级。
     pub skill_levels: BTreeMap<String, u8>,
+    /// 一次性行迹节点的解锁状态。
+    pub node_unlocks: BTreeMap<String, bool>,
 }
 
 /// 静态来源已计入的角色面板，供后续加入局内因素。
@@ -173,55 +184,6 @@ pub struct CharacterPanel {
     pub energy: EnergyCapacity,
 }
 
-/// 需由机制模块解释的效果引用。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum MechanismReference {
-    /// 角色与能力版本。
-    Character {
-        /// 角色 ID。
-        character_id: String,
-        /// 能力版本。
-        ability_version: u32,
-    },
-    /// 星魂机制。
-    Eidolon {
-        /// 角色 ID。
-        character_id: String,
-        /// 生效星魂数。
-        count: u8,
-    },
-    /// 行迹机制。
-    Trace {
-        /// 已解锁节点 ID。
-        node_id: String,
-    },
-    /// 光锥效果。
-    LightCone {
-        /// 光锥 ID。
-        light_cone_id: String,
-        /// 叠影。
-        superimposition: u8,
-    },
-    /// 套装效果。
-    RelicSet {
-        /// 套装 ID。
-        set_id: String,
-        /// 实际件数。
-        pieces: u8,
-    },
-}
-
-/// 一个静态属性来源的贡献，用于核对面板。
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PanelContribution {
-    /// 来源类型与对应 ID，例如角色、行迹、光锥或遗器。
-    pub source: String,
-    /// 该来源贡献的固定值或百分比。
-    pub attributes: AttributeValues,
-}
-
 /// 已完成模板展开、映射和面板计算的一种角色配置。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -230,10 +192,6 @@ pub struct PlayableCharacter {
     pub character_id: String,
     /// 本体、试用或玩法专属来源。
     pub origin: CharacterOrigin,
-    /// 生效等级。
-    pub level: u8,
-    /// 生效突破。
-    pub promotion: u8,
     /// 生效星魂数。
     pub eidolons: u8,
     /// 玩法固定使用的能力版本。
@@ -246,10 +204,6 @@ pub struct PlayableCharacter {
     pub relics: PlayableRelics,
     /// 已完成的静态面板。
     pub panel: CharacterPanel,
-    /// 面板各项数值的来源。
-    pub panel_contributions: Vec<PanelContribution>,
-    /// 后续战斗与机制处理需要的引用。
-    pub mechanisms: Vec<MechanismReference>,
 }
 
 /// 供策略与战斗组装共用的完整实际游玩配置。

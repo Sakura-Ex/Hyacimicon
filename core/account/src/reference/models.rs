@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeMap;
 
-use crate::playable::attributes::AttributeBonus;
+use crate::playable::{BASE_CRIT_RATE, attributes::AttributeBonus};
 
 /// 一个角色各小行迹节点激活后的属性贡献。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -105,12 +105,17 @@ pub struct CharacterBaseStats {
     pub defense: f64,
     /// 基础速度。
     pub speed: f64,
-    /// 基础暴击率，使用比例。
-    pub crit_rate: f64,
-    /// 基础暴击伤害，使用比例。
-    pub crit_damage: f64,
+    /// 基础暴击率的特殊取值；缺省时使用统一基础暴击率。
+    pub crit_rate_override: Option<f64>,
     /// 基础嘲讽值，未记录时为空。
     pub aggro: Option<u16>,
+}
+
+impl CharacterBaseStats {
+    /// 读取特殊暴击率或统一的基础暴击率。
+    pub fn crit_rate(&self) -> f64 {
+        self.crit_rate_override.unwrap_or(BASE_CRIT_RATE)
+    }
 }
 
 /// 文档所列能量或专属资源的容量。
@@ -137,10 +142,6 @@ pub struct CharacterData {
     pub rarity: Option<u8>,
     /// 攻击属性。
     pub element: Element,
-    /// 本条基础数据适用等级。
-    pub level: u8,
-    /// 本条基础数据适用突破阶段。
-    pub promotion: u8,
     /// 角色自身属性。
     pub base: CharacterBaseStats,
     /// 能量或专属资源容量。
@@ -157,10 +158,6 @@ pub struct LightConeData {
     pub path: GamePath,
     /// 三／四／五星稀有度。
     pub rarity: u8,
-    /// 数据适用等级。
-    pub level: u8,
-    /// 数据适用突破阶段。
-    pub promotion: u8,
     /// 光锥自身属性。
     pub base: BaseCombatStats,
 }
@@ -187,7 +184,7 @@ pub struct BackgroundEnergy {
     pub maximum: f64,
 }
 
-/// 一种玩法形态在指定局内星级下的参数，供后续战斗组装使用。
+/// 一种玩法形态的固定信息及各星级参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GameplayFormData {
@@ -199,6 +196,14 @@ pub struct GameplayFormData {
     pub cost: u8,
     /// 可用站位类别。
     pub position: Position,
+    /// 各局内星级的参数。
+    pub stars: Vec<GameplayStarData>,
+}
+
+/// 同一玩法形态在一个局内星级下的数值。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GameplayStarData {
     /// 局内星级。
     pub star: u8,
     /// 前台强度。
@@ -221,8 +226,4 @@ pub struct GameplayFormData {
     pub base_damage_modifier: Option<f64>,
     /// 每增加一魂的伤害修正，使用比例。
     pub damage_modifier_per_eidolon: Option<f64>,
-    /// 基础幸运率。
-    pub lucky_rate: f64,
-    /// 基础幸运伤害。
-    pub lucky_damage: f64,
 }

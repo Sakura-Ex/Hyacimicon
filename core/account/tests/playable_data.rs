@@ -7,7 +7,7 @@ use account_core::{
     playable::{
         CharacterOrigin, ConfigurationMode, PlayableRelics,
         attributes::Attribute,
-        planning::{MappingAction, PlanRequest, plan_playable_account},
+        planning::{MappingAction, PlanRequest, mapped_eidolons, plan_playable_account},
     },
     reference::{MappingPart, PlayableData, SkillKind},
 };
@@ -35,8 +35,23 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     assert_eq!(data.light_cones.len(), 172);
     assert_eq!(data.trials.len(), 61);
     assert_eq!(data.mappings.len(), 60);
-    assert_eq!(data.gameplay_forms.len(), 216);
-    assert_eq!(data.rules.default_light_cones.len(), 9);
+    assert_eq!(data.gameplay_forms.len(), 63);
+    assert_eq!(
+        data.gameplay_forms
+            .iter()
+            .map(|form| form.stars.len())
+            .sum::<usize>(),
+        216
+    );
+    assert_eq!(data.default_light_cones.len(), 9);
+    for (path, cone_id) in &data.default_light_cones {
+        let cone = data
+            .light_cones
+            .iter()
+            .find(|entry| entry.id == *cone_id)
+            .unwrap();
+        assert_eq!(cone.path, *path);
+    }
     assert_eq!(data.minor_traces.len(), 60);
     for minor in &data.minor_traces {
         assert_eq!(
@@ -44,14 +59,6 @@ fn loads_all_documented_records_and_preserves_cross_references() {
             (201..=210).collect::<Vec<_>>()
         );
     }
-    assert_eq!(
-        (
-            data.relics.mainstats.len(),
-            data.relics.substats.len(),
-            data.relics.sets.len()
-        ),
-        (19, 12, 64)
-    );
     let character_ids: BTreeSet<_> = data.characters.iter().map(|entry| &entry.id).collect();
     let trial_ids: BTreeSet<_> = data
         .trials
@@ -61,11 +68,8 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     assert_eq!(character_ids, trial_ids);
     assert_eq!(character_ids.len(), 61);
     let cone_ids: BTreeSet<_> = data.light_cones.iter().map(|entry| &entry.id).collect();
-    let set_ids: BTreeSet<_> = data.relics.sets.iter().map(|entry| &entry.id).collect();
     for trial in &data.trials {
-        assert!(cone_ids.contains(&trial.light_cone.light_cone_id));
-        assert!(set_ids.contains(&trial.relics.outer_set_id));
-        assert!(set_ids.contains(&trial.relics.planar_set_id));
+        assert!(cone_ids.contains(&trial.light_cone_id));
         if let Some(traces) = &trial.traces {
             let minor = data
                 .minor_traces
@@ -82,8 +86,6 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     }
     for mapping in &data.mappings {
         assert!(character_ids.contains(&mapping.character_id));
-        assert!(set_ids.contains(&mapping.outer.set_id));
-        assert!(set_ids.contains(&mapping.planar.set_id));
     }
     let gameplay_ids: BTreeSet<_> = data
         .gameplay_forms
@@ -133,9 +135,6 @@ fn binds_the_last_two_minor_nodes_and_keeps_fully_unlocked_trials() {
             ),
         }
     }
-    for mapping in &data.mappings {
-        assert_eq!(mapping.traces.inactive_minor_nodes, [209, 210]);
-    }
 }
 
 #[test]
@@ -146,16 +145,10 @@ fn keeps_trial_and_mapping_values_distinct() {
         .iter()
         .find(|entry| entry.character_id == "1408")
         .unwrap();
-    let mapping = data
-        .mappings
-        .iter()
-        .find(|entry| entry.character_id == "1408")
-        .unwrap();
     assert_eq!(
         trial.traces.as_ref().unwrap().base_levels[&SkillKind::Basic],
         6
     );
-    assert_eq!(mapping.traces.base_levels[&SkillKind::Basic], 5);
     let welt = data
         .mappings
         .iter()
@@ -165,31 +158,50 @@ fn keeps_trial_and_mapping_values_distinct() {
     assert_eq!(welt.planar.set_id, "309");
     assert_eq!(welt.outer.stats[&Attribute::Speed], 29.632);
     assert!((welt.planar.stats[&Attribute::ImaginaryDamageBoost] - 0.388803).abs() < 1e-12);
-    for entry in &data.mappings {
-        let definition = data
-            .characters
-            .iter()
-            .find(|definition| definition.id == entry.character_id)
-            .unwrap();
-        assert_eq!(
-            entry.eidolons,
-            if definition.rarity == Some(4) { 6 } else { 0 }
-        );
-    }
 }
 
 #[test]
-fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
+fn derives_mapped_eidolons_from_rarity_independently_of_trial_eidolons() {
+    let data = PlayableData::bundled().unwrap();
+    let natasha = data
+        .characters
+        .iter()
+        .find(|entry| entry.id == "1105")
+        .unwrap();
+    assert_eq!(mapped_eidolons(natasha).unwrap(), 6);
+    let trailblazer = data
+        .characters
+        .iter()
+        .find(|entry| entry.id == "8009")
+        .unwrap();
+    assert_eq!(
+        data.trials
+            .iter()
+            .find(|entry| entry.character_id == "8009")
+            .unwrap()
+            .eidolons,
+        6
+    );
+    assert_eq!(mapped_eidolons(trailblazer).unwrap(), 0);
+    let pam = data
+        .characters
+        .iter()
+        .find(|entry| entry.id == "6042")
+        .unwrap();
+    assert_eq!(
+        mapped_eidolons(pam).unwrap_err().0,
+        "角色 6042 缺少适用于星魂映射的四／五星稀有度"
+    );
+}
+
+#[test]
+fn preserves_aggregate_trial_relics_and_special_characters() {
     let data = PlayableData::bundled().unwrap();
     let welt = data
         .trials
         .iter()
         .find(|entry| entry.character_id == "1004")
         .unwrap();
-    assert_eq!(welt.character_level, None);
-    assert_eq!(welt.character_promotion, None);
-    assert_eq!(welt.light_cone.level, None);
-    assert_eq!(welt.light_cone.superimposition, 1);
     assert!((welt.relics.stats[&Attribute::ImaginaryDamageBoost] - 0.3888).abs() < 1e-12);
     let relics = PlayableRelics::TrialAggregate {
         template_id: "1004".to_owned(),
@@ -205,7 +217,7 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
         .find(|entry| entry.id == "6042")
         .unwrap();
     assert_eq!(pam.base.hp, 917.28);
-    assert_eq!(pam.base.crit_rate, 1.0);
+    assert_eq!(pam.base.crit_rate(), 1.0);
     assert_eq!(pam.base.aggro, Some(125));
     assert_eq!(pam.rarity, None);
     assert!(
@@ -218,7 +230,8 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
         data.gameplay_forms
             .iter()
             .filter(|entry| entry.character_id == "1511")
-            .count(),
+            .map(|form| form.stars.len())
+            .sum::<usize>(),
         9
     );
     let aha = data
@@ -230,7 +243,12 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
         aha.traces.as_ref().unwrap().base_levels[&SkillKind::AhaBiography],
         1
     );
-    assert_eq!(data.rules.relic_mapping_minimum_level, 15);
+    let normal = data
+        .characters
+        .iter()
+        .find(|entry| entry.id == "1004")
+        .unwrap();
+    assert_eq!(normal.base.crit_rate(), 0.05);
 }
 
 #[test]
@@ -252,7 +270,7 @@ fn fills_missing_roles_with_trial_sources_and_preserves_original_account() {
             raw_character_id: "1004".to_owned()
         }
     );
-    assert_eq!(welt.mapping_decisions.len(), 6);
+    assert_eq!(welt.mapping_decisions.len(), 5);
     assert_eq!(
         welt.mapping_decisions[&MappingPart::OuterRelics],
         MappingAction::UseTemplate

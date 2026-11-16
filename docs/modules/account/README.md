@@ -20,7 +20,7 @@ core/account/
 │   │   ├── equipment.rs  # 光锥、遗器实例和部位
 │   │   └── stats.rs    # 遗器主副词条键
 │   ├── playable/       # 实际配置与转换计划
-│   │   ├── mod.rs      # 生效配置、面板与机制引用
+│   │   ├── mod.rs      # 生效配置、面板及共用规则常量
 │   │   ├── planning.rs  # 角色来源与分项映射计划
 │   │   ├── attributes.rs  # 静态属性键与单位
 │   │   └── traces.rs   # 按试用基础行迹补齐

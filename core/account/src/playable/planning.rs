@@ -13,8 +13,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     CharacterConfig, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicInstance, RelicSlot,
-    playable::{CharacterOrigin, ConfigurationMode},
-    reference::{CharacterKind, MappingPart, PlayableData},
+    playable::{CharacterOrigin, ConfigurationMode, RELIC_MAPPING_LEVEL},
+    reference::{CharacterData, CharacterKind, MappingPart, PlayableData},
 };
 
 /// 每部分的映射选择，待判断状态明确保留。
@@ -49,7 +49,7 @@ pub struct PlannedCharacter {
     pub character_id: String,
     /// 本体、试用或玩法专属来源。
     pub origin: CharacterOrigin,
-    /// 本体的六部分选择；试用和玩法专属角色为空。
+    /// 本体的分项选择；试用和玩法专属角色为空。
     pub mapping_decisions: BTreeMap<MappingPart, MappingAction>,
 }
 
@@ -83,6 +83,20 @@ impl fmt::Display for PlanError {
 }
 
 impl Error for PlanError {}
+
+/// 按角色稀有度确定星魂映射目标：四星为 6，五星为 0。
+///
+/// 依据常规稀有度计算；缺少四／五星稀有度时返回具体错误。
+pub fn mapped_eidolons(character: &CharacterData) -> Result<u8, PlanError> {
+    match character.rarity {
+        Some(4) => Ok(6),
+        Some(5) => Ok(0),
+        _ => Err(PlanError(format!(
+            "角色 {} 缺少适用于星魂映射的四／五星稀有度",
+            character.id
+        ))),
+    }
+}
 
 /// 按持有情况补齐试用来源，并根据遗器等级判断内外圈整体映射。
 ///
@@ -153,7 +167,6 @@ pub fn plan_playable_account(
         }
     }
     let parts = [
-        MappingPart::CharacterProgression,
         MappingPart::Eidolons,
         MappingPart::Traces,
         MappingPart::LightCone,
@@ -202,13 +215,11 @@ pub fn plan_playable_account(
                                 RelicSlot::Body,
                                 RelicSlot::Feet,
                             ],
-                            data.rules.relic_mapping_minimum_level,
                         )?,
                         MappingPart::PlanarRelics => relic_mapping_action(
                             character,
                             &relics,
                             &[RelicSlot::PlanarSphere, RelicSlot::LinkRope],
-                            data.rules.relic_mapping_minimum_level,
                         )?,
                         _ => MappingAction::Undetermined,
                     };
@@ -266,7 +277,6 @@ fn relic_mapping_action(
     character: &CharacterConfig,
     relics: &BTreeMap<&str, &RelicInstance>,
     slots: &[RelicSlot],
-    minimum_level: u8,
 ) -> Result<MappingAction, PlanError> {
     let mut has_underleveled = false;
     let mut has_empty_slot = false;
@@ -287,12 +297,12 @@ fn relic_mapping_action(
                 character.character_id
             )));
         }
-        if relic.level > minimum_level {
+        if relic.level > RELIC_MAPPING_LEVEL {
             return Err(PlanError(format!(
-                "遗器 {instance_id} 等级超过资料上限 {minimum_level}"
+                "遗器 {instance_id} 等级超过资料上限 {RELIC_MAPPING_LEVEL}"
             )));
         }
-        has_underleveled |= relic.level < minimum_level;
+        has_underleveled |= relic.level < RELIC_MAPPING_LEVEL;
     }
     Ok(if has_underleveled {
         MappingAction::UseTemplate
