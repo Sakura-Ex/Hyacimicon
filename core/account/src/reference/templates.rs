@@ -50,7 +50,7 @@ pub struct TrialRelics {
     pub stats: AttributeValues,
 }
 
-/// 文档中的试用配置，供未持有角色和全试用任务使用。
+/// 文档中的试用配置，供未持有角色使用。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TrialTemplate {

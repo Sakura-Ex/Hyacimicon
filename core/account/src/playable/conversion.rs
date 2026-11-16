@@ -12,9 +12,9 @@ use crate::{
 };
 
 use super::{
-    CharacterOrigin, ConfigurationMode, EquipmentOrigin, PLAYABLE_ACCOUNT_SCHEMA_VERSION,
-    PlayableAccount, PlayableCharacter, PlayableLightCone, PlayableRelicGroup, PlayableRelics,
-    PlayableTraces, TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
+    CharacterOrigin, EquipmentOrigin, PLAYABLE_ACCOUNT_SCHEMA_VERSION, PlayableAccount,
+    PlayableCharacter, PlayableLightCone, PlayableRelicGroup, PlayableRelics, PlayableTraces,
+    TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
     attributes::AttributeValues,
     panel,
     selection::{mapped_eidolons, owned_characters},
@@ -24,14 +24,12 @@ use super::{
 /// 完整转换使用的规则版本。
 pub const CONVERSION_RULES_VERSION: &str = "s2-4.7-v1";
 
-/// 完整转换所需的输出标识、资源模式和角色 ID 对照。
+/// 完整转换所需的输出标识和角色 ID 对照。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ConversionRequest {
     /// 本次游玩配置的标识。
     pub config_id: String,
-    /// 本体加试用，或全试用。
-    pub mode: ConfigurationMode,
     /// 已核对的原始角色 ID 到模板角色 ID 对照。
     pub character_aliases: BTreeMap<String, String>,
 }
@@ -69,11 +67,7 @@ pub fn convert_playable_account(
             .iter()
             .find(|entry| &entry.id == id)
             .ok_or_else(|| ConversionError(format!("缺少角色 {id} 的基础数据")))?;
-        let owned = if request.mode == ConfigurationMode::OwnedWithTrials {
-            owned_index.get(id).copied()
-        } else {
-            None
-        };
+        let owned = owned_index.get(id).copied();
         let eidolons = match owned {
             Some(character) => character.eidolons.max(mapped_eidolons(definition)?),
             None => trial.eidolons,
@@ -225,7 +219,6 @@ pub fn convert_playable_account(
         season: data.manifest.season.clone(),
         data_snapshot: data.manifest.snapshot_id.clone(),
         rules_version: CONVERSION_RULES_VERSION.to_owned(),
-        mode: request.mode,
         characters,
         owned_light_cones: raw.light_cones.iter().map(owned_light_cone).collect(),
         owned_relics: raw.relics.clone(),

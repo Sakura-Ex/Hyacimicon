@@ -6,7 +6,7 @@ use account_core::{
     CharacterConfig, LightConeInstance, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicInstance,
     RelicMainStat, RelicSlot, RelicSubStat, TraceConfig,
     playable::{
-        CharacterOrigin, ConfigurationMode, EquipmentOrigin, PlayableRelicGroup, PlayableRelics,
+        CharacterOrigin, EquipmentOrigin, PlayableRelicGroup, PlayableRelics,
         conversion::{ConversionRequest, convert_playable_account},
     },
     reference::PlayableData,
@@ -55,11 +55,10 @@ fn account() -> RawAccount {
     }
 }
 
-/// 普通资源模式的完整转换请求。
+/// 完整转换请求。
 fn request() -> ConversionRequest {
     ConversionRequest {
         config_id: "playable-test".to_owned(),
-        mode: ConfigurationMode::OwnedWithTrials,
         character_aliases: BTreeMap::new(),
     }
 }
@@ -182,12 +181,15 @@ fn counts_owned_mainstats_substats_and_set_bonuses_once_with_mapped_inner_relics
 }
 
 #[test]
-fn trial_mode_uses_trial_eidolons_skills_and_equipment_for_all_characters() {
-    let raw = account();
-    let mut options = request();
-    options.mode = ConfigurationMode::TrialsOnly;
+fn empty_owned_roster_is_filled_with_trial_eidolons_skills_and_equipment() {
+    let mut raw = account();
+    raw.characters.clear();
+    let before = raw.clone();
     let result =
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &options).unwrap();
+        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    assert_eq!(raw, before);
+    assert_eq!(result.characters.len(), 61);
+    assert_eq!(result.owned_light_cones[0].superimposition, 5);
     assert!(
         result
             .characters

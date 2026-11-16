@@ -4,25 +4,22 @@ use std::{collections::BTreeMap, env, error::Error, fs, io};
 
 use account_core::{
     import::reliquary::import_reliquary_archive,
-    playable::{
-        ConfigurationMode,
-        conversion::{ConversionRequest, convert_playable_account},
-    },
+    playable::conversion::{ConversionRequest, convert_playable_account},
     reference::PlayableData,
 };
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = env::args().skip(1).collect();
     if arguments.len() < 2 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput,
-            "用法：convert_playable <导出文件> <输出文件> [原始角色ID=模板角色ID ...] [--trials-only]").into());
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "用法：convert_playable <导出文件> <输出文件> [原始角色ID=模板角色ID ...]",
+        )
+        .into());
     }
     let mut aliases = BTreeMap::new();
-    let mut mode = ConfigurationMode::OwnedWithTrials;
     for argument in &arguments[2..] {
-        if argument == "--trials-only" {
-            mode = ConfigurationMode::TrialsOnly;
-        } else if let Some((source, target)) = argument.split_once('=') {
+        if let Some((source, target)) = argument.split_once('=') {
             if aliases
                 .insert(source.to_owned(), target.to_owned())
                 .is_some()
@@ -44,7 +41,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         &data,
         &ConversionRequest {
             config_id: "player-account-s2".to_owned(),
-            mode,
             character_aliases: aliases,
         },
     )?;

@@ -4,17 +4,17 @@
 
 ## 输入与交付
 
-公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID、本体加试用或全试用模式，以及已核对的角色 ID 对照。缺少必需资料或资源引用冲突时返回 `ConversionError`。
+公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID 和已核对的角色 ID 对照。角色来源由原始账号的实际持有情况确定，缺少必需资料或资源引用冲突时返回 `ConversionError`。
 
 账号模块完成来源选择、练度保底、技能加级和静态属性计算。局面模拟使用这份配置维护实际阵容。战斗输入组装再根据局面、敌人和游戏资料计算开战属性、固定系数及动作参数；战斗引擎执行战斗流程，实时处理 buff 和触发效果。调用关系见[账号数据流](../account-generation/data-flow.md)。
 
 ## 数据结构
 
-类型位于 `core/account/src/playable/`。格式版本 `PLAYABLE_ACCOUNT_SCHEMA_VERSION` 当前为 2。
+类型位于 `core/account/src/playable/`。格式版本 `PLAYABLE_ACCOUNT_SCHEMA_VERSION` 当前为 3。
 
 | 类型 | 保存内容 |
 | --- | --- |
-| `PlayableAccount` | 配置关联、游戏版本、赛季、资料与规则版本、资源模式、角色列表和持有库存 |
+| `PlayableAccount` | 配置关联、游戏版本、赛季、资料与规则版本、角色列表和持有库存 |
 | `PlayableCharacter` | 角色 ID、本体或试用来源、星魂、能力版本、行迹、光锥、遗器和静态面板 |
 | `CharacterOrigin` | 本体及原始角色 ID，或试用来源；玩法专属角色同样采用模板 |
 | `PlayableTraces` | 计入星魂加级后的实际技能等级，以及一次性节点激活状态 |
@@ -29,7 +29,7 @@
 
 静态属性计入已激活小行迹、遗器主副词条、套装无条件常驻属性和命途匹配的光锥无条件常驻属性。动态效果由战斗引擎计算，组装时按这一约定衔接各来源，保证静态贡献只计入一次。换装后重新计算静态面板。
 
-持有库存保存可分配的实际实例。角色引用库存装备；试用和映射遗器保存原表提供的合计配置。全试用模式下角色统一采用试用配置，库存使用权限由后续资源选择检查。
+持有库存保存可分配的实际实例。角色引用库存装备；试用和映射遗器保存原表提供的合计配置。不同账号分别导入和转换，包括用于全试用挑战的账号。
 
 ## 计算资料
 
@@ -52,7 +52,7 @@
 
 ## 转换规则
 
-入口先检查账号版本、重复 ID、装备引用、部位和跨角色占用，再按试用表顺序生成全部角色配置。普通模式采用持有角色本体，缺席角色补齐试用；全试用模式统一采用试用。玩法专属角色从模板取得。
+入口先检查账号版本、重复 ID、装备引用、部位和跨角色占用，再按试用表顺序生成全部角色配置。持有角色采用本体，缺席角色补齐试用，玩法专属角色从模板取得。
 
 角色 ID 对照由调用方显式提供。例如已确认的开拓者 `8010 → 8009` 会保留原始 ID；多个持有条目对应同一目标时返回冲突。
 
@@ -72,7 +72,6 @@
 
 ```powershell
 cargo run --locked -p account-core --example convert_playable -- <导出.json> <静态配置.json> 8010=8009
-cargo run --locked -p account-core --example convert_playable -- <导出.json> <全试用配置.json> --trials-only
 cargo test --locked -p account-core
 cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings

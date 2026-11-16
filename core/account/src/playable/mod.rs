@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// 实际游玩配置的序列化格式版本。
-pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 2;
+pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 3;
 
 /// 玩法中角色与光锥的统一等级。
 pub const PLAYABLE_LEVEL: u8 = 80;
@@ -34,16 +34,6 @@ pub const BASE_CRIT_RATE: f64 = 0.05;
 /// 角色统一基础暴击伤害。
 pub const BASE_CRIT_DAMAGE: f64 = 0.5;
 
-/// 一次配置转换使用的账号资源模式。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConfigurationMode {
-    /// 持有角色使用本体，缺席角色补齐试用。
-    OwnedWithTrials,
-    /// 按挑战设置对全部角色使用试用模板。
-    TrialsOnly,
-}
-
 /// 角色配置来源，保留本体与试用的区别。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -53,7 +43,7 @@ pub enum CharacterOrigin {
         /// 原始角色 ID，显式别名映射后可能与目标 ID 不同。
         raw_character_id: String,
     },
-    /// 未持有或全试用模式采用的模板。
+    /// 未持有角色采用的模板。
     Trial,
 }
 
@@ -224,8 +214,6 @@ pub struct PlayableAccount {
     pub data_snapshot: String,
     /// 转换规则版本。
     pub rules_version: String,
-    /// 本体加试用，或全试用模式。
-    pub mode: ConfigurationMode,
     /// 玩法角色范围内的生效配置。
     pub characters: Vec<PlayableCharacter>,
     /// 使用统一等级与进阶的持有光锥库存。
