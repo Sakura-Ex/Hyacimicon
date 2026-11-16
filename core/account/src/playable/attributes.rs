@@ -31,6 +31,9 @@ pub enum Attribute {
     /// 固定速度，保留小数。
     #[serde(rename = "SPD")]
     Speed,
+    /// 基础速度增加量，计入百分比速度加成所用的基础值。
+    #[serde(rename = "BaseSpeed")]
+    BaseSpeed,
     /// 速度百分比。
     #[serde(rename = "SPD_")]
     SpeedPercent,

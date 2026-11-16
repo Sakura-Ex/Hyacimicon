@@ -181,6 +181,48 @@ fn counts_owned_mainstats_substats_and_set_bonuses_once_with_mapped_inner_relics
 }
 
 #[test]
+fn light_cone_base_speed_scales_with_percent_speed_only_when_its_path_matches() {
+    let mut raw = account();
+    let role = &mut raw.characters[0];
+    role.character_id = "1408".to_owned();
+    role.traces.skill_levels = [(1, 6), (2, 10), (3, 10), (4, 10), (7, 1)]
+        .into_iter()
+        .map(|(suffix, level)| (format!("1408{suffix:03}"), level))
+        .collect();
+    role.traces.node_unlocks = [
+        101, 102, 103, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
+    ]
+    .into_iter()
+    .map(|suffix| (format!("1408{suffix}"), true))
+    .collect();
+    equip_outer(&mut raw);
+    for relic in &mut raw.relics {
+        relic.substats.clear();
+        if matches!(relic.slot, RelicSlot::Body | RelicSlot::Feet) {
+            relic.mainstat = RelicMainStat::HpPercent;
+        }
+    }
+    let data = PlayableData::bundled().unwrap();
+    for (cone_id, rank, base, added) in [
+        ("23044", 1, 106.0, 18.26),
+        ("23044", 5, 114.0, 18.74),
+        ("23036", 1, 94.0, 17.54),
+    ] {
+        raw.light_cones[0].light_cone_id = cone_id.to_owned();
+        raw.light_cones[0].superimposition = rank;
+        let result = convert_playable_account(&raw, &data, &request()).unwrap();
+        let phainon = result
+            .characters
+            .iter()
+            .find(|role| role.character_id == "1408")
+            .unwrap();
+        close(phainon.panel.speed.base, base);
+        close(phainon.panel.speed.added, added);
+        close(phainon.panel.speed.total(), base + added);
+    }
+}
+
+#[test]
 fn empty_owned_roster_is_filled_with_trial_eidolons_skills_and_equipment() {
     let mut raw = account();
     raw.characters.clear();

@@ -66,7 +66,7 @@ pub(super) fn calculate(
             Attribute::DefensePercent,
         ),
         speed: scaled(
-            character.base.speed,
+            character.base.speed + bonus(values, Attribute::BaseSpeed),
             Attribute::Speed,
             Attribute::SpeedPercent,
         ),

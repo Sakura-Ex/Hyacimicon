@@ -22,7 +22,7 @@ use super::{
 };
 
 /// 完整转换使用的规则版本。
-pub const CONVERSION_RULES_VERSION: &str = "s2-4.7-v1";
+pub const CONVERSION_RULES_VERSION: &str = "s2-4.7-v2";
 
 /// 完整转换所需的输出标识和角色 ID 对照。
 #[derive(Debug, Clone, Serialize, Deserialize)]

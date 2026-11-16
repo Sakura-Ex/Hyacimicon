@@ -125,6 +125,23 @@ fn keeps_trial_and_mapping_values_distinct() {
 }
 
 #[test]
+fn preserves_light_cone_base_speed_as_a_distinct_property_at_every_rank() {
+    let data = PlayableData::bundled().unwrap();
+    for id in ["23036", "23044", "23065"] {
+        let cone = data
+            .light_cones
+            .iter()
+            .find(|entry| entry.id == id)
+            .unwrap();
+        assert_eq!(
+            cone.properties[&Attribute::BaseSpeed],
+            [12.0, 14.0, 16.0, 18.0, 20.0]
+        );
+        assert!(!cone.properties.contains_key(&Attribute::Speed));
+    }
+}
+
+#[test]
 fn preserves_aggregate_trial_relics_and_special_characters() {
     let data = PlayableData::bundled().unwrap();
     let welt = data
