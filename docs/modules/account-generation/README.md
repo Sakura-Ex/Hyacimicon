@@ -2,6 +2,8 @@
 
 账号级金数与统一五星配装、推荐队友关联、资源集中分配及角色和遗器生成已实现。玩家数据接入与实际配置转换处于设计阶段。
 
+供后续接入共用的 [Rust 原始账号模型](../account/README.md)已定义在 `core/account/`。Python 生成结果转换到该模型的接口待实现。
+
 账号生成器属于研究与训练工具，代码位于 `research/account_generation/`，按 `relics/`、`characters/`、`accounts/` 三组组织，对外通过 `research.account_generation` 导入。调用方传入参数和随机源，取得生成结果，再交给账号组装与配置转换。
 
 | 阅读入口 | 主要内容 |

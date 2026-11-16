@@ -6,6 +6,11 @@
 
 ```text
 hsr-currency-wars-ai/
+├── core/account/                        # Rust 共用原始账号模型
+│   ├── Cargo.toml                       # account-core crate
+│   ├── src/                             # 账号、角色、装备和属性类型
+│   ├── tests/                           # 模型样例与序列化验证
+│   └── examples/                        # 统一格式读取示例
 ├── research/account_generation/         # 原始账号配置生成
 │   ├── __init__.py                      # 对外接口
 │   ├── data/                            # 随模块安装的账号参考资料 JSON
@@ -32,6 +37,8 @@ hsr-currency-wars-ai/
 ├── tests/account_generation/            # 生成与规则测试
 ├── pyproject.toml                       # Python 包与检查工具配置
 ├── uv.lock                              # 依赖锁文件
+├── Cargo.toml                           # Rust workspace 共用配置
+├── Cargo.lock                           # Rust 依赖锁文件
 ├── docs/
 │   ├── README.md                       # 文档总入口
 │   ├── project/                        # 项目目标、架构、计划和规则
@@ -60,6 +67,8 @@ hsr-currency-wars-ai/
 ```
 
 当前账号生成模块按遗器、角色、账号三个职责组织。账号使用角色与遗器实现，角色使用遗器实现，对外接口集中由 `research.account_generation` 导出。
+
+`core/account/` 提供训练和玩家应用共用的原始账号类型，接口、范围和验证命令见 [Rust 原始账号模型](../modules/account/README.md)。Rust crate 在根 Cargo workspace 中登记，测试、样例与示例随 crate 维护。后续战斗、整局和决策模块分别放在 `core/battle/`、`core/run/` 和 `core/decision/`；训练绑定放在 `research/sim_native/`，通过路径依赖调用核心。
 
 ## 模块放置
 

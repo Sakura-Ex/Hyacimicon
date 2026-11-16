@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "config_id": "handwritten-model-example",
+  "game_version": null,
+  "data_snapshot": null,
+  "characters": [
+    {
+      "character_id": "1004",
+      "level": 70,
+      "promotion": 5,
+      "eidolons": 2,
+      "ability_version": 0,
+      "traces": {
+        "skill_levels": {"1004001": 5, "1004002": 8},
+        "node_unlocks": {"1004007": true, "1004008": false}
+      },
+      "light_cone_instance_id": "example:lc:equipped",
+      "relic_instance_ids": {"3": "example:relic:body"}
+    },
+    {
+      "character_id": "8002",
+      "level": 20,
+      "promotion": 0,
+      "eidolons": 0,
+      "ability_version": null,
+      "traces": {"skill_levels": {}, "node_unlocks": {}},
+      "light_cone_instance_id": null,
+      "relic_instance_ids": {}
+    },
+    {
+      "character_id": "8004",
+      "level": 20,
+      "promotion": 0,
+      "eidolons": 1,
+      "ability_version": 1,
+      "traces": {"skill_levels": {}, "node_unlocks": {}},
+      "light_cone_instance_id": null,
+      "relic_instance_ids": {}
+    }
+  ],
+  "light_cones": [
+    {
+      "instance_id": "example:lc:equipped",
+      "light_cone_id": "23004",
+      "level": 70,
+      "promotion": 5,
+      "superimposition": 1
+    },
+    {
+      "instance_id": "example:lc:idle",
+      "light_cone_id": "23004",
+      "level": 1,
+      "promotion": 0,
+      "superimposition": 2
+    }
+  ],
+  "relics": [
+    {
+      "instance_id": "example:relic:body",
+      "set_id": "115",
+      "slot": 3,
+      "rarity": 5,
+      "level": 14,
+      "mainstat": "CRIT Rate_",
+      "substats": {"SPD": 2.3, "HP_": 0.034560003, "ATK": 16.935019, "DEF": 16.935019}
+    },
+    {
+      "instance_id": "example:relic:idle",
+      "set_id": "115",
+      "slot": 1,
+      "rarity": 4,
+      "level": 0,
+      "mainstat": "HP",
+      "substats": {}
+    }
+  ]
+}
