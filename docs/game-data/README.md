@@ -6,7 +6,7 @@
 | --- | --- |
 | [角色 ID 与 80 级基础数值](character-data.md) | 按命途分类的角色 ID、80 级基础属性和能量上限 |
 | [货币战争角色数值](currency-wars-character-data.md) | S2 角色各星级的前后台强度、基础属性、伤害修正与星魂修正 |
-| [货币战争角色小行迹表](currency-wars-minor-traces.md) | S2 小行迹节点 ID 与属性加成 |
+| [货币战争角色小行迹表](currency-wars-minor-traces.md) | 按 S2 角色查阅小行迹 ID 与属性加成 |
 | [角色试用和映射配置](character-trial-mapping.md) | S2 角色的星魂、行迹、光锥及内外圈遗器属性 |
 | [光锥 ID 与 80 级基础数值](light-cone-data.md) | 按命途分类的光锥 ID、名称、稀有度和基础属性 |
 | [五星遗器数据](relic-data.md) | +15 主词条、副词条档位、部位与属性键、套装 ID 对照 |
