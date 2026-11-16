@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::models::{GamePath, Verification};
+use super::models::GamePath;
 use crate::{
     RelicSlot,
     playable::attributes::{Attribute, AttributeBonus, AttributeValues},
@@ -74,8 +74,6 @@ pub struct TrialRelics {
 pub struct TrialTemplate {
     /// 常规或玩法专属角色 ID。
     pub character_id: String,
-    /// 显示名。
-    pub name: String,
     /// 试用星魂数。
     pub eidolons: u8,
     /// 试用角色等级，文档未提供时为空。
@@ -88,10 +86,6 @@ pub struct TrialTemplate {
     pub light_cone: LightConeTemplate,
     /// 六件遗器合计。
     pub relics: TrialRelics,
-    /// 文档记录状态。
-    pub verification: Verification,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
 /// 内圈和外圈的替换范围。
@@ -112,8 +106,6 @@ pub struct RelicGroupTemplate {
     pub set_id: String,
     /// 此圈主副词条合计。
     pub stats: AttributeValues,
-    /// 此圈数值的游戏内核对状态。
-    pub verification: Verification,
 }
 
 /// 文档记录的角色映射目标，各部分的触发条件由规则决定。
@@ -122,8 +114,6 @@ pub struct RelicGroupTemplate {
 pub struct MappingTemplate {
     /// 角色 ID。
     pub character_id: String,
-    /// 显示名。
-    pub name: String,
     /// 映射后的星魂数。
     pub eidolons: u8,
     /// 映射后的基础行迹。
@@ -132,10 +122,6 @@ pub struct MappingTemplate {
     pub outer: RelicGroupTemplate,
     /// 内圈整体替换配置。
     pub planar: RelicGroupTemplate,
-    /// 文档记录状态。
-    pub verification: Verification,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
 /// 分别判断是否映射的配置部分。
@@ -156,14 +142,6 @@ pub enum MappingPart {
     PlanarRelics,
 }
 
-/// 遗器映射以整圈替换执行。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RelicReplacementScope {
-    /// 一圈的套装、主副词条整体采用目标配置。
-    WholeGroup,
-}
-
 /// 按命途选择的默认映射光锥。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -172,34 +150,20 @@ pub struct DefaultLightCone {
     pub path: GamePath,
     /// 默认光锥种类 ID。
     pub light_cone_id: String,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
-/// 已有规则参数与尚待补充的触发条件。
+/// 配置转换使用的规则参数。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MappingRules {
     /// 有强化形态时固定使用强化形态，具体版本通过角色资料解析。
     pub force_enhanced_form: bool,
-    /// 遗器替换范围。
-    pub mapped_relic_scope: RelicReplacementScope,
     /// 任意一件低于此强化等级时，整圈采用映射模板。
     pub relic_mapping_minimum_level: u8,
     /// 默认映射光锥的叠影。
     pub default_light_cone_superimposition: u8,
     /// 各命途默认光锥。
     pub default_light_cones: Vec<DefaultLightCone>,
-    /// 试用角色等级，尚未明确时为空。
-    pub trial_character_level: Option<u8>,
-    /// 试用光锥等级，尚未明确时为空。
-    pub trial_light_cone_level: Option<u8>,
-    /// 项目讨论稿记录的等级目标，确认适用规则后才能用于自动映射。
-    pub proposed_mapped_character_level: u8,
-    /// 上述等级目标的核对状态。
-    pub proposed_level_verification: Verification,
-    /// 尚未提供自动触发条件的配置部分。
-    pub pending_triggers: Vec<MappingPart>,
 }
 
 /// 主词条在文档指定品质和强化等级下的数值。
@@ -212,10 +176,6 @@ pub struct MainStatData {
     pub slots: Vec<RelicSlot>,
     /// 最终数值。
     pub value: f64,
-    /// 记录状态。
-    pub verification: Verification,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
 /// 一种副词条的低、中、高三档数值。
@@ -226,10 +186,6 @@ pub struct SubstatData {
     pub attribute: Attribute,
     /// 低、中、高档，百分比采用比例。
     pub values: [f64; 3],
-    /// 记录状态。
-    pub verification: Verification,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
 /// 遗器套装 ID、显示名与内外圈归属。
@@ -238,12 +194,8 @@ pub struct SubstatData {
 pub struct RelicSetData {
     /// 套装 ID。
     pub id: String,
-    /// 显示名。
-    pub name: String,
     /// 所属内外圈。
     pub group: RelicGroup,
-    /// 来源行号。
-    pub source_line: u32,
 }
 
 /// 文档覆盖的遗器数值与套装索引。

@@ -9,7 +9,7 @@ use account_core::{
         attributes::Attribute,
         planning::{MappingAction, PlanRequest, plan_playable_account},
     },
-    reference::{MappingPart, PlayableData, SkillKind, Verification},
+    reference::{MappingPart, PlayableData, SkillKind},
 };
 
 /// 模型阶段已有的人工原始账号。
@@ -31,79 +31,61 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     let data = PlayableData::bundled().unwrap();
     assert_eq!(data.manifest.game_version, "4.7");
     assert_eq!(data.manifest.season, "S2");
-    assert_eq!(data.characters.data.len(), 61);
-    assert_eq!(data.light_cones.data.len(), 172);
-    assert_eq!(data.trials.data.len(), 61);
-    assert_eq!(data.mappings.data.len(), 60);
-    assert_eq!(data.gameplay_forms.data.len(), 216);
-    assert_eq!(data.rules.data.default_light_cones.len(), 9);
+    assert_eq!(data.characters.len(), 61);
+    assert_eq!(data.light_cones.len(), 172);
+    assert_eq!(data.trials.len(), 61);
+    assert_eq!(data.mappings.len(), 60);
+    assert_eq!(data.gameplay_forms.len(), 216);
+    assert_eq!(data.rules.default_light_cones.len(), 9);
     assert_eq!(
         (
-            data.relics.data.mainstats.len(),
-            data.relics.data.substats.len(),
-            data.relics.data.sets.len()
+            data.relics.mainstats.len(),
+            data.relics.substats.len(),
+            data.relics.sets.len()
         ),
         (19, 12, 64)
     );
-    let character_ids: BTreeSet<_> = data.characters.data.iter().map(|entry| &entry.id).collect();
+    let character_ids: BTreeSet<_> = data.characters.iter().map(|entry| &entry.id).collect();
     let trial_ids: BTreeSet<_> = data
         .trials
-        .data
         .iter()
         .map(|entry| &entry.character_id)
         .collect();
     assert_eq!(character_ids, trial_ids);
     assert_eq!(character_ids.len(), 61);
-    let cone_ids: BTreeSet<_> = data
-        .light_cones
-        .data
-        .iter()
-        .map(|entry| &entry.id)
-        .collect();
-    let set_ids: BTreeSet<_> = data
-        .relics
-        .data
-        .sets
-        .iter()
-        .map(|entry| &entry.id)
-        .collect();
-    for trial in &data.trials.data {
+    let cone_ids: BTreeSet<_> = data.light_cones.iter().map(|entry| &entry.id).collect();
+    let set_ids: BTreeSet<_> = data.relics.sets.iter().map(|entry| &entry.id).collect();
+    for trial in &data.trials {
         assert!(cone_ids.contains(&trial.light_cone.light_cone_id));
         assert!(set_ids.contains(&trial.relics.outer_set_id));
         assert!(set_ids.contains(&trial.relics.planar_set_id));
     }
-    for mapping in &data.mappings.data {
+    for mapping in &data.mappings {
         assert!(character_ids.contains(&mapping.character_id));
         assert!(set_ids.contains(&mapping.outer.set_id));
         assert!(set_ids.contains(&mapping.planar.set_id));
     }
     let gameplay_ids: BTreeSet<_> = data
         .gameplay_forms
-        .data
         .iter()
         .map(|entry| &entry.gameplay_id)
         .collect();
     assert_eq!(gameplay_ids.len(), 63);
-    for form in &data.gameplay_forms.data {
+    for form in &data.gameplay_forms {
         assert!(character_ids.contains(&form.character_id));
     }
-    assert_eq!(data.manifest.files["trial-templates.json"].count, 61);
-    assert_eq!(data.manifest.files["mapping-templates.json"].count, 60);
-    assert_eq!(data.manifest.files["gameplay-forms.json"].count, 216);
 }
 
 #[test]
-fn keeps_trial_and_mapping_values_distinct_and_retains_verification() {
+fn keeps_trial_and_mapping_values_distinct() {
     let data = PlayableData::bundled().unwrap();
     let trial = data
         .trials
-        .data
         .iter()
         .find(|entry| entry.character_id == "1408")
         .unwrap();
     let mapping = data
         .mappings
-        .data
         .iter()
         .find(|entry| entry.character_id == "1408")
         .unwrap();
@@ -114,7 +96,6 @@ fn keeps_trial_and_mapping_values_distinct_and_retains_verification() {
     assert_eq!(mapping.traces.base_levels[&SkillKind::Basic], 5);
     let welt = data
         .mappings
-        .data
         .iter()
         .find(|entry| entry.character_id == "1004")
         .unwrap();
@@ -122,20 +103,9 @@ fn keeps_trial_and_mapping_values_distinct_and_retains_verification() {
     assert_eq!(welt.planar.set_id, "309");
     assert_eq!(welt.outer.stats[&Attribute::Speed], 29.632);
     assert!((welt.planar.stats[&Attribute::ImaginaryDamageBoost] - 0.388803).abs() < 1e-12);
-    assert_eq!(welt.outer.verification, Verification::InGameVerified);
-    assert_eq!(welt.planar.verification, Verification::InGameVerified);
-    let evernight = data
-        .mappings
-        .data
-        .iter()
-        .find(|entry| entry.character_id == "1413")
-        .unwrap();
-    assert_eq!(evernight.outer.verification, Verification::PendingInGame);
-    assert_eq!(evernight.planar.verification, Verification::InGameVerified);
-    for entry in &data.mappings.data {
+    for entry in &data.mappings {
         let definition = data
             .characters
-            .data
             .iter()
             .find(|definition| definition.id == entry.character_id)
             .unwrap();
@@ -151,7 +121,6 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
     let data = PlayableData::bundled().unwrap();
     let welt = data
         .trials
-        .data
         .iter()
         .find(|entry| entry.character_id == "1004")
         .unwrap();
@@ -170,7 +139,6 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
     assert!(encoded.get("instance_ids").is_none());
     let pam = data
         .characters
-        .data
         .iter()
         .find(|entry| entry.id == "6042")
         .unwrap();
@@ -181,13 +149,11 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
     assert!(
         !data
             .mappings
-            .data
             .iter()
             .any(|entry| entry.character_id == "6042")
     );
     assert_eq!(
         data.gameplay_forms
-            .data
             .iter()
             .filter(|entry| entry.character_id == "1511")
             .count(),
@@ -195,7 +161,6 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
     );
     let aha = data
         .trials
-        .data
         .iter()
         .find(|entry| entry.character_id == "1511")
         .unwrap();
@@ -203,8 +168,7 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
         aha.traces.as_ref().unwrap().base_levels[&SkillKind::AhaBiography],
         1
     );
-    assert_eq!(data.rules.data.pending_triggers.len(), 4);
-    assert_eq!(data.rules.data.relic_mapping_minimum_level, 15);
+    assert_eq!(data.rules.relic_mapping_minimum_level, 15);
 }
 
 #[test]

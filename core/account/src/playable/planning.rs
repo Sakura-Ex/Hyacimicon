@@ -104,7 +104,6 @@ pub fn plan_playable_account(
     }
     let target_ids: BTreeSet<_> = data
         .characters
-        .data
         .iter()
         .map(|entry| entry.id.as_str())
         .collect();
@@ -147,7 +146,6 @@ pub fn plan_playable_account(
         }
         if !data
             .mappings
-            .data
             .iter()
             .any(|entry| &entry.character_id == character_id)
         {
@@ -168,11 +166,10 @@ pub fn plan_playable_account(
             return Err(PlanError(format!("遗器实例 ID {} 重复", relic.instance_id)));
         }
     }
-    let mut characters = Vec::with_capacity(data.trials.data.len());
-    for trial in &data.trials.data {
+    let mut characters = Vec::with_capacity(data.trials.len());
+    for trial in &data.trials {
         let definition = data
             .characters
-            .data
             .iter()
             .find(|entry| entry.id == trial.character_id)
             .ok_or_else(|| PlanError(format!("试用模板 {} 没有角色资料", trial.character_id)))?;
@@ -205,13 +202,13 @@ pub fn plan_playable_account(
                                 RelicSlot::Body,
                                 RelicSlot::Feet,
                             ],
-                            data.rules.data.relic_mapping_minimum_level,
+                            data.rules.relic_mapping_minimum_level,
                         )?,
                         MappingPart::PlanarRelics => relic_mapping_action(
                             character,
                             &relics,
                             &[RelicSlot::PlanarSphere, RelicSlot::LinkRope],
-                            data.rules.data.relic_mapping_minimum_level,
+                            data.rules.relic_mapping_minimum_level,
                         )?,
                         _ => MappingAction::Undetermined,
                     };

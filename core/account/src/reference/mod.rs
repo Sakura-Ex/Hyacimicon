@@ -6,25 +6,25 @@ pub mod templates;
 pub use models::*;
 pub use templates::*;
 
-/// 供账号转换和图鉴共用的数据快照。
+/// 账号转换使用的基础数据、模板与规则。
 #[derive(Debug)]
 pub struct PlayableData {
-    /// 版本、文件摘要与已知缺项。
+    /// 游戏版本、赛季与快照标识。
     pub manifest: DataManifest,
     /// 角色自身基础数值。
-    pub characters: DataFile<Vec<CharacterData>>,
+    pub characters: Vec<CharacterData>,
     /// 光锥自身基础数值。
-    pub light_cones: DataFile<Vec<LightConeData>>,
+    pub light_cones: Vec<LightConeData>,
     /// 试用配置。
-    pub trials: DataFile<Vec<TrialTemplate>>,
+    pub trials: Vec<TrialTemplate>,
     /// 映射目标配置。
-    pub mappings: DataFile<Vec<MappingTemplate>>,
+    pub mappings: Vec<MappingTemplate>,
     /// 默认光锥和已记录的映射规则。
-    pub rules: DataFile<MappingRules>,
+    pub rules: MappingRules,
     /// 局内星级参数，供后续组装阶段选择。
-    pub gameplay_forms: DataFile<Vec<GameplayFormData>>,
+    pub gameplay_forms: Vec<GameplayFormData>,
     /// 遗器数值与套装索引。
-    pub relics: DataFile<RelicReference>,
+    pub relics: RelicReference,
 }
 
 impl PlayableData {

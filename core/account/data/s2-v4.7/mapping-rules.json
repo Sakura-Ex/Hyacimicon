@@ -1,78 +1,43 @@
 {
-  "schema_version": 1,
-  "game_version": "4.7",
-  "season": "S2",
-  "source_documents": [
+  "force_enhanced_form": true,
+  "relic_mapping_minimum_level": 15,
+  "default_light_cone_superimposition": 1,
+  "default_light_cones": [
     {
-      "path": "docs/game-data/character-trial-mapping.md",
-      "sha256": "5319f3b55881b91841ed5c1a535350eabd0a3ac8710a3a8c8c481e16acdb9d5a"
+      "path": "Warrior",
+      "light_cone_id": "21012"
     },
     {
-      "path": "docs/project/game-rules.md",
-      "sha256": "a00712ab85ce274b5aac98c91e09e3f2d17f23f2ecfb829c6044f7632b5586b5"
+      "path": "Rogue",
+      "light_cone_id": "21037"
+    },
+    {
+      "path": "Mage",
+      "light_cone_id": "21027"
+    },
+    {
+      "path": "Shaman",
+      "light_cone_id": "21025"
+    },
+    {
+      "path": "Warlock",
+      "light_cone_id": "21001"
+    },
+    {
+      "path": "Knight",
+      "light_cone_id": "21002"
+    },
+    {
+      "path": "Priest",
+      "light_cone_id": "21021"
+    },
+    {
+      "path": "Memory",
+      "light_cone_id": "21050"
+    },
+    {
+      "path": "Elation",
+      "light_cone_id": "21064"
     }
-  ],
-  "data": {
-    "force_enhanced_form": true,
-    "mapped_relic_scope": "whole_group",
-    "relic_mapping_minimum_level": 15,
-    "default_light_cone_superimposition": 1,
-    "default_light_cones": [
-      {
-        "path": "Warrior",
-        "light_cone_id": "21012",
-        "source_line": 154
-      },
-      {
-        "path": "Rogue",
-        "light_cone_id": "21037",
-        "source_line": 155
-      },
-      {
-        "path": "Mage",
-        "light_cone_id": "21027",
-        "source_line": 156
-      },
-      {
-        "path": "Shaman",
-        "light_cone_id": "21025",
-        "source_line": 157
-      },
-      {
-        "path": "Warlock",
-        "light_cone_id": "21001",
-        "source_line": 158
-      },
-      {
-        "path": "Knight",
-        "light_cone_id": "21002",
-        "source_line": 159
-      },
-      {
-        "path": "Priest",
-        "light_cone_id": "21021",
-        "source_line": 160
-      },
-      {
-        "path": "Memory",
-        "light_cone_id": "21050",
-        "source_line": 161
-      },
-      {
-        "path": "Elation",
-        "light_cone_id": "21064",
-        "source_line": 162
-      }
-    ],
-    "trial_character_level": null,
-    "trial_light_cone_level": null,
-    "proposed_mapped_character_level": 80,
-    "proposed_level_verification": "pending_in_game",
-    "pending_triggers": [
-      "character_progression",
-      "eidolons",
-      "traces",
-      "light_cone"
-    ]
-  }
+  ]
 }
