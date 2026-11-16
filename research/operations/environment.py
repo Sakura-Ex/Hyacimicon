@@ -78,8 +78,9 @@ class OperationEnvironment:
     won: bool = field(init=False, default=False)
     last_battle_progress: int | None = field(init=False, default=None)
     last_battle_provider: str | None = field(init=False, default=None)
-    front_team: dict[tuple[str, int], int] = field(init=False, default_factory=dict)
-    back_team: dict[tuple[str, int], int] = field(init=False, default_factory=dict)
+    front_slots: list[UnitInstance | None] = field(init=False, default_factory=list)
+    back_slots: list[UnitInstance | None] = field(init=False, default_factory=list)
+    bench_slots: list[UnitInstance | None] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         difficulty = self.pack.difficulties.get(self.difficulty_id)
@@ -131,6 +132,9 @@ class OperationEnvironment:
 
         self.market = Market(self.pack.rules, self.pack.units, self.rng)
         self.investments = InvestmentEngine(self.pack, self.rng, environment.effect)
+        self.front_slots = [None] * self.pack.rules.front_capacity
+        self.back_slots = [None] * self.pack.rules.back_capacity
+        self.bench_slots = [None] * self.pack.rules.bench_capacity
 
         if environment.effect.starting_unit_count:
             starting_cost = environment.effect.starting_unit_cost
@@ -149,6 +153,7 @@ class OperationEnvironment:
                 self.pack.rules.starting_supply,
                 max_cost=self.pack.rules.starting_unit_max_cost,
             )
+        self._reconcile_slots(add_missing_to_bench=True)
         self._auto_deploy()
         self._enter_node()
 
@@ -243,7 +248,7 @@ class OperationEnvironment:
         gold, merges = self.market.buy_unit(offer_index, self.gold)
         self.gold = gold
         self.spent_this_node = True
-        self._normalize_team()
+        self._reconcile_slots(add_missing_to_bench=True)
         return merges
 
     def sell_unit(self, unit_id: str, star: int) -> None:
@@ -251,34 +256,30 @@ class OperationEnvironment:
 
         self._ensure_market_phase()
         self.gold = self.market.sell_unit(unit_id, star, self.gold)
-        self._normalize_team()
+        self._reconcile_slots(add_missing_to_bench=False)
 
     @property
     def bench_count(self) -> int:
         """当前备战席角色实例数量。"""
 
-        return len(self.market.roster.instances()) - self.active_count
+        return sum(unit is not None for unit in self.bench_slots)
 
     @property
     def active_count(self) -> int:
-        return sum(self.front_team.values()) + sum(self.back_team.values())
+        return sum(unit is not None for unit in self.front_slots) + sum(
+            unit is not None for unit in self.back_slots
+        )
 
     def front_units(self) -> tuple[UnitInstance, ...]:
-        return self._instances_for(self.front_team)
+        return tuple(unit for unit in self.front_slots if unit is not None)
 
     def back_units(self) -> tuple[UnitInstance, ...]:
-        return self._instances_for(self.back_team)
+        return tuple(unit for unit in self.back_slots if unit is not None)
 
     def bench_units(self) -> tuple[UnitInstance, ...]:
         """返回未上阵角色实例。"""
 
-        remaining = dict(self.market.roster.units)
-        for team in (self.front_team, self.back_team):
-            for key, count in team.items():
-                remaining[key] -= count
-                if remaining[key] <= 0:
-                    del remaining[key]
-        return self._instances_for(remaining)
+        return tuple(unit for unit in self.bench_slots if unit is not None)
 
     def set_unit_position(
         self,
@@ -289,35 +290,77 @@ class OperationEnvironment:
         """把一名角色移动到前台、后台或备战席。"""
 
         self._ensure_market_phase()
-        key = (unit_id, star)
-        if self.market.roster.units.get(key, 0) == 0:
+        unit = UnitInstance(unit_id, star)
+        source = self._find_slot(unit)
+        if source is None and self.market.roster.units.get((unit_id, star), 0) == 0:
             raise OperationActionError("没有可部署的指定角色")
+        if source is None:
+            self._reconcile_slots(add_missing_to_bench=True)
+            source = self._find_slot(unit)
+            if source is None:
+                raise OperationActionError("角色不在可用格位")
         if position is not None and position not in (Position.FRONT, Position.BACK):
             raise OperationActionError("角色只能部署到前台或后台")
-        current = self.front_team.get(key, 0) + self.back_team.get(key, 0)
         if position is None:
-            if current == 0:
+            if source is None or source[0] == "bench":
                 return
             if self.bench_count >= self.pack.rules.bench_capacity:
                 raise OperationActionError("备战席已满")
-            self._remove_team_instance(key)
+            self.bench_slots[self._first_empty(self.bench_slots)] = unit
+            self._set_slot(source, None)
             return
-        if current:
-            self._remove_team_instance(key, normalize=False)
-        else:
+        target_location = "front" if position is Position.FRONT else "back"
+        target = self._slots_for(target_location)
+        target_index = self._first_empty(target)
+        if target_index is None:
+            raise OperationActionError(f"{'前台' if position is Position.FRONT else '后台'}已满")
+        if source[0] == "bench":
             if self.active_count >= self.market.active_capacity:
                 raise OperationActionError("上阵人数已达到商店等级上限")
-            if current >= self.market.roster.units.get(key, 0):
-                raise OperationActionError("备战席没有该角色")
-        target = self.front_team if position is Position.FRONT else self.back_team
-        capacity = (
-            self.pack.rules.front_capacity
-            if position is Position.FRONT
-            else self.pack.rules.back_capacity
+            self._set_slot(source, None)
+        else:
+            self._set_slot(source, None)
+        target[target_index] = unit
+
+    def swap_unit_slots(
+        self,
+        source_location: str,
+        source_index: int,
+        target_location: str,
+        target_index: int,
+    ) -> None:
+        """交换两个格位，并在任何约束失败时保持原布局。"""
+
+        self._ensure_market_phase()
+        source_slots = self._slots_for(source_location)
+        target_slots = self._slots_for(target_location)
+        if not 0 <= source_index < len(source_slots):
+            raise OperationActionError("拖动起点不存在")
+        if not 0 <= target_index < len(target_slots):
+            raise OperationActionError("拖动终点不存在")
+        if source_slots[source_index] is None:
+            raise OperationActionError("拖动起点没有角色")
+        if source_location == target_location and source_index == target_index:
+            return
+        source_unit = source_slots[source_index]
+        target_unit = target_slots[target_index]
+        next_active = self.active_count
+        if source_location == "bench" and target_location != "bench" and target_unit is None:
+            next_active += 1
+        elif source_location != "bench" and target_location == "bench" and target_unit is None:
+            next_active -= 1
+        if next_active > self.market.active_capacity:
+            raise OperationActionError("上阵人数已达到商店等级上限")
+        before = (
+            list(self.front_slots),
+            list(self.back_slots),
+            list(self.bench_slots),
         )
-        if sum(target.values()) >= capacity:
-            raise OperationActionError(f"{'前台' if position is Position.FRONT else '后台'}已满")
-        target[key] = target.get(key, 0) + 1
+        source_slots[source_index] = target_unit
+        target_slots[target_index] = source_unit
+        if not self._slots_match_roster():
+            self.front_slots, self.back_slots, self.bench_slots = before
+            raise OperationActionError("交换后角色归属不合法")
 
     def buy_xp(self, purchase_count: int = 1) -> tuple[int, ...]:
         """购买经验，返回本次达到的等级。"""
@@ -441,7 +484,9 @@ class OperationEnvironment:
     def _auto_deploy(self) -> None:
         """开局时按角色站位自动部署默认阵容。"""
 
-        for unit in self.market.roster.instances():
+        for bench_index, unit in enumerate(self.bench_slots):
+            if unit is None:
+                continue
             if self.active_count >= self.market.active_capacity:
                 break
             preferred = self.pack.units[unit.unit_id].position
@@ -451,32 +496,72 @@ class OperationEnvironment:
                 else (Position.BACK, Position.FRONT)
             )
             for position in candidates:
-                team = self.front_team if position is Position.FRONT else self.back_team
-                capacity = (
-                    self.pack.rules.front_capacity
-                    if position is Position.FRONT
-                    else self.pack.rules.back_capacity
-                )
-                if sum(team.values()) < capacity:
-                    key = (unit.unit_id, unit.star)
-                    team[key] = team.get(key, 0) + 1
+                target = self.front_slots if position is Position.FRONT else self.back_slots
+                target_index = self._first_empty(target)
+                if target_index is not None:
+                    target[target_index] = unit
+                    self.bench_slots[bench_index] = None
                     break
 
-    def _normalize_team(self) -> None:
-        """删除合成或出售后已不存在的上阵实例。"""
+    def _reconcile_slots(self, *, add_missing_to_bench: bool) -> None:
+        """让格位中的角色与拥有列表一致，并保留现有格位顺序。"""
 
-        for key in set(self.front_team) | set(self.back_team):
+        current: dict[tuple[str, int], int] = {}
+        for unit in (*self.front_slots, *self.back_slots, *self.bench_slots):
+            if unit is not None:
+                key = (unit.unit_id, unit.star)
+                current[key] = current.get(key, 0) + 1
+        for key, count in current.items():
             owned = self.market.roster.units.get(key, 0)
-            while self.front_team.get(key, 0) + self.back_team.get(key, 0) > owned:
-                if self.back_team.get(key, 0):
-                    self._remove_one_from(self.back_team, key)
-                else:
-                    self._remove_one_from(self.front_team, key)
+            while count > owned:
+                if not self._remove_last_occurrence(key):
+                    break
+                count -= 1
         while self.active_count > self.market.active_capacity:
-            if self.back_team:
-                self._remove_one_from(self.back_team)
-            else:
-                self._remove_one_from(self.front_team)
+            self._move_last_active_to_bench()
+        if add_missing_to_bench:
+            placed = self._slot_counts()
+            for key, owned in self.market.roster.units.items():
+                for _ in range(owned - placed.get(key, 0)):
+                    index = self._first_empty(self.bench_slots)
+                    if index is None:
+                        raise OperationActionError("备战席已满")
+                    self.bench_slots[index] = UnitInstance(*key)
+                    placed[key] = placed.get(key, 0) + 1
+
+    def _remove_last_occurrence(self, key: tuple[str, int]) -> bool:
+        for slots in (self.bench_slots, self.back_slots, self.front_slots):
+            for index in range(len(slots) - 1, -1, -1):
+                unit = slots[index]
+                if unit is not None and (unit.unit_id, unit.star) == key:
+                    slots[index] = None
+                    return True
+        return False
+
+    def _move_last_active_to_bench(self) -> None:
+        bench_index = self._first_empty(self.bench_slots)
+        if bench_index is None:
+            raise OperationActionError("备战席已满")
+        for slots in (self.back_slots, self.front_slots):
+            for index in range(len(slots) - 1, -1, -1):
+                unit = slots[index]
+                if unit is not None:
+                    self.bench_slots[bench_index] = unit
+                    slots[index] = None
+                    return
+
+    def _slot_counts(self) -> dict[tuple[str, int], int]:
+        counts: dict[tuple[str, int], int] = {}
+        for unit in (*self.front_slots, *self.back_slots, *self.bench_slots):
+            if unit is not None:
+                key = (unit.unit_id, unit.star)
+                counts[key] = counts.get(key, 0) + 1
+        return counts
+
+    def _slots_match_roster(self) -> bool:
+        return self._slot_counts() == {
+            key: count for key, count in self.market.roster.units.items() if count
+        }
 
     def _purchase_would_merge(self, unit_id: str) -> bool:
         counts = dict(self.market.roster.units)
@@ -487,32 +572,35 @@ class OperationEnvironment:
             key = (unit_id, key[1] + 1)
         return False
 
-    def _remove_team_instance(self, key: tuple[str, int], *, normalize: bool = True) -> None:
-        for team in (self.front_team, self.back_team):
-            if team.get(key, 0):
-                self._remove_one_from(team, key)
-                if normalize:
-                    self._normalize_team()
-                return
-        raise OperationActionError("该角色当前没有上阵")
+    def _find_slot(self, unit: UnitInstance) -> tuple[str, int] | None:
+        for location, slots in (
+            ("front", self.front_slots),
+            ("back", self.back_slots),
+            ("bench", self.bench_slots),
+        ):
+            for index, candidate in enumerate(slots):
+                if candidate == unit:
+                    return location, index
+        return None
+
+    def _slots_for(self, location: str) -> list[UnitInstance | None]:
+        if location == "front":
+            return self.front_slots
+        if location == "back":
+            return self.back_slots
+        if location == "bench":
+            return self.bench_slots
+        raise OperationActionError("未知阵容位置")
 
     @staticmethod
-    def _remove_one_from(
-        team: dict[tuple[str, int], int],
-        key: tuple[str, int] | None = None,
-    ) -> None:
-        selected = key if key is not None else next(iter(team))
-        team[selected] -= 1
-        if team[selected] == 0:
-            del team[selected]
+    def _first_empty(slots: list[UnitInstance | None]) -> int | None:
+        for index, unit in enumerate(slots):
+            if unit is None:
+                return index
+        return None
 
-    @staticmethod
-    def _instances_for(counts: dict[tuple[str, int], int]) -> tuple[UnitInstance, ...]:
-        return tuple(
-            UnitInstance(unit_id, star)
-            for (unit_id, star), count in sorted(counts.items())
-            for _ in range(count)
-        )
+    def _set_slot(self, source: tuple[str, int], unit: UnitInstance | None) -> None:
+        self._slots_for(source[0])[source[1]] = unit
 
     def team_power(self) -> float:
         """计算抽象阵容强度。"""

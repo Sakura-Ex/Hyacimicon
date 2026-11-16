@@ -163,7 +163,7 @@ function renderRoute(session) {
     .join("");
 }
 
-function unitCard(unit, location) {
+function unitCard(unit, location, index) {
   const cost = unit.costs?.[0] ?? unit.cost;
   return `
     <article
@@ -173,6 +173,9 @@ function unitCard(unit, location) {
       data-drag-unit-id="${escapeHtml(unit.unit_id)}"
       data-drag-star="${unit.star}"
       data-drag-location="${location}"
+      data-drag-index="${index}"
+      data-slot-location="${location}"
+      data-slot-index="${index}"
     >
       ${portraitMarkup(unit)}
       <span class="cost-badge">${cost}</span>
@@ -186,25 +189,29 @@ function unitCard(unit, location) {
 }
 
 function renderUnits(session) {
-  const expandSlots = (units, minimum, location) => {
-    const cards = units.map((unit) => unitCard(unit, location));
-    while (cards.length < minimum) {
-      cards.push('<div class="unit-slot empty"></div>');
-    }
-    return cards.join("");
+  const renderSlots = (slots, location) => {
+    return slots
+      .map((unit, index) =>
+        unit
+          ? unitCard(unit, location, index)
+          : `<div class="unit-slot empty" data-slot-location="${location}" data-slot-index="${index}"></div>`,
+      )
+      .join("");
   };
-  byId("front-units").innerHTML = expandSlots(session.front_units, 5, "front");
-  byId("back-units").innerHTML = expandSlots(session.back_units, 6, "back");
+  byId("front-units").innerHTML = renderSlots(session.front_slots, "front");
+  byId("back-units").innerHTML = renderSlots(session.back_slots, "back");
   byId("active-capacity").textContent =
     `${session.active_units.length}/${session.team_limits.active}`;
 }
 
 function renderBench(session) {
-  const slots = session.bench_units.map((unit) => unitCard(unit, "bench"));
-  while (slots.length < session.team_limits.bench) {
-    slots.push('<div class="unit-slot empty"></div>');
-  }
-  byId("bench").innerHTML = slots.join("");
+  byId("bench").innerHTML = session.bench_slots
+    .map((unit, index) =>
+      unit
+        ? unitCard(unit, "bench", index)
+        : `<div class="unit-slot empty" data-slot-location="bench" data-slot-index="${index}"></div>`,
+    )
+    .join("");
   byId("bench-count").textContent =
     `${session.team_limits.bench_used}/${session.team_limits.bench}`;
 }
@@ -649,6 +656,7 @@ document.addEventListener("dragstart", (event) => {
       unit_id: card.dataset.dragUnitId,
       star: Number(card.dataset.dragStar),
       location: card.dataset.dragLocation,
+      index: Number(card.dataset.dragIndex),
     }),
   );
   card.classList.add("is-dragging");
@@ -694,15 +702,25 @@ document.addEventListener("drop", async (event) => {
   } catch {
     return;
   }
-  const position = zone.dataset.dropPosition;
-  if (payload.location === position) {
+  const targetSlot = event.target.closest("[data-slot-location]");
+  if (!targetSlot) {
+    return;
+  }
+  const targetLocation = targetSlot.dataset.slotLocation;
+  const targetIndex = Number(targetSlot.dataset.slotIndex);
+  if (payload.location === targetLocation && payload.index === targetIndex) {
     return;
   }
   await runAction({
-    type: "set_unit_position",
-    unit_id: payload.unit_id,
-    star: payload.star,
-    position: position === "bench" ? null : position,
+    type: "swap_units",
+    source: {
+      location: payload.location,
+      index: payload.index,
+    },
+    target: {
+      location: targetLocation,
+      index: targetIndex,
+    },
   });
 });
 

@@ -157,6 +157,36 @@ class OperationSession:
                 f"将 {star} 星 {self.pack.units[unit_id].name} 移至{labels[position]}",
             )
             return
+        if action_type == "swap_units":
+            source_location, source_index = _slot_reference(action.get("source"))
+            target_location, target_index = _slot_reference(action.get("target"))
+            self.environment.swap_unit_slots(
+                source_location,
+                source_index,
+                target_location,
+                target_index,
+            )
+            source_unit = action.get("source")
+            target_unit = action.get("target")
+            if isinstance(source_unit, dict) and isinstance(target_unit, dict):
+                source_location_text = _required_string(
+                    source_unit.get("location"),
+                    "source.location",
+                )
+                target_location_text = _required_string(
+                    target_unit.get("location"),
+                    "target.location",
+                )
+                self._append_event(
+                    "deployment",
+                    (
+                        f"交换格位：{source_location_text}"
+                        f" {_required_int(source_unit.get('index'), 'source.index') + 1}"
+                        f" ↔ {target_location_text}"
+                        f" {_required_int(target_unit.get('index'), 'target.index') + 1}"
+                    ),
+                )
+            return
         if action_type == "buy_xp":
             count = _integer(action, "count", default=1)
             level_before = self.environment.market.level
@@ -236,6 +266,9 @@ class OperationSession:
             "front_units": [self._unit_view(unit) for unit in self.environment.front_units()],
             "back_units": [self._unit_view(unit) for unit in self.environment.back_units()],
             "bench_units": [self._unit_view(unit) for unit in self.environment.bench_units()],
+            "front_slots": self._slot_views(self.environment.front_slots),
+            "back_slots": self._slot_views(self.environment.back_slots),
+            "bench_slots": self._slot_views(self.environment.bench_slots),
             "team_limits": {
                 "active": observation.level,
                 "front": self.pack.rules.front_capacity,
@@ -388,6 +421,12 @@ class OperationSession:
             "portrait_path": unit.portrait_path,
             "description": unit.description,
         }
+
+    def _slot_views(
+        self,
+        slots: list[UnitInstance | None],
+    ) -> list[dict[str, object] | None]:
+        return [None if unit is None else self._unit_view(unit) for unit in slots]
 
     def _active_trait_view(self, observation: RunObservation) -> list[dict[str, object]]:
         counts: dict[str, int] = {}
@@ -656,6 +695,11 @@ def _required_int(value: object, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         raise SessionInputError(f"{label} 必须是整数")
     return value
+
+
+def _slot_reference(value: object) -> tuple[str, int]:
+    data = _object(value)
+    return _string(data, "location"), _integer(data, "index")
 
 
 def _boolean(data: dict[str, object], key: str) -> bool:

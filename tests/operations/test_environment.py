@@ -240,10 +240,14 @@ class EnvironmentTests(unittest.TestCase):
 
         for unit in env.active_units():
             env.set_unit_position(unit.unit_id, unit.star, None)
+        env.gold = 1000
         for definition in self.pack.units.values():
             if env.bench_count >= self.pack.rules.bench_capacity:
                 break
-            env.market.roster.add(definition.unit_id)
+            if (definition.unit_id, 1) in env.market.roster.units:
+                continue
+            env.market.offers = (ShopOffer(definition.unit_id),)
+            env.buy_shop_offer(0)
         blocked = next(
             definition
             for definition in self.pack.units.values()
@@ -253,6 +257,75 @@ class EnvironmentTests(unittest.TestCase):
         env.market.offers = (ShopOffer(blocked.unit_id),)
         with self.assertRaisesRegex(OperationActionError, "备战席已满"):
             env.buy_shop_offer(0)
+
+    def test_bench_order_is_stable_and_occupied_slots_swap(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(15),
+            difficulty_id="training",
+            environment_id="silver_age",
+            affix_ids=(),
+        )
+        for unit in env.active_units():
+            env.set_unit_position(unit.unit_id, unit.star, None)
+        start_index = next(index for index, unit in enumerate(env.bench_slots) if unit is None)
+        candidates = [
+            definition
+            for definition in self.pack.units.values()
+            if (definition.unit_id, 1) not in env.market.roster.units
+        ][:3]
+        env.gold = 100
+        for definition in candidates:
+            env.market.offers = (ShopOffer(definition.unit_id),)
+            env.buy_shop_offer(0)
+        before = [
+            None if unit is None else (unit.unit_id, unit.star)
+            for unit in env.bench_slots[start_index : start_index + 3]
+        ]
+        self.assertEqual(
+            before,
+            [(definition.unit_id, 1) for definition in candidates],
+        )
+
+        env.swap_unit_slots("bench", start_index, "bench", start_index + 1)
+
+        self.assertEqual(
+            [
+                None if unit is None else (unit.unit_id, unit.star)
+                for unit in env.bench_slots[start_index : start_index + 3]
+            ],
+            [before[1], before[0], before[2]],
+        )
+
+    def test_invalid_swap_is_rejected_without_changing_slots(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(16),
+            difficulty_id="training",
+            environment_id="silver_age",
+            affix_ids=(),
+        )
+        bench_unit = next(
+            definition
+            for definition in self.pack.units.values()
+            if (definition.unit_id, 1) not in env.market.roster.units
+        )
+        env.market.offers = (ShopOffer(bench_unit.unit_id),)
+        env.buy_shop_offer(0)
+        before = (
+            list(env.front_slots),
+            list(env.back_slots),
+            list(env.bench_slots),
+        )
+        empty_front = next(index for index, unit in enumerate(env.front_slots) if unit is None)
+
+        with self.assertRaisesRegex(OperationActionError, "上阵人数"):
+            env.swap_unit_slots("bench", 0, "front", empty_front)
+
+        self.assertEqual(
+            (env.front_slots, env.back_slots, env.bench_slots),
+            before,
+        )
 
 
 if __name__ == "__main__":

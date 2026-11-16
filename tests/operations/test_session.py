@@ -148,6 +148,35 @@ class OperationServiceTests(unittest.TestCase):
             [unit["unit_id"] for unit in session["front_units"]],
         )
 
+    def test_swap_action_exchanges_occupied_slots(self):
+        session = self._create()
+        session_id = str(session["session_id"])
+        buy_index = next(
+            index
+            for index, offer in enumerate(session["shop"])
+            if not offer["empty"] and offer["affordable"]
+        )
+        session = self.service.apply_action(
+            session_id,
+            {"type": "buy_offer", "index": buy_index},
+        )
+        front_before = session["front_slots"][0]
+        bench_before = session["bench_slots"][0]
+        self.assertIsInstance(front_before, dict)
+        self.assertIsInstance(bench_before, dict)
+
+        session = self.service.apply_action(
+            session_id,
+            {
+                "type": "swap_units",
+                "source": {"location": "bench", "index": 0},
+                "target": {"location": "front", "index": 0},
+            },
+        )
+
+        self.assertEqual(session["front_slots"][0]["unit_id"], bench_before["unit_id"])
+        self.assertEqual(session["bench_slots"][0]["unit_id"], front_before["unit_id"])
+
 
 class OperationHTTPServerTests(unittest.TestCase):
     """验证静态页面和 API 能通过本地 HTTP 使用。"""
