@@ -3,6 +3,7 @@ const appState = {
   session: null,
   busy: false,
   drawer: null,
+  shopOpen: true,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -162,10 +163,17 @@ function renderRoute(session) {
     .join("");
 }
 
-function unitCard(unit) {
+function unitCard(unit, location) {
   const cost = unit.costs?.[0] ?? unit.cost;
   return `
-    <article class="unit-slot filled" title="${escapeHtml(unit.description || "")}">
+    <article
+      class="unit-slot filled draggable-unit"
+      title="${escapeHtml(unit.description || "")}"
+      draggable="true"
+      data-drag-unit-id="${escapeHtml(unit.unit_id)}"
+      data-drag-star="${unit.star}"
+      data-drag-location="${location}"
+    >
       ${portraitMarkup(unit)}
       <span class="cost-badge">${cost}</span>
       <span class="star-badge">${starText(unit.star)}</span>
@@ -178,17 +186,27 @@ function unitCard(unit) {
 }
 
 function renderUnits(session) {
-  const expandSlots = (units, minimum) => {
-    const cards = units.map(unitCard);
+  const expandSlots = (units, minimum, location) => {
+    const cards = units.map((unit) => unitCard(unit, location));
     while (cards.length < minimum) {
       cards.push('<div class="unit-slot empty"></div>');
     }
     return cards.join("");
   };
-  byId("front-units").innerHTML = expandSlots(session.front_units, 5);
-  byId("back-units").innerHTML = expandSlots(session.back_units, 6);
+  byId("front-units").innerHTML = expandSlots(session.front_units, 5, "front");
+  byId("back-units").innerHTML = expandSlots(session.back_units, 6, "back");
   byId("active-capacity").textContent =
     `${session.active_units.length}/${session.team_limits.active}`;
+}
+
+function renderBench(session) {
+  const slots = session.bench_units.map((unit) => unitCard(unit, "bench"));
+  while (slots.length < session.team_limits.bench) {
+    slots.push('<div class="unit-slot empty"></div>');
+  }
+  byId("bench").innerHTML = slots.join("");
+  byId("bench-count").textContent =
+    `${session.team_limits.bench_used}/${session.team_limits.bench}`;
 }
 
 function renderTraits(session) {
@@ -260,6 +278,11 @@ function renderShop(session) {
   byId("buy-xp").disabled = !session.capabilities.buy_xp;
   byId("advance-node").disabled = !session.capabilities.advance_node;
   byId("free-rerolls").textContent = session.resources.free_rerolls;
+
+  byId("shop-panel").hidden = !appState.shopOpen;
+  byId("bench-panel").hidden = appState.shopOpen;
+  const toggle = byId("toggle-shop-view");
+  toggle.textContent = appState.shopOpen ? "收起商店" : "展开商店";
 }
 
 function renderResources(session) {
@@ -512,6 +535,7 @@ function render() {
   renderUnits(session);
   renderTraits(session);
   renderShop(session);
+  renderBench(session);
   renderInvestmentModal(session);
   renderFinish(session);
   renderDrawer(session);
@@ -605,7 +629,81 @@ document.addEventListener("click", async (event) => {
   }
   if (target.id === "export-run") {
     exportRun();
+    return;
   }
+  if (target.id === "toggle-shop-view") {
+    appState.shopOpen = !appState.shopOpen;
+    renderShop(appState.session);
+  }
+});
+
+document.addEventListener("dragstart", (event) => {
+  const card = event.target.closest("[data-drag-unit-id]");
+  if (!card || !event.dataTransfer) {
+    return;
+  }
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData(
+    "application/json",
+    JSON.stringify({
+      unit_id: card.dataset.dragUnitId,
+      star: Number(card.dataset.dragStar),
+      location: card.dataset.dragLocation,
+    }),
+  );
+  card.classList.add("is-dragging");
+});
+
+document.addEventListener("dragend", (event) => {
+  event.target.closest("[data-drag-unit-id]")?.classList.remove("is-dragging");
+  document
+    .querySelectorAll(".drop-zone.is-drag-over")
+    .forEach((zone) => zone.classList.remove("is-drag-over"));
+});
+
+document.addEventListener("dragover", (event) => {
+  const zone = event.target.closest("[data-drop-position]");
+  if (
+    !zone ||
+    !Array.from(event.dataTransfer?.types || []).includes("application/json")
+  ) {
+    return;
+  }
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  zone.classList.add("is-drag-over");
+});
+
+document.addEventListener("dragleave", (event) => {
+  const zone = event.target.closest("[data-drop-position]");
+  if (zone && !zone.contains(event.relatedTarget)) {
+    zone.classList.remove("is-drag-over");
+  }
+});
+
+document.addEventListener("drop", async (event) => {
+  const zone = event.target.closest("[data-drop-position]");
+  if (!zone || !event.dataTransfer) {
+    return;
+  }
+  event.preventDefault();
+  zone.classList.remove("is-drag-over");
+  let payload;
+  try {
+    payload = JSON.parse(event.dataTransfer.getData("application/json"));
+  } catch {
+    return;
+  }
+  const position = zone.dataset.dropPosition;
+  if (payload.location === position) {
+    return;
+  }
+  await runAction({
+    type: "set_unit_position",
+    unit_id: payload.unit_id,
+    star: payload.star,
+    position: position === "bench" ? null : position,
+  });
 });
 
 async function init() {

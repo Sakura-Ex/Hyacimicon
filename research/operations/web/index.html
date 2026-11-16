@@ -57,7 +57,7 @@
             <small>上阵角色</small>
           </div>
 
-          <section class="unit-row front-row">
+          <section class="unit-row front-row drop-zone" data-drop-position="front">
             <div class="row-label">
               <span></span>
               <strong>前台区域</strong>
@@ -66,7 +66,7 @@
             <div id="front-units" class="unit-slots"></div>
           </section>
 
-          <section class="unit-row back-row">
+          <section class="unit-row back-row drop-zone" data-drop-position="back">
             <div class="row-label">
               <span></span>
               <strong>后台区域</strong>
@@ -132,12 +132,23 @@
               <strong id="shop-gold">-- 金币</strong>
             </div>
             <div class="shop-actions">
+              <button id="toggle-shop-view" class="shop-toggle" type="button">收起商店</button>
               <button id="toggle-lock" class="icon-button" type="button" title="锁定商店">锁</button>
               <button id="reroll-shop" class="icon-button" type="button" title="刷新商店">↻</button>
               <span class="free-rerolls">免费 <b id="free-rerolls">0</b></span>
             </div>
           </div>
-          <div id="shop" class="shop-row"></div>
+          <div id="shop-panel" class="dock-panel">
+            <div id="shop" class="shop-row"></div>
+          </div>
+          <div id="bench-panel" class="dock-panel bench-panel" data-drop-position="bench" hidden>
+            <div class="bench-caption">
+              <strong>备战席</strong>
+              <span id="bench-count">0/9</span>
+              <small>拖到前台或后台即可上场</small>
+            </div>
+            <div id="bench" class="bench-row"></div>
+          </div>
         </section>
 
         <section class="battle-controls">

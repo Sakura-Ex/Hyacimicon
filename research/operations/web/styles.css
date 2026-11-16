@@ -535,6 +535,30 @@ select {
   border-color: var(--line-strong);
 }
 
+.draggable-unit {
+  cursor: grab;
+}
+
+.draggable-unit:active {
+  cursor: grabbing;
+}
+
+.draggable-unit.is-dragging {
+  opacity: 0.42;
+}
+
+.drop-zone {
+  border-radius: 10px;
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.drop-zone.is-drag-over {
+  background: rgba(116, 220, 237, 0.13);
+  box-shadow: inset 0 0 0 1px rgba(116, 220, 237, 0.72);
+}
+
 .unit-slot.empty::after {
   align-self: center;
   color: rgba(174, 158, 235, 0.22);
@@ -736,6 +760,11 @@ select {
   align-items: center;
 }
 
+.shop-toggle {
+  padding: 0.32rem 0.55rem;
+  font-size: 0.66rem;
+}
+
 .icon-button {
   width: 30px;
   height: 28px;
@@ -756,6 +785,66 @@ select {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.5rem;
   min-width: 0;
+}
+
+.dock-panel {
+  min-width: 0;
+  min-height: 0;
+}
+
+.bench-panel {
+  display: grid;
+  grid-template-columns: 106px minmax(0, 1fr);
+  gap: 0.55rem;
+  padding: 0.15rem 0;
+}
+
+.bench-caption {
+  display: grid;
+  align-content: center;
+  gap: 0.15rem;
+  padding: 0.4rem 0.55rem;
+  border-right: 1px solid var(--line);
+}
+
+.bench-caption strong {
+  color: var(--gold);
+  font-size: 0.78rem;
+}
+
+.bench-caption span {
+  color: var(--cyan);
+  font-size: 0.7rem;
+}
+
+.bench-caption small {
+  color: var(--muted);
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+.bench-row {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.bench-row .unit-slot {
+  width: 100%;
+  min-width: 0;
+}
+
+.bench-row .unit-info {
+  padding: 0.18rem;
+}
+
+.bench-row .unit-info strong {
+  font-size: 0.58rem;
+}
+
+.bench-row .unit-info small {
+  display: none;
 }
 
 .shop-card {
@@ -1310,6 +1399,11 @@ th {
     overflow-x: auto;
   }
 
+  .bench-row {
+    grid-template-columns: repeat(9, minmax(78px, 1fr));
+    overflow-x: auto;
+  }
+
   .start-card {
     grid-template-columns: 1fr;
   }
@@ -1334,6 +1428,10 @@ th {
 
   .unit-slots {
     flex-wrap: wrap;
+  }
+
+  .bench-panel {
+    grid-template-columns: 1fr;
   }
 
   .investment-options,
