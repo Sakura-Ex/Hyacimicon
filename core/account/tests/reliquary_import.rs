@@ -79,7 +79,7 @@ fn imports_complete_inventory_and_keeps_source_fields_separate() {
     assert_eq!(imported.report.build, "0.19.0");
     assert_eq!(
         imported.report.trace_bindings_snapshot,
-        "reliquary-traces-4.7-fe44559408d9"
+        "reliquary-traces-4.7-dfdfe3337bcf"
     );
     assert_eq!(imported.report.default_techniques, 3);
     assert!(imported.report.warnings.is_empty());

@@ -31,6 +31,9 @@ pub enum Attribute {
     /// 固定速度，保留小数。
     #[serde(rename = "SPD")]
     Speed,
+    /// 速度百分比。
+    #[serde(rename = "SPD_")]
+    SpeedPercent,
     /// 暴击率。
     #[serde(rename = "CRIT Rate_")]
     CritRate,
@@ -52,6 +55,12 @@ pub enum Attribute {
     /// 治疗量加成。
     #[serde(rename = "Outgoing Healing Boost_")]
     OutgoingHealingBoost,
+    /// 受到治疗量加成。
+    #[serde(rename = "Incoming Healing Boost_")]
+    IncomingHealingBoost,
+    /// 全属性伤害加成。
+    #[serde(rename = "All DMG Boost_")]
+    AllDamageBoost,
     /// 物理伤害加成。
     #[serde(rename = "Physical DMG Boost_")]
     PhysicalDamageBoost,

@@ -51,8 +51,9 @@ pub(super) fn convert(
         let path = format!("relics[{index}]");
         unique_id(&relic.uid, &path, &mut relic_ids)?;
         numeric_id(&relic.set_id, &format!("{path}.set_id"))?;
-        bounded(relic.rarity, 2, 5, &format!("{path}.rarity"))?;
-        bounded(relic.level, 0, relic.rarity * 3, &format!("{path}.level"))?;
+        let max_level = RelicInstance::max_level_for_rarity(relic.rarity)
+            .ok_or_else(|| invalid(format!("{path}.rarity"), "遗器品质超出支持范围（2～5）"))?;
+        bounded(relic.level, 0, max_level, &format!("{path}.level"))?;
         let slot = slot(&relic.slot, &format!("{path}.slot"))?;
         let (mainstat, main_key) = mainstat(slot, &relic.mainstat, &format!("{path}.mainstat"))?;
         let instance_id = format!("{config_id}:relic:{}", relic.uid);
@@ -137,46 +138,7 @@ fn mainstat(
     };
     let stat: Stat = serde_json::from_value(serde_json::Value::String(key.clone()))
         .map_err(|_| invalid(path, "未知主词条标签"))?;
-    let supported = match slot {
-        RelicSlot::Head => stat == Stat::Hp,
-        RelicSlot::Hands => stat == Stat::Atk,
-        RelicSlot::Body => matches!(
-            stat,
-            Stat::HpPercent
-                | Stat::AtkPercent
-                | Stat::DefPercent
-                | Stat::CritRate
-                | Stat::CritDmg
-                | Stat::EffectHitRate
-                | Stat::OutgoingHealingBoost
-        ),
-        RelicSlot::Feet => matches!(
-            stat,
-            Stat::HpPercent | Stat::AtkPercent | Stat::DefPercent | Stat::Spd
-        ),
-        RelicSlot::PlanarSphere => matches!(
-            stat,
-            Stat::HpPercent
-                | Stat::AtkPercent
-                | Stat::DefPercent
-                | Stat::PhysicalDmgBoost
-                | Stat::FireDmgBoost
-                | Stat::IceDmgBoost
-                | Stat::LightningDmgBoost
-                | Stat::WindDmgBoost
-                | Stat::QuantumDmgBoost
-                | Stat::ImaginaryDmgBoost
-        ),
-        RelicSlot::LinkRope => matches!(
-            stat,
-            Stat::HpPercent
-                | Stat::AtkPercent
-                | Stat::DefPercent
-                | Stat::BreakEffect
-                | Stat::EnergyRegenerationRate
-        ),
-    };
-    if !supported {
+    if !stat.supports_slot(slot) {
         return Err(invalid(path, "主词条与遗器部位不匹配"));
     }
     Ok((stat, key))
@@ -188,7 +150,7 @@ fn substats(
     main_key: &str,
     path: &str,
 ) -> Result<BTreeMap<RelicSubStat, f64>, ImportError> {
-    if relic.substats.len() > 4 {
+    if relic.substats.len() > RelicInstance::MAX_SUBSTATS {
         return Err(invalid(format!("{path}.substats"), "当前副词条最多四条"));
     }
     let mut stats = BTreeMap::new();

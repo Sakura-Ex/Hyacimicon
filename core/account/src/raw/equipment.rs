@@ -97,3 +97,13 @@ pub struct RelicInstance {
     /// 当前已生效的副词条；未获得副词条时为空，来源预览词条另行保存。
     pub substats: BTreeMap<RelicSubStat, f64>,
 }
+
+impl RelicInstance {
+    /// 遗器最多包含的互异副词条数量。
+    pub const MAX_SUBSTATS: usize = 4;
+
+    /// 按品质读取强化上限；当前支持二至五星遗器。
+    pub fn max_level_for_rarity(rarity: u8) -> Option<u8> {
+        (2..=5).contains(&rarity).then_some(rarity * 3)
+    }
+}

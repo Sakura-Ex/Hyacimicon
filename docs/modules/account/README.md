@@ -1,8 +1,8 @@
 # Rust 账号数据与配置
 
-状态：原始账号模型、reliquary-archiver v4 导入、实际游玩配置结构、文档数值 JSON、角色来源选择、遗器等级判断和行迹保底运算已实现。完整模板展开、面板计算、Python 生成结果接入与绑定待实现。
+状态：原始账号模型、reliquary-archiver v4 导入、完整游玩配置转换和静态面板计算已实现。Python 生成结果接入与绑定待实现。
 
-`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[实际游玩配置](playable-configuration.md)说明目标结构、JSON 文件及试用补齐和映射算法。整体流程见[账号数据流](../account-generation/data-flow.md)。
+`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[实际游玩配置](playable-configuration.md)说明完整转换入口、保底规则和面板结构。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
 ## 目录与入口
 
@@ -23,7 +23,9 @@ core/account/
 │   │   ├── mod.rs      # 生效配置、面板及共用规则常量
 │   │   ├── planning.rs  # 角色来源与分项映射计划
 │   │   ├── attributes.rs  # 静态属性键与单位
-│   │   └── traces.rs   # 按试用基础行迹补齐
+│   │   ├── traces.rs   # 按试用基础行迹补齐
+│   │   ├── conversion.rs  # 完整配置转换入口
+│   │   └── panel.rs    # 共用静态属性计算
 │   ├── reference/      # 文档数据类型及 JSON 载入
 │   └── import/reliquary/  # 来源字段、行迹与装备转换
 ├── examples/           # 统一格式读取与实际文件导入
@@ -31,6 +33,7 @@ core/account/
     ├── raw_account.rs
     ├── reliquary_import.rs
     ├── playable_data.rs
+    ├── playable_conversion.rs
     ├── trace_floor.rs
     └── fixtures/       # 人工构造的最小样例
 ```
@@ -77,7 +80,7 @@ reliquary-archiver v4 适配器已完成主词条歧义处理、百分比换算�
 
 reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突、等级与突破范围、当前词条和行迹绑定。缺失的行迹信息保持未知并写入报告。直接构造或反序列化 `RawAccount` 时仍需由对应入口检查；完整规则合法性、游戏资料兼容性与玩法约束由后续转换处理。
 
-导入报告在原始账号之外保存错误、缺失字段和未知编码。生成器继续在自己的结果中保存生成参数、随机种子、投入评分与搜索统计，并在接入时提供 `RawAccount`。试用补齐、练度保底、星魂附加等级与生效属性计算由后续配置转换完成。
+导入报告在原始账号之外保存错误、缺失字段和未知编码。生成器在自己的结果中保存生成参数、随机种子、投入评分与搜索统计。`convert_playable_account` 接收 `RawAccount`，完成试用补齐、练度保底、星魂技能加级和静态面板计算。
 
 ## 运行与验证
 
@@ -85,6 +88,7 @@ reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突�
 
 ```powershell
 cargo run --locked -p account-core --example raw_account
+cargo run --locked -p account-core --example convert_playable -- <导出.json> <游玩配置.json>
 cargo test --locked -p account-core
 cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings

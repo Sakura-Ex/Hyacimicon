@@ -1,9 +1,11 @@
-//! 实际游玩配置的目标结构；所需数据齐全后由后续转换器构造。
+//! 完整转换生成的统一游玩配置、静态面板及共用规则。
 //!
-//! 等级、面板和技能等级均为生效值。原始账号保持独立，试用与映射装备
+//! 面板和技能等级均为生效值，等级与进阶采用共用规则。试用与映射装备
 //! 随对应角色保存；局内星级、站位和投资在战斗组装时加入。
 
 pub mod attributes;
+pub mod conversion;
+mod panel;
 pub mod planning;
 pub mod traces;
 
@@ -12,7 +14,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    LightConeInstance, RelicInstance,
+    RelicInstance,
     reference::{Element, EnergyCapacity, RelicGroupTemplate, TrialRelics},
 };
 
@@ -104,7 +106,7 @@ pub struct PlayableLightCone {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum PlayableRelicGroup {
-    /// 使用确认持有的实际实例，允许空装和缺件。
+    /// 使用确认持有且全部达到映射等级的实际实例。
     Owned {
         /// 此圈实际使用的实例 ID。
         instance_ids: Vec<String>,
@@ -148,20 +150,37 @@ pub struct PlayableTraces {
     pub node_unlocks: BTreeMap<String, bool>,
 }
 
+/// 一项属性的基础值及静态加成。
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PanelStat {
+    /// 角色和光锥提供的基础值。
+    pub base: f64,
+    /// 固定加成与百分比加成折算后的增加值。
+    pub added: f64,
+}
+
+impl PanelStat {
+    /// 读取基础值与加成之和。
+    pub fn total(&self) -> f64 {
+        self.base + self.added
+    }
+}
+
 /// 静态来源已计入的角色面板，供后续加入局内因素。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CharacterPanel {
     /// 面板生命。
-    pub hp: f64,
+    pub hp: PanelStat,
     /// 面板攻击。
-    pub attack: f64,
+    pub attack: PanelStat,
     /// 面板防御。
-    pub defense: f64,
+    pub defense: PanelStat,
     /// 面板速度。
-    pub speed: f64,
-    /// 嘲讽值，资料尚未提供时为空；依赖该值的战斗组装需补齐资料。
-    pub aggro: Option<f64>,
+    pub speed: PanelStat,
+    /// 嘲讽值。
+    pub aggro: f64,
     /// 暴击率。
     pub crit_rate: f64,
     /// 暴击伤害。
@@ -176,6 +195,10 @@ pub struct CharacterPanel {
     pub energy_regeneration_rate: f64,
     /// 治疗量加成。
     pub outgoing_healing_boost: f64,
+    /// 受到治疗量加成。
+    pub incoming_healing_boost: f64,
+    /// 全属性伤害加成。
+    pub all_damage_boost: f64,
     /// 各属性伤害加成。
     pub elemental_damage_boost: BTreeMap<Element, f64>,
     /// 欢愉度。
@@ -194,12 +217,13 @@ pub struct PlayableCharacter {
     pub origin: CharacterOrigin,
     /// 生效星魂数。
     pub eidolons: u8,
-    /// 玩法固定使用的能力版本。
-    pub ability_version: u32,
+    /// 常规角色固定使用的能力版本；玩法专属角色无常规版本时省略。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability_version: Option<u32>,
     /// 基础行迹与星魂加级后的技能。
     pub traces: PlayableTraces,
-    /// 生效光锥，规则允许空装时可为空。
-    pub light_cone: Option<PlayableLightCone>,
+    /// 生效光锥。
+    pub light_cone: PlayableLightCone,
     /// 保留原装或采用模板的遗器配置。
     pub relics: PlayableRelics,
     /// 已完成的静态面板。
@@ -228,8 +252,8 @@ pub struct PlayableAccount {
     pub mode: ConfigurationMode,
     /// 玩法角色范围内的生效配置。
     pub characters: Vec<PlayableCharacter>,
-    /// 确认持有的原始光锥库存；是否允许使用由模式与玩法约束决定。
-    pub owned_light_cones: Vec<LightConeInstance>,
+    /// 使用统一等级与进阶的持有光锥库存。
+    pub owned_light_cones: Vec<PlayableLightCone>,
     /// 确认持有的原始遗器库存。
     pub owned_relics: Vec<RelicInstance>,
 }

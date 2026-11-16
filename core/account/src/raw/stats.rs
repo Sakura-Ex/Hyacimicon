@@ -106,3 +106,51 @@ pub enum RelicSubStat {
     #[serde(rename = "Break Effect_")]
     BreakEffect,
 }
+
+impl RelicMainStat {
+    /// 检查主词条是否适用于指定部位。
+    pub fn supports_slot(self, slot: crate::RelicSlot) -> bool {
+        use crate::RelicMainStat as Stat;
+        use crate::RelicSlot;
+        let stat = self;
+        match slot {
+            RelicSlot::Head => stat == Stat::Hp,
+            RelicSlot::Hands => stat == Stat::Atk,
+            RelicSlot::Body => matches!(
+                stat,
+                Stat::HpPercent
+                    | Stat::AtkPercent
+                    | Stat::DefPercent
+                    | Stat::CritRate
+                    | Stat::CritDmg
+                    | Stat::EffectHitRate
+                    | Stat::OutgoingHealingBoost
+            ),
+            RelicSlot::Feet => matches!(
+                stat,
+                Stat::HpPercent | Stat::AtkPercent | Stat::DefPercent | Stat::Spd
+            ),
+            RelicSlot::PlanarSphere => matches!(
+                stat,
+                Stat::HpPercent
+                    | Stat::AtkPercent
+                    | Stat::DefPercent
+                    | Stat::PhysicalDmgBoost
+                    | Stat::FireDmgBoost
+                    | Stat::IceDmgBoost
+                    | Stat::LightningDmgBoost
+                    | Stat::WindDmgBoost
+                    | Stat::QuantumDmgBoost
+                    | Stat::ImaginaryDmgBoost
+            ),
+            RelicSlot::LinkRope => matches!(
+                stat,
+                Stat::HpPercent
+                    | Stat::AtkPercent
+                    | Stat::DefPercent
+                    | Stat::BreakEffect
+                    | Stat::EnergyRegenerationRate
+            ),
+        }
+    }
+}

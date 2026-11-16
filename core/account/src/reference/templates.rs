@@ -88,16 +88,10 @@ pub struct MappingTemplate {
     pub planar: RelicGroupTemplate,
 }
 
-/// 分别判断是否映射的配置部分。
+/// 独立判断是否整体映射的遗器范围。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MappingPart {
-    /// 星魂。
-    Eidolons,
-    /// 行迹。
-    Traces,
-    /// 光锥。
-    LightCone,
     /// 外圈遗器。
     OuterRelics,
     /// 内圈遗器。

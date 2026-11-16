@@ -2,11 +2,15 @@
 
 pub mod models;
 pub mod templates;
+pub mod traces;
 
 pub use models::*;
 pub use templates::*;
+pub use traces::*;
 
 use std::collections::BTreeMap;
+
+use crate::{RelicMainStat, playable::attributes::AttributeValues};
 
 /// 账号转换使用的基础数据、模板与规则。
 #[derive(Debug)]
@@ -27,6 +31,12 @@ pub struct PlayableData {
     pub gameplay_forms: Vec<GameplayFormData>,
     /// 各角色小行迹节点及其属性贡献。
     pub minor_traces: Vec<CharacterMinorTraces>,
+    /// 共用的行迹节点与星魂技能加级资料。
+    pub traces: TraceCatalog,
+    /// 套装达到指定件数时的常驻属性。
+    pub set_properties: BTreeMap<String, BTreeMap<u8, AttributeValues>>,
+    /// 五星 +15 主词条数值。
+    pub mainstats: BTreeMap<RelicMainStat, f64>,
 }
 
 impl PlayableData {
@@ -49,6 +59,11 @@ impl PlayableData {
             minor_traces: serde_json::from_str(include_str!(
                 "../../data/s2-v4.7/minor-traces.json"
             ))?,
+            traces: TraceCatalog::bundled()?,
+            set_properties: serde_json::from_str(include_str!(
+                "../../data/s2-v4.7/set-properties.json"
+            ))?,
+            mainstats: serde_json::from_str(include_str!("../../data/s2-v4.7/mainstats.json"))?,
         })
     }
 }

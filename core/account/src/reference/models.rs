@@ -4,7 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use std::collections::BTreeMap;
 
-use crate::playable::{BASE_CRIT_RATE, attributes::AttributeBonus};
+use crate::playable::{
+    BASE_CRIT_RATE,
+    attributes::{Attribute, AttributeBonus},
+};
 
 /// 一个角色各小行迹节点激活后的属性贡献。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +96,7 @@ pub struct BaseCombatStats {
     pub defense: f64,
 }
 
-/// 角色自身数值，保留文档未提供的嘲讽值为空。
+/// 角色自身的基础属性。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CharacterBaseStats {
@@ -107,8 +110,8 @@ pub struct CharacterBaseStats {
     pub speed: f64,
     /// 基础暴击率的特殊取值；缺省时使用统一基础暴击率。
     pub crit_rate_override: Option<f64>,
-    /// 基础嘲讽值，未记录时为空。
-    pub aggro: Option<u16>,
+    /// 基础嘲讽值。
+    pub aggro: u16,
 }
 
 impl CharacterBaseStats {
@@ -123,8 +126,10 @@ impl CharacterBaseStats {
 #[serde(deny_unknown_fields)]
 pub struct EnergyCapacity {
     /// 容量，文档为缺省符号时为空。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub amount: Option<f64>,
     /// 文档括号内的专属资源名。
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub resource_name: Option<String>,
 }
 
@@ -160,6 +165,9 @@ pub struct LightConeData {
     pub rarity: u8,
     /// 光锥自身属性。
     pub base: BaseCombatStats,
+    /// 每种常驻属性在叠影 1～5 时的数值。
+    #[serde(default)]
+    pub properties: BTreeMap<Attribute, [f64; 5]>,
 }
 
 /// 玩法允许的站位类别。

@@ -56,16 +56,16 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 
 随 crate 提供的最小绑定资料为 `core/account/data/reliquary-traces-v4.json`：
 
-- 快照 ID：`reliquary-traces-4.7-fe44559408d9`；条目类别：`character_trace_binding`；条目 ID：`角色 ID:能力版本`。
-- 游戏资料版本：4.7；来源提交：`fe44559408d9f53700a5c236edfb64c3122d9449`。
-- 来源文件：[AvatarSkillTreeConfig.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/fe44559408d9f53700a5c236edfb64c3122d9449/ExcelOutput/AvatarSkillTreeConfig.json) 与 [AvatarSkillTreeConfigLD.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/fe44559408d9f53700a5c236edfb64c3122d9449/ExcelOutput/AvatarSkillTreeConfigLD.json)。
+- 快照 ID：`reliquary-traces-4.7-dfdfe3337bcf`；条目类别：`character_trace_binding`；条目 ID：`角色 ID:能力版本`。
+- 游戏资料版本：4.7；来源提交：`dfdfe3337bcfa14f000074d2dae7058118193ea6`。
+- 节点来源：[AvatarSkillTreeConfig.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput/AvatarSkillTreeConfig.json) 与 [AvatarSkillTreeConfigLD.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput/AvatarSkillTreeConfigLD.json)。转换共用该资料的实际技能 ID，以及 `AvatarRankConfig.json`／`AvatarRankConfigLD.json` 中的星魂加级列表。
 - 按一级记录的 `AvatarID + EnhancedID + AnchorType` 提取真实节点 ID 与等级上限，得到 99 种角色形态、109 个角色与能力版本组合。
 
 来源标签 `basic/skill/ult/talent` 分别对应 `Point01`～`Point04`，`ability_1`～`ability_3` 对应 `Point06`～`Point08`，`stat_1`～`stat_10` 对应 `Point09`～`Point18`；忆灵技能对应 `Point19/Point20`，`special` 对应 `Point21`，欢愉技对应 `Point22`。
 
 来源省略了秘技等级。资料中 `Point05` 明确为默认解锁、固定一级时，导入器据此记录一级，并在报告中统计数量。导出器为无 `special` 节点的角色也写出 `special=false`，导入器跳过该格式占位；存在节点时保留真实布尔状态。
 
-更新绑定资料时，从固定提交的两份来源文件重新提取这些字段，核对角色与版本组合的唯一性、节点标签和默认秘技条件，再运行增强角色、忆灵、欢愉技及解锁状态的回归用例。游戏资料按仓库分工维护，crate 内保留运行所需的精简快照。
+更新绑定资料时，从固定提交的节点与星魂配置提取所需字段，核对角色与版本组合的唯一性、节点标签、默认一级技能条件和技能加级引用，再运行相关回归用例。游戏资料按仓库分工维护，crate 内保留运行所需的精简快照。
 
 ## 检查与返回结果
 

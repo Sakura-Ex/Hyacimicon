@@ -17,12 +17,11 @@ fn account() -> RawAccount {
     serde_json::from_str(include_str!("fixtures/raw_account.json")).unwrap()
 }
 
-/// 显式建立模式，空选择表示各项映射尚待判断。
+/// 显式建立资源模式。
 fn request(mode: ConfigurationMode) -> PlanRequest {
     PlanRequest {
         mode,
         character_aliases: BTreeMap::new(),
-        mapping_decisions: BTreeMap::new(),
     }
 }
 
@@ -218,7 +217,7 @@ fn preserves_aggregate_trial_relics_and_special_characters() {
         .unwrap();
     assert_eq!(pam.base.hp, 917.28);
     assert_eq!(pam.base.crit_rate(), 1.0);
-    assert_eq!(pam.base.aggro, Some(125));
+    assert_eq!(pam.base.aggro, 125);
     assert_eq!(pam.rarity, None);
     assert!(
         !data
@@ -270,16 +269,14 @@ fn fills_missing_roles_with_trial_sources_and_preserves_original_account() {
             raw_character_id: "1004".to_owned()
         }
     );
-    assert_eq!(welt.mapping_decisions.len(), 5);
+    assert_eq!(welt.mapping_decisions.len(), 2);
     assert_eq!(
         welt.mapping_decisions[&MappingPart::OuterRelics],
         MappingAction::UseTemplate
     );
-    assert!(
-        welt.mapping_decisions
-            .iter()
-            .filter(|(part, _)| **part != MappingPart::OuterRelics)
-            .all(|(_, action)| *action == MappingAction::Undetermined)
+    assert_eq!(
+        welt.mapping_decisions[&MappingPart::PlanarRelics],
+        MappingAction::UseTemplate
     );
     let clara = plan
         .characters
@@ -340,16 +337,10 @@ fn supports_explicit_aliases_without_automatically_merging_forms() {
 
 #[test]
 fn keeps_inner_and_outer_mapping_choices_independent() {
-    let raw = account();
+    let mut raw = fully_equipped_account();
+    raw.relics[0].level = 12;
     let data = PlayableData::bundled().unwrap();
-    let mut options = request(ConfigurationMode::OwnedWithTrials);
-    options.mapping_decisions.insert(
-        "1004".to_owned(),
-        BTreeMap::from([
-            (MappingPart::OuterRelics, MappingAction::UseTemplate),
-            (MappingPart::PlanarRelics, MappingAction::KeepOwned),
-        ]),
-    );
+    let options = request(ConfigurationMode::OwnedWithTrials);
     let plan = plan_playable_account(&raw, &data, &options).unwrap();
     let welt = plan
         .characters
@@ -363,10 +354,6 @@ fn keeps_inner_and_outer_mapping_choices_independent() {
     assert_eq!(
         welt.mapping_decisions[&MappingPart::PlanarRelics],
         MappingAction::KeepOwned
-    );
-    assert_eq!(
-        welt.mapping_decisions[&MappingPart::LightCone],
-        MappingAction::Undetermined
     );
     let all_trial =
         plan_playable_account(&raw, &data, &request(ConfigurationMode::TrialsOnly)).unwrap();
@@ -385,7 +372,7 @@ fn keeps_inner_and_outer_mapping_choices_independent() {
 }
 
 #[test]
-fn rejects_duplicate_ids_invalid_aliases_and_stale_choices() {
+fn rejects_duplicate_ids_invalid_aliases_and_version_mismatch() {
     let data = PlayableData::bundled().unwrap();
     let mut raw = account();
     raw.characters.push(raw.characters[0].clone());
@@ -401,16 +388,6 @@ fn rejects_duplicate_ids_invalid_aliases_and_stale_choices() {
             .unwrap_err()
             .0,
         "别名目标 9999 未包含在资料中"
-    );
-    let mut options = request(ConfigurationMode::OwnedWithTrials);
-    options
-        .mapping_decisions
-        .insert("1107".to_owned(), BTreeMap::new());
-    assert!(
-        plan_playable_account(&account(), &data, &options)
-            .unwrap_err()
-            .0
-            .contains("当前采用试用来源")
     );
     let mut raw = account();
     raw.game_version = Some("4.6".to_owned());
@@ -506,12 +483,13 @@ fn maps_the_entire_group_when_any_one_piece_is_underleveled() {
 }
 
 #[test]
-fn rejects_invalid_relic_references_and_conflicting_manual_choices() {
+fn rejects_invalid_relic_references() {
     let data = PlayableData::bundled().unwrap();
     let options = request(ConfigurationMode::OwnedWithTrials);
     let mut raw = fully_equipped_account();
     raw.relics[0].level = 12;
     raw.relics[1].slot = RelicSlot::Feet;
+    raw.relics[1].mainstat = RelicMainStat::Spd;
     assert_eq!(
         plan_playable_account(&raw, &data, &options).unwrap_err().0,
         "角色 1004 的遗器 example:full:2 部位不一致"
@@ -520,16 +498,5 @@ fn rejects_invalid_relic_references_and_conflicting_manual_choices() {
     assert_eq!(
         plan_playable_account(&raw, &data, &options).unwrap_err().0,
         "角色 1004 引用的遗器 example:full:2 不存在"
-    );
-    let mut raw = fully_equipped_account();
-    raw.relics[0].level = 12;
-    let mut options = options;
-    options.mapping_decisions.insert(
-        "1004".to_owned(),
-        BTreeMap::from([(MappingPart::OuterRelics, MappingAction::KeepOwned)]),
-    );
-    assert_eq!(
-        plan_playable_account(&raw, &data, &options).unwrap_err().0,
-        "角色 1004 的 OuterRelics 选择与遗器等级规则冲突"
     );
 }

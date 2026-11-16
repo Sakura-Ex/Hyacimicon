@@ -25,12 +25,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     let request = PlanRequest {
         mode: ConfigurationMode::OwnedWithTrials,
         character_aliases: BTreeMap::new(),
-        mapping_decisions: BTreeMap::new(),
     };
     let plan = plan_playable_account(&raw, &data, &request)?;
     fs::write(&arguments[1], serde_json::to_vec_pretty(&plan)?)?;
     println!(
-        "快照 {}，已规划 {} 个角色；分项映射条件及面板继续由展开阶段处理",
+        "快照 {}，已生成 {} 个角色的来源及遗器映射计划",
         plan.data_snapshot,
         plan.characters.len()
     );

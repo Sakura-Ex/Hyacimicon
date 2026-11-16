@@ -1,7 +1,6 @@
 //! 先确定本体、试用来源和各部分映射选择，再展开完整实际游玩配置。
 //!
-//! 此阶段实现来源选择和遗器整圈映射判断。其余尚未明确的部分标为待判断，
-//! 计划供后续转换器使用，等级、行迹和面板在展开阶段确定。
+//! 来源选择和遗器整圈判断由计划入口统一执行，完整转换直接复用其结果。
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -17,7 +16,7 @@ use crate::{
     reference::{CharacterData, CharacterKind, MappingPart, PlayableData},
 };
 
-/// 每部分的映射选择，待判断状态明确保留。
+/// 一圈遗器保留原装或采用映射模板。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MappingAction {
@@ -25,11 +24,9 @@ pub enum MappingAction {
     KeepOwned,
     /// 使用该部分的映射模板。
     UseTemplate,
-    /// 触发条件尚未确认或尚未计算。
-    Undetermined,
 }
 
-/// 生成计划所需的模式、已确认 ID 对照和映射选择。
+/// 生成计划所需的资源模式和已确认 ID 对照。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlanRequest {
@@ -37,8 +34,6 @@ pub struct PlanRequest {
     pub mode: ConfigurationMode,
     /// 原始角色 ID 到文档角色 ID 的直接对照；由调用方提供已核对关系。
     pub character_aliases: BTreeMap<String, String>,
-    /// 按文档角色 ID 提供尚未自动确定的选择；与自动遗器判断冲突时返回错误。
-    pub mapping_decisions: BTreeMap<String, BTreeMap<MappingPart, MappingAction>>,
 }
 
 /// 一种角色后续展开所采用的来源与映射选择。
@@ -102,7 +97,7 @@ pub fn mapped_eidolons(character: &CharacterData) -> Result<u8, PlanError> {
 ///
 /// 仅按角色 ID 及调用方已核对的直接别名查找持有情况。两份原始角色映射到
 /// 同一目标时返回冲突。已知遗器未满级时采用整圈模板；全部满级时保留原装。
-/// 空缺部位使“全部满级”尚无法确认，保留待判断。完整配置和面板由后续阶段展开。
+/// 空缺部位同样触发所在圈映射。完整配置和面板由转换入口展开。
 pub fn plan_playable_account(
     raw: &RawAccount,
     data: &PlayableData,
@@ -150,35 +145,14 @@ pub fn plan_playable_account(
             )));
         }
     }
-    for character_id in request.mapping_decisions.keys() {
-        if request.mode == ConfigurationMode::TrialsOnly
-            || !owned.contains_key(character_id.as_str())
-        {
-            return Err(PlanError(format!(
-                "角色 {character_id} 当前采用试用来源，无法应用本体映射选择"
-            )));
-        }
-        if !data
-            .mappings
-            .iter()
-            .any(|entry| &entry.character_id == character_id)
-        {
-            return Err(PlanError(format!("角色 {character_id} 没有映射模板")));
-        }
-    }
-    let parts = [
-        MappingPart::Eidolons,
-        MappingPart::Traces,
-        MappingPart::LightCone,
-        MappingPart::OuterRelics,
-        MappingPart::PlanarRelics,
-    ];
+    let parts = [MappingPart::OuterRelics, MappingPart::PlanarRelics];
     let mut relics = BTreeMap::new();
     for relic in &raw.relics {
         if relics.insert(relic.instance_id.as_str(), relic).is_some() {
             return Err(PlanError(format!("遗器实例 ID {} 重复", relic.instance_id)));
         }
     }
+    validate_equipment(raw)?;
     let mut characters = Vec::with_capacity(data.trials.len());
     for trial in &data.trials {
         let definition = data
@@ -221,26 +195,8 @@ pub fn plan_playable_account(
                             &relics,
                             &[RelicSlot::PlanarSphere, RelicSlot::LinkRope],
                         )?,
-                        _ => MappingAction::Undetermined,
                     };
-                    let specified = request
-                        .mapping_decisions
-                        .get(&trial.character_id)
-                        .and_then(|choices| choices.get(&part))
-                        .copied();
-                    let action = match specified {
-                        Some(choice) if automatic == MappingAction::Undetermined => choice,
-                        Some(choice)
-                            if choice != MappingAction::Undetermined && choice != automatic =>
-                        {
-                            return Err(PlanError(format!(
-                                "角色 {} 的 {part:?} 选择与遗器等级规则冲突",
-                                trial.character_id
-                            )));
-                        }
-                        _ => automatic,
-                    };
-                    Ok((part, action))
+                    Ok((part, automatic))
                 })
                 .collect::<Result<_, PlanError>>()?;
             (
@@ -291,24 +247,107 @@ fn relic_mapping_action(
                 character.character_id
             ))
         })?;
-        if relic.slot != *slot {
-            return Err(PlanError(format!(
-                "角色 {} 的遗器 {instance_id} 部位不一致",
-                character.character_id
-            )));
-        }
-        if relic.level > RELIC_MAPPING_LEVEL {
-            return Err(PlanError(format!(
-                "遗器 {instance_id} 等级超过资料上限 {RELIC_MAPPING_LEVEL}"
-            )));
-        }
         has_underleveled |= relic.level < RELIC_MAPPING_LEVEL;
     }
-    Ok(if has_underleveled {
+    Ok(if has_underleveled || has_empty_slot {
         MappingAction::UseTemplate
-    } else if has_empty_slot {
-        MappingAction::Undetermined
     } else {
         MappingAction::KeepOwned
     })
+}
+
+/// 核对库存光锥 ID 及跨角色的装备归属，避免同一实例同时装备。
+fn validate_equipment(raw: &RawAccount) -> Result<(), PlanError> {
+    let mut cone_ids = BTreeSet::new();
+    for cone in &raw.light_cones {
+        if !cone_ids.insert(&cone.instance_id) {
+            return Err(PlanError(format!("光锥实例 ID {} 重复", cone.instance_id)));
+        }
+        if !(1..=5).contains(&cone.superimposition) {
+            return Err(PlanError(format!(
+                "光锥 {} 的叠影超出 1～5",
+                cone.light_cone_id
+            )));
+        }
+    }
+    for relic in &raw.relics {
+        let max_level = RelicInstance::max_level_for_rarity(relic.rarity)
+            .ok_or_else(|| PlanError(format!("遗器 {} 的品质超出范围", relic.instance_id)))?;
+        if relic.level > max_level {
+            return Err(PlanError(format!(
+                "遗器 {} 的品质或强化等级超出范围",
+                relic.instance_id
+            )));
+        }
+        if !relic.mainstat.supports_slot(relic.slot) {
+            return Err(PlanError(format!(
+                "遗器 {} 的主词条与部位不匹配",
+                relic.instance_id
+            )));
+        }
+        if relic.substats.len() > RelicInstance::MAX_SUBSTATS {
+            return Err(PlanError(format!(
+                "遗器 {} 的副词条数量超出范围",
+                relic.instance_id
+            )));
+        }
+        let main: super::attributes::Attribute = relic.mainstat.into();
+        if relic
+            .substats
+            .keys()
+            .any(|key| super::attributes::Attribute::from(*key) == main)
+        {
+            return Err(PlanError(format!(
+                "遗器 {} 的主副词条重复",
+                relic.instance_id
+            )));
+        }
+        if relic
+            .substats
+            .values()
+            .any(|value| !value.is_finite() || *value <= 0.0)
+        {
+            return Err(PlanError(format!(
+                "遗器 {} 的副词条应为有限正数",
+                relic.instance_id
+            )));
+        }
+    }
+    let mut assigned_cones = BTreeSet::new();
+    let mut assigned_relics = BTreeSet::new();
+    for character in &raw.characters {
+        if let Some(id) = &character.light_cone_instance_id {
+            if !cone_ids.contains(id) {
+                return Err(PlanError(format!(
+                    "角色 {} 引用的光锥 {id} 不存在",
+                    character.character_id
+                )));
+            }
+            if !assigned_cones.insert(id) {
+                return Err(PlanError(format!("光锥实例 {id} 被多个角色装备")));
+            }
+        }
+        for (slot, id) in &character.relic_instance_ids {
+            let relic = raw
+                .relics
+                .iter()
+                .find(|entry| &entry.instance_id == id)
+                .ok_or_else(|| {
+                    PlanError(format!(
+                        "角色 {} 引用的遗器 {id} 不存在",
+                        character.character_id
+                    ))
+                })?;
+            if relic.slot != *slot {
+                return Err(PlanError(format!(
+                    "角色 {} 的遗器 {id} 部位不一致",
+                    character.character_id
+                )));
+            }
+            if !assigned_relics.insert(id) {
+                return Err(PlanError(format!("遗器实例 {id} 被多个角色装备")));
+            }
+        }
+    }
+    Ok(())
 }
