@@ -1,17 +1,21 @@
 # 项目目录与文件职责
 
-日期：2026-11-11。本页约定模块放置、文件职责、依赖关系，以及示例、测试、文档和数据的组织方式，供新增模块和目录调整时使用。系统模块职责见[系统设计与技术方案](../project/architecture.md)。
+日期：2026-11-16。本页约定模块放置、文件职责、依赖关系，以及示例、测试、文档和数据的组织方式，供新增模块和目录调整时使用。系统模块职责见[系统设计与技术方案](../project/architecture.md)。
 
 ## 当前目录
 
 ```text
 hsr-currency-wars-ai/
-├── core/battle/                         # 显式输入基础战斗内核与批次 CLI
+├── core/battle/                         # 显式输入单场战斗、回放与离线批次评估
 │   ├── src/                            # 输入校验、数学、状态执行、批次及 CLI
 │   ├── tests/                          # 行为、数学、批次及 CLI 验证，含合成向量
 │   ├── examples/                       # 人工构造的 JSON 场景，不是真实账号
 │   ├── Cargo.toml / Cargo.lock         # 战斗包配置与锁定依赖
 │   └── rust-toolchain.toml             # 固定 Rust、rustfmt 和 Clippy 版本
+├── core/run/                            # 单次战斗、显式结算、节点推进及训练记录
+│   ├── src/                            # 整局状态、观测、单场结果适配和CLI
+│   ├── tests/ / examples/              # 真实引擎驱动的合成状态转换验证
+│   └── Cargo.toml / Cargo.lock / rust-toolchain.toml
 ├── research/account_generation/         # 原始账号配置生成
 │   ├── __init__.py                      # 对外接口
 │   ├── data/                            # 随模块安装的账号参考资料 JSON
@@ -49,6 +53,8 @@ hsr-currency-wars-ai/
 │   ├── development/                    # 通用开发、协作与目录约定
 │   └── modules/
 │       ├── README.md                   # 模块目录
+│       ├── battle-simulation/          # 单场战斗、回放及离线评估
+│       ├── run-simulation/             # 单次战斗、整局结算和框架评审
 │       └── account-generation/         # 账号与遗器数据的设计资料
 │           ├── README.md               # 模块总览和阅读入口
 │           ├── data-flow.md            # 数据流与模块职责
@@ -69,7 +75,7 @@ hsr-currency-wars-ai/
 
 ## 模块放置
 
-先根据模块的用途、输入输出和调用方，确定它在现有设计中的归属，再选择代码位置。模拟与决策核心按业务职责放在 `core/`，当前战斗内核位于 `core/battle/`，Cargo 包名为 `battle-core`。研究与训练工具放在 `research/`。其他业务模块在开发时根据已确认的职责和技术方案确定目录，并在本页登记位置及理由。
+先根据模块的用途、输入输出和调用方，确定它在现有设计中的归属，再选择代码位置。模拟与决策核心按业务职责放在 `core/`，当前战斗内核位于 `core/battle/`，Cargo 包名为 `battle-core`；整局框架位于 `core/run/`，包名为 `run-core`，通过路径依赖复用战斗库。研究与训练工具放在 `research/`。其他业务模块在开发时根据已确认的职责和技术方案确定目录，并在本页登记位置及理由。
 
 目录按业务职责组织；测试和示例跟随模块归属安排。新增目录承载实际代码或资料。模块增加、职责拆分或文件迁移时，同步更新当前目录和相关文档引用。
 
@@ -78,7 +84,7 @@ hsr-currency-wars-ai/
 | 位置 | 存放内容 | 维护要求 |
 | --- | --- | --- |
 | 业务代码目录 | 可复用的实现、数据类型和模块接口 | 按职责命名，明确输入输出与依赖 |
-| `core/` | 模拟与决策核心，当前包含 `battle/` 战斗内核 | 按业务职责划分模块，构建配置和锁文件随模块维护 |
+| `core/` | 模拟与决策核心，当前包含 `battle/` 战斗内核和 `run/` 整局框架 | 按业务职责划分模块，构建配置和锁文件随模块维护 |
 | `research/` | 数据生成、搜索实验、模型训练和评估等研究工具 | 复用已有规则与模块接口，保存实验的复现条件 |
 | `examples/` | 按功能归类的调用和调试示例 | 通过公开接口调用业务代码，说明运行环境和参数 |
 | `tests/` | 按功能归类的自动验证与最小测试样例 | 围绕模块行为验证，使用项目实际的导入和依赖配置 |
@@ -113,6 +119,8 @@ hsr-currency-wars-ai/
 增加其他技术栈时，在对应配置和使用说明中登记安装、运行、构建及验证入口。模块接口和具体参数保存在各自文档中，本页维护位置与职责约定。
 
 基础战斗内核位于 `core/battle/`，作为独立 Cargo 包构建。安装 Rustup 后，进入该目录，由其中的 `rust-toolchain.toml` 选择固定工具链。运行 `cargo fmt --all -- --check`、`cargo clippy --locked --all-targets -- -D warnings` 和 `cargo test --locked`；CLI 与合成场景用法见[战斗模块入口](../modules/battle-simulation/README.md)。构建产物留在已忽略的 `core/battle/target/`，批次 ledger 和本机验证日志不提交。
+
+整局框架从 `core/run/` 运行自己的 Cargo 命令，使用模块内锁文件与同版本工具链。具体入口见[整局模块](../modules/run-simulation/README.md)。研究端后续绑定 `core/battle` 和 `core/run`；PyO3/Maturin 绑定以及根 workspace 的迁移需单独评审，本轮保持模块自持构建配置。
 
 ## 新增或迁移模块
 

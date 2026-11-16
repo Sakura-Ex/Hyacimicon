@@ -1,0 +1,292 @@
+{
+  "schema_version": 1,
+  "ruleset": "synthetic_run_v1",
+  "account_config_id": "synthetic-account-v1",
+  "provenance": {
+    "game_version": "synthetic",
+    "data_snapshot": "run-foundation-demo-v1",
+    "description": "Lose once, continue, then win; explicit synthetic HP and currency changes."
+  },
+  "initial": {
+    "hp": 30.0,
+    "max_hp": 30.0,
+    "gold": 10,
+    "crystals": 0
+  },
+  "nodes": [
+    {
+      "id": "loss-then-continue",
+      "battle": {
+        "schema_version": 1,
+        "ruleset": "basic_v1",
+        "provenance": {
+          "game_version": "synthetic",
+          "data_snapshot": "run-foundation-demo-v1",
+          "description": "Artificial resolved panels and deterministic primitive actions, not game kits."
+        },
+        "unsupported_mechanics": [],
+        "max_av": 1000.0,
+        "max_actions": 10,
+        "ally_skill_points": {
+          "initial": 0,
+          "maximum": 5
+        },
+        "enemy_skill_points": {
+          "initial": 0,
+          "maximum": 5
+        },
+        "allies": [
+          {
+            "id": "ally",
+            "stats": {
+              "level": 1,
+              "max_hp": 1000.0,
+              "attack": 10.0,
+              "defense": 0.0,
+              "speed": 100.0,
+              "taunt": 1.0,
+              "crit_rate": 0.0,
+              "crit_damage": 1.0,
+              "damage_bonus": 0.0,
+              "defense_reduction": 0.0,
+              "defense_ignore": 0.0,
+              "resistance": 0.0,
+              "resistance_penetration": 0.0,
+              "vulnerability": 0.0,
+              "damage_reduction": 0.0,
+              "independent_multiplier": 1.0,
+              "toughness_broken": true,
+              "healing_bonus": 0.0,
+              "incoming_healing_bonus": 0.0,
+              "shield_bonus": 0.0
+            },
+            "initial_hp": 1000.0,
+            "initial_energy": 0.0,
+            "max_energy": 100.0,
+            "revival": null,
+            "actions": [
+              {
+                "id": "wait",
+                "kind": "basic",
+                "sp_cost": 0,
+                "sp_gain": 0,
+                "energy_cost": 0.0,
+                "energy_gain": 0.0,
+                "effects": [
+                  {
+                    "type": "energy",
+                    "amount": 0.0,
+                    "target": "self_unit"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "waves": [
+          [
+            {
+              "id": "enemy",
+              "stats": {
+                "level": 1,
+                "max_hp": 1000.0,
+                "attack": 10.0,
+                "defense": 0.0,
+                "speed": 200.0,
+                "taunt": 1.0,
+                "crit_rate": 0.0,
+                "crit_damage": 1.0,
+                "damage_bonus": 0.0,
+                "defense_reduction": 0.0,
+                "defense_ignore": 0.0,
+                "resistance": 0.0,
+                "resistance_penetration": 0.0,
+                "vulnerability": 0.0,
+                "damage_reduction": 0.0,
+                "independent_multiplier": 1.0,
+                "toughness_broken": true,
+                "healing_bonus": 0.0,
+                "incoming_healing_bonus": 0.0,
+                "shield_bonus": 0.0
+              },
+              "initial_hp": 1000.0,
+              "initial_energy": 0.0,
+              "max_energy": 100.0,
+              "revival": null,
+              "actions": [
+                {
+                  "id": "hit",
+                  "kind": "basic",
+                  "sp_cost": 0,
+                  "sp_gain": 0,
+                  "energy_cost": 0.0,
+                  "energy_gain": 0.0,
+                  "effects": [
+                    {
+                      "type": "damage",
+                      "scale": "attack",
+                      "ratio": 0.0,
+                      "flat": 1000.0,
+                      "hits": 1,
+                      "can_crit": false,
+                      "target": "enemy_lowest_hp"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "settlement": {
+        "ruleset": "synthetic_explicit_v1",
+        "rule_id": "synthetic-loss-v1",
+        "source": "Hand-calculated synthetic contract; not a real game settlement formula.",
+        "victory": null,
+        "defeat": {
+          "hp": -7.0,
+          "gold": 2,
+          "crystals": 0
+        },
+        "draw": null
+      }
+    },
+    {
+      "id": "victory-and-finish",
+      "battle": {
+        "schema_version": 1,
+        "ruleset": "basic_v1",
+        "provenance": {
+          "game_version": "synthetic",
+          "data_snapshot": "run-foundation-demo-v1",
+          "description": "Artificial resolved panels and deterministic primitive actions, not game kits."
+        },
+        "unsupported_mechanics": [],
+        "max_av": 1000.0,
+        "max_actions": 10,
+        "ally_skill_points": {
+          "initial": 0,
+          "maximum": 5
+        },
+        "enemy_skill_points": {
+          "initial": 0,
+          "maximum": 5
+        },
+        "allies": [
+          {
+            "id": "ally",
+            "stats": {
+              "level": 1,
+              "max_hp": 1000.0,
+              "attack": 10.0,
+              "defense": 0.0,
+              "speed": 200.0,
+              "taunt": 1.0,
+              "crit_rate": 0.0,
+              "crit_damage": 1.0,
+              "damage_bonus": 0.0,
+              "defense_reduction": 0.0,
+              "defense_ignore": 0.0,
+              "resistance": 0.0,
+              "resistance_penetration": 0.0,
+              "vulnerability": 0.0,
+              "damage_reduction": 0.0,
+              "independent_multiplier": 1.0,
+              "toughness_broken": true,
+              "healing_bonus": 0.0,
+              "incoming_healing_bonus": 0.0,
+              "shield_bonus": 0.0
+            },
+            "initial_hp": 1000.0,
+            "initial_energy": 0.0,
+            "max_energy": 100.0,
+            "revival": null,
+            "actions": [
+              {
+                "id": "hit",
+                "kind": "basic",
+                "sp_cost": 0,
+                "sp_gain": 0,
+                "energy_cost": 0.0,
+                "energy_gain": 0.0,
+                "effects": [
+                  {
+                    "type": "damage",
+                    "scale": "attack",
+                    "ratio": 0.0,
+                    "flat": 1000.0,
+                    "hits": 1,
+                    "can_crit": false,
+                    "target": "enemy_lowest_hp"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "waves": [
+          [
+            {
+              "id": "enemy",
+              "stats": {
+                "level": 1,
+                "max_hp": 1000.0,
+                "attack": 10.0,
+                "defense": 0.0,
+                "speed": 100.0,
+                "taunt": 1.0,
+                "crit_rate": 0.0,
+                "crit_damage": 1.0,
+                "damage_bonus": 0.0,
+                "defense_reduction": 0.0,
+                "defense_ignore": 0.0,
+                "resistance": 0.0,
+                "resistance_penetration": 0.0,
+                "vulnerability": 0.0,
+                "damage_reduction": 0.0,
+                "independent_multiplier": 1.0,
+                "toughness_broken": true,
+                "healing_bonus": 0.0,
+                "incoming_healing_bonus": 0.0,
+                "shield_bonus": 0.0
+              },
+              "initial_hp": 1000.0,
+              "initial_energy": 0.0,
+              "max_energy": 100.0,
+              "revival": null,
+              "actions": [
+                {
+                  "id": "wait",
+                  "kind": "basic",
+                  "sp_cost": 0,
+                  "sp_gain": 0,
+                  "energy_cost": 0.0,
+                  "energy_gain": 0.0,
+                  "effects": [
+                    {
+                      "type": "energy",
+                      "amount": 0.0,
+                      "target": "self_unit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        ]
+      },
+      "settlement": {
+        "ruleset": "synthetic_explicit_v1",
+        "rule_id": "synthetic-win-v1",
+        "source": "Hand-calculated synthetic contract; not a real game settlement formula.",
+        "victory": {
+          "hp": 0.0,
+          "gold": 5,
+          "crystals": 0
+        },
+        "defeat": null,
+        "draw": null
+      }
+    }
+  ]
+}

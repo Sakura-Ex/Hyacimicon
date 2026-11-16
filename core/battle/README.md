@@ -4,7 +4,9 @@ This library executes explicit, already resolved battle scenarios. The `basic_v1
 profile supports speed/action-value scheduling, teams and enemy waves, skill
 points and energy, automatic action priorities, direct damage and critical hits,
 weighted random targets, healing, shields, action advance/delay, and optional
-explicit revival. It returns an event trace or a reproducible Monte Carlo ledger.
+explicit revival. Normal run progression executes one battle and consumes its
+actual result through [`run-core`](../run/README.md). Reproducible Monte Carlo
+ledgers remain available for candidate comparison and offline evaluation.
 
 The profile is a bounded simulation contract, not a claim of complete Currency
 Wars 4.7 character coverage. It does not convert accounts or infer missing kits,

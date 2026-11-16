@@ -1,0 +1,18 @@
+[package]
+name = "run-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "GPL-3.0-only"
+publish = false
+description = "Single-sample battle execution, explicit run settlement and experience records"
+
+[dependencies]
+battle-core = { path = "../battle" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["float_roundtrip"] }
+sha2 = "0.10"
+
+[[bin]]
+name = "hcwa-run"
+path = "src/main.rs"

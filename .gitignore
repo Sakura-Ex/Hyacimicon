@@ -28,6 +28,7 @@ Desktop.ini
 # Common build and dependency outputs
 /target/
 /core/battle/target/
+/core/run/target/
 /dist/
 /build/
 node_modules/
