@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "snapshot_id": "playable-s2-4.7-20095b7e1a6c",
+  "game_version": "4.7",
+  "season": "S2",
+  "files": {
+    "characters.json": {
+      "sha256": "5d7c22029b73272d2497c98ffa9dcb2e4c41c595a5e5cd628d50f5bcdb398de7",
+      "count": 61
+    },
+    "light-cones.json": {
+      "sha256": "b0ee77c788a705993f51f3702ae601779344939f3b364538c15c84e7028b12f9",
+      "count": 172
+    },
+    "trial-templates.json": {
+      "sha256": "746d9f603e9667371eadbbfcae504518a32f9ddcab6a3554e590bd8e7d7e8c97",
+      "count": 61
+    },
+    "mapping-templates.json": {
+      "sha256": "0ac1c3639c7fa8a3bd1627d26ae791b96b68c4c506905dfe3c177efd6f4f2b01",
+      "count": 60
+    },
+    "mapping-rules.json": {
+      "sha256": "5ba92c53600042aa690dd6cd64f6047962d31dc101578be0ede073273cbfff1c",
+      "count": 9
+    },
+    "gameplay-forms.json": {
+      "sha256": "00c72ae9caf9ff73d342113e83c1628d0504e50fc1e2956dfb9cad2cccf2e072",
+      "count": 216
+    },
+    "relics.json": {
+      "sha256": "2da8d78ccbfc6deb59422726895b5a949978289db70cced603fe67a9bce358cb",
+      "count": 95
+    }
+  },
+  "known_gaps": [
+    {
+      "key": "trial_levels",
+      "description": "试用角色与光锥的等级、突破未在模板表中列出"
+    },
+    {
+      "key": "mapping_triggers",
+      "description": "角色、星魂、行迹、光锥、内圈及外圈的触发条件待补充"
+    },
+    {
+      "key": "mapping_relic_verification",
+      "description": "已核对瓦尔特内外圈与长夜月内圈，其余映射遗器待游戏内对照"
+    },
+    {
+      "key": "trace_node_binding",
+      "description": "模板的未激活小行迹按属性贡献记录，实际节点 ID 需绑定"
+    },
+    {
+      "key": "character_aliases",
+      "description": "文档使用开拓者 8009，导入可能包含其他性别或形态 ID，归并关系需显式提供"
+    },
+    {
+      "key": "static_effects",
+      "description": "文档未列出全部行迹、星魂、光锥和套装效果，面板计算需另行接入"
+    },
+    {
+      "key": "other_relic_levels",
+      "description": "主词条资料当前覆盖五星 +15，其余品质与强化等级的成长数据待补充"
+    }
+  ]
+}

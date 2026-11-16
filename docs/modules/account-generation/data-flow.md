@@ -37,7 +37,7 @@ flowchart LR
 
 账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。完整角色和遗器生成通过 Python 参数调用，当前入口见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
 
-程序生成和玩家导入共用 `core/account/` 的 [Rust 原始账号模型](../account/README.md)。模型、统一格式序列化和 reliquary-archiver 导入已实现，Python 生成结果接入及玩法配置转换待实现。原始账号保存完整库存和可缺省的装备关系；导入报告与生成统计由各自入口单独保存。
+程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。原始模型、统一格式序列化和 reliquary-archiver 导入已实现。[实际游玩配置](../account/playable-configuration.md)已定义 Rust 结构，提供文档数值 JSON 和来源选择计划；模板展开、自动映射、面板计算及 Python 生成结果接入待实现。原始账号保存完整库存和可缺省的装备关系；导入报告与生成统计由各自入口单独保存。
 
 ## 生成与实际配置的分工
 

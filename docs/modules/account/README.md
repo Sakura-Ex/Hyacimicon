@@ -1,26 +1,33 @@
-# Rust 原始账号与导入
+# Rust 账号数据与配置
 
-状态：统一数据模型、Serde 序列化及 reliquary-archiver v4 导入已实现。Python 生成结果接入、玩法配置转换和 Python 绑定待实现。
+状态：原始账号模型、reliquary-archiver v4 导入、实际游玩配置结构、文档数值 JSON 和角色来源选择已实现。自动映射、模板展开、面板计算、Python 生成结果接入与绑定待实现。
 
-`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号。整体流程见[账号数据流](../account-generation/data-flow.md)。
+`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[实际游玩配置](playable-configuration.md)说明目标结构、JSON 文件及试用补齐和映射算法。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
 ## 目录与入口
 
 ```text
 core/account/
 ├── Cargo.toml
-├── data/reliquary-traces-v4.json  # 已固定版本的行迹绑定
+├── data/
+│   ├── reliquary-traces-v4.json  # 已固定版本的行迹绑定
+│   └── s2-v4.7/                # 实际游玩配置所需的文档数值与模板
 ├── src/
 │   ├── lib.rs          # 公开类型
 │   ├── raw.rs          # 账号标识、版本与完整库存
 │   ├── character.rs    # 角色、行迹与装备引用
 │   ├── equipment.rs    # 光锥、遗器实例和部位
 │   ├── stats.rs        # 统一主副词条键
-│   └── import/reliquary/  # 来源字段、行迹与装备转换
+│   ├── import/reliquary/  # 来源字段、行迹与装备转换
+│   ├── attributes.rs    # 静态属性键与单位
+│   ├── reference/       # 文档数据类型及 JSON 载入
+│   ├── planning.rs      # 角色来源与分项映射计划
+│   └── playable.rs      # 完整实际游玩配置的目标结构
 ├── examples/           # 统一格式读取与实际文件导入
 └── tests/
     ├── raw_account.rs
     ├── reliquary_import.rs
+    ├── playable_data.rs
     └── fixtures/       # 人工构造的最小样例
 ```
 

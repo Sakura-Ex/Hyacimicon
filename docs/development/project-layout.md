@@ -6,10 +6,10 @@
 
 ```text
 hsr-currency-wars-ai/
-├── core/account/                        # Rust 共用原始账号模型与来源导入
+├── core/account/                        # Rust 账号模型、导入与实际配置设计
 │   ├── Cargo.toml                       # account-core crate
-│   ├── data/                            # 运行所需的行迹绑定快照
-│   ├── src/                             # 账号类型与 reliquary-archiver 导入
+│   ├── data/                            # 行迹绑定及版本化基础数据、试用和映射模板
+│   ├── src/                             # 账号类型、来源导入、参考数据及配置计划
 │   ├── tests/                           # 模型样例与序列化验证
 │   └── examples/                        # 统一格式读取示例
 ├── research/account_generation/         # 原始账号配置生成
@@ -69,7 +69,7 @@ hsr-currency-wars-ai/
 
 当前账号生成模块按遗器、角色、账号三个职责组织。账号使用角色与遗器实现，角色使用遗器实现，对外接口集中由 `research.account_generation` 导出。
 
-`core/account/` 提供训练和玩家应用共用的原始账号类型及 reliquary-archiver 导入，接口、范围和验证命令见 [Rust 原始账号与导入](../modules/account/README.md)。Rust crate 在根 Cargo workspace 中登记，测试、样例与示例随 crate 维护。后续战斗、整局和决策模块分别放在 `core/battle/`、`core/run/` 和 `core/decision/`；训练绑定放在 `research/sim_native/`，通过路径依赖调用核心。
+`core/account/` 提供训练和玩家应用共用的账号类型、reliquary-archiver 导入、文档数值 JSON 及实际配置来源计划，接口、设计和验证命令见 [Rust 账号数据与配置](../modules/account/README.md)。Rust crate 在根 Cargo workspace 中登记，测试、样例与示例随 crate 维护。后续战斗、整局和决策模块分别放在 `core/battle/`、`core/run/` 和 `core/decision/`；训练绑定放在 `research/sim_native/`，通过路径依赖调用核心。
 
 ## 模块放置
 

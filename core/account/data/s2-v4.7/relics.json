@@ -1,0 +1,705 @@
+{
+  "schema_version": 1,
+  "game_version": "4.7",
+  "season": "S2",
+  "source_documents": [
+    {
+      "path": "docs/game-data/relic-data.md",
+      "sha256": "c373ef97329d4ed3d19e250c6b43a649b53b9a3a693df384ca2f25344258fc18"
+    }
+  ],
+  "data": {
+    "rarity": 5,
+    "level": 15,
+    "mainstats": [
+      {
+        "attribute": "HP",
+        "slots": [
+          1
+        ],
+        "value": 705.6,
+        "verification": "documented",
+        "source_line": 37
+      },
+      {
+        "attribute": "ATK",
+        "slots": [
+          2
+        ],
+        "value": 352.8,
+        "verification": "documented",
+        "source_line": 38
+      },
+      {
+        "attribute": "HP_",
+        "slots": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "value": 0.432,
+        "verification": "documented",
+        "source_line": 39
+      },
+      {
+        "attribute": "ATK_",
+        "slots": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "value": 0.432,
+        "verification": "documented",
+        "source_line": 40
+      },
+      {
+        "attribute": "DEF_",
+        "slots": [
+          3,
+          4,
+          5,
+          6
+        ],
+        "value": 0.54,
+        "verification": "documented",
+        "source_line": 41
+      },
+      {
+        "attribute": "SPD",
+        "slots": [
+          4
+        ],
+        "value": 25.032,
+        "verification": "documented",
+        "source_line": 42
+      },
+      {
+        "attribute": "CRIT Rate_",
+        "slots": [
+          3
+        ],
+        "value": 0.324,
+        "verification": "documented",
+        "source_line": 43
+      },
+      {
+        "attribute": "CRIT DMG_",
+        "slots": [
+          3
+        ],
+        "value": 0.648,
+        "verification": "documented",
+        "source_line": 44
+      },
+      {
+        "attribute": "Effect Hit Rate_",
+        "slots": [
+          3
+        ],
+        "value": 0.432,
+        "verification": "documented",
+        "source_line": 45
+      },
+      {
+        "attribute": "Outgoing Healing Boost_",
+        "slots": [
+          3
+        ],
+        "value": 0.345606,
+        "verification": "documented",
+        "source_line": 46
+      },
+      {
+        "attribute": "Break Effect_",
+        "slots": [
+          6
+        ],
+        "value": 0.648,
+        "verification": "documented",
+        "source_line": 47
+      },
+      {
+        "attribute": "Energy Regeneration Rate_",
+        "slots": [
+          6
+        ],
+        "value": 0.194394,
+        "verification": "documented",
+        "source_line": 48
+      },
+      {
+        "attribute": "Physical DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 49
+      },
+      {
+        "attribute": "Fire DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 50
+      },
+      {
+        "attribute": "Ice DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 51
+      },
+      {
+        "attribute": "Lightning DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 52
+      },
+      {
+        "attribute": "Wind DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 53
+      },
+      {
+        "attribute": "Quantum DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 54
+      },
+      {
+        "attribute": "Imaginary DMG Boost_",
+        "slots": [
+          5
+        ],
+        "value": 0.388803,
+        "verification": "documented",
+        "source_line": 55
+      }
+    ],
+    "substats": [
+      {
+        "attribute": "HP",
+        "values": [
+          33.87004,
+          38.103798,
+          42.33755
+        ],
+        "verification": "documented",
+        "source_line": 65
+      },
+      {
+        "attribute": "ATK",
+        "values": [
+          16.935019,
+          19.051895,
+          21.168774
+        ],
+        "verification": "documented",
+        "source_line": 66
+      },
+      {
+        "attribute": "DEF",
+        "values": [
+          16.935019,
+          19.051895,
+          21.168774
+        ],
+        "verification": "documented",
+        "source_line": 67
+      },
+      {
+        "attribute": "HP_",
+        "values": [
+          0.034560003,
+          0.038880002,
+          0.0432
+        ],
+        "verification": "documented",
+        "source_line": 68
+      },
+      {
+        "attribute": "ATK_",
+        "values": [
+          0.034560003,
+          0.038880002,
+          0.0432
+        ],
+        "verification": "documented",
+        "source_line": 69
+      },
+      {
+        "attribute": "DEF_",
+        "values": [
+          0.0432,
+          0.0486,
+          0.054
+        ],
+        "verification": "documented",
+        "source_line": 70
+      },
+      {
+        "attribute": "SPD",
+        "values": [
+          2.0,
+          2.3,
+          2.6
+        ],
+        "verification": "documented",
+        "source_line": 71
+      },
+      {
+        "attribute": "CRIT Rate_",
+        "values": [
+          0.02592,
+          0.029160001,
+          0.0324
+        ],
+        "verification": "documented",
+        "source_line": 72
+      },
+      {
+        "attribute": "CRIT DMG_",
+        "values": [
+          0.05184,
+          0.058320003,
+          0.0648
+        ],
+        "verification": "documented",
+        "source_line": 73
+      },
+      {
+        "attribute": "Effect Hit Rate_",
+        "values": [
+          0.034560003,
+          0.038880002,
+          0.0432
+        ],
+        "verification": "documented",
+        "source_line": 74
+      },
+      {
+        "attribute": "Effect RES_",
+        "values": [
+          0.034560003,
+          0.038880002,
+          0.0432
+        ],
+        "verification": "documented",
+        "source_line": 75
+      },
+      {
+        "attribute": "Break Effect_",
+        "values": [
+          0.05184,
+          0.058320003,
+          0.0648
+        ],
+        "verification": "documented",
+        "source_line": 76
+      }
+    ],
+    "sets": [
+      {
+        "id": "101",
+        "name": "云无留迹的过客",
+        "group": "outer",
+        "source_line": 115
+      },
+      {
+        "id": "102",
+        "name": "野穗伴行的快枪手",
+        "group": "outer",
+        "source_line": 116
+      },
+      {
+        "id": "103",
+        "name": "净庭教宗的圣骑士",
+        "group": "outer",
+        "source_line": 117
+      },
+      {
+        "id": "104",
+        "name": "密林卧雪的猎人",
+        "group": "outer",
+        "source_line": 118
+      },
+      {
+        "id": "105",
+        "name": "街头出身的拳王",
+        "group": "outer",
+        "source_line": 119
+      },
+      {
+        "id": "106",
+        "name": "戍卫风雪的铁卫",
+        "group": "outer",
+        "source_line": 120
+      },
+      {
+        "id": "107",
+        "name": "熔岩锻铸的火匠",
+        "group": "outer",
+        "source_line": 121
+      },
+      {
+        "id": "108",
+        "name": "繁星璀璨的天才",
+        "group": "outer",
+        "source_line": 122
+      },
+      {
+        "id": "109",
+        "name": "激奏雷电的乐队",
+        "group": "outer",
+        "source_line": 123
+      },
+      {
+        "id": "110",
+        "name": "晨昏交界的翔鹰",
+        "group": "outer",
+        "source_line": 124
+      },
+      {
+        "id": "111",
+        "name": "流星追迹的怪盗",
+        "group": "outer",
+        "source_line": 125
+      },
+      {
+        "id": "112",
+        "name": "盗匪荒漠的废土客",
+        "group": "outer",
+        "source_line": 126
+      },
+      {
+        "id": "113",
+        "name": "宝命长存的莳者",
+        "group": "outer",
+        "source_line": 127
+      },
+      {
+        "id": "114",
+        "name": "骇域漫游的信使",
+        "group": "outer",
+        "source_line": 128
+      },
+      {
+        "id": "115",
+        "name": "毁烬焚骨的大公",
+        "group": "outer",
+        "source_line": 129
+      },
+      {
+        "id": "116",
+        "name": "幽锁深牢的系囚",
+        "group": "outer",
+        "source_line": 130
+      },
+      {
+        "id": "117",
+        "name": "死水深潜的先驱",
+        "group": "outer",
+        "source_line": 131
+      },
+      {
+        "id": "118",
+        "name": "机心戏梦的钟表匠",
+        "group": "outer",
+        "source_line": 132
+      },
+      {
+        "id": "119",
+        "name": "荡除蠹灾的铁骑",
+        "group": "outer",
+        "source_line": 133
+      },
+      {
+        "id": "120",
+        "name": "风举云飞的勇烈",
+        "group": "outer",
+        "source_line": 134
+      },
+      {
+        "id": "121",
+        "name": "重循苦旅的司铎",
+        "group": "outer",
+        "source_line": 135
+      },
+      {
+        "id": "122",
+        "name": "识海迷坠的学者",
+        "group": "outer",
+        "source_line": 136
+      },
+      {
+        "id": "123",
+        "name": "凯歌祝捷的英豪",
+        "group": "outer",
+        "source_line": 137
+      },
+      {
+        "id": "124",
+        "name": "哀歌覆国的诗人",
+        "group": "outer",
+        "source_line": 138
+      },
+      {
+        "id": "125",
+        "name": "烈阳惊雷的女武神",
+        "group": "outer",
+        "source_line": 139
+      },
+      {
+        "id": "126",
+        "name": "恶海逐波的船长",
+        "group": "outer",
+        "source_line": 140
+      },
+      {
+        "id": "127",
+        "name": "再创天地的救世主",
+        "group": "outer",
+        "source_line": 141
+      },
+      {
+        "id": "128",
+        "name": "自匿星芒的隐士",
+        "group": "outer",
+        "source_line": 142
+      },
+      {
+        "id": "129",
+        "name": "闪耀功勋的魔法少女",
+        "group": "outer",
+        "source_line": 143
+      },
+      {
+        "id": "130",
+        "name": "应天涉远的卜者",
+        "group": "outer",
+        "source_line": 144
+      },
+      {
+        "id": "131",
+        "name": "星如我见的领航员",
+        "group": "outer",
+        "source_line": 145
+      },
+      {
+        "id": "132",
+        "name": "叩问天工的名冶",
+        "group": "outer",
+        "source_line": 146
+      },
+      {
+        "id": "133",
+        "name": "戏梦点星的伶人",
+        "group": "outer",
+        "source_line": 147
+      },
+      {
+        "id": "134",
+        "name": "贪噬禁果的异端",
+        "group": "outer",
+        "source_line": 148
+      },
+      {
+        "id": "301",
+        "name": "太空封印站",
+        "group": "planar",
+        "source_line": 156
+      },
+      {
+        "id": "302",
+        "name": "不老者的仙舟",
+        "group": "planar",
+        "source_line": 157
+      },
+      {
+        "id": "303",
+        "name": "泛银河商业公司",
+        "group": "planar",
+        "source_line": 158
+      },
+      {
+        "id": "304",
+        "name": "筑城者的贝洛伯格",
+        "group": "planar",
+        "source_line": 159
+      },
+      {
+        "id": "305",
+        "name": "星体差分机",
+        "group": "planar",
+        "source_line": 160
+      },
+      {
+        "id": "306",
+        "name": "停转的萨尔索图",
+        "group": "planar",
+        "source_line": 161
+      },
+      {
+        "id": "307",
+        "name": "盗贼公国塔利亚",
+        "group": "planar",
+        "source_line": 162
+      },
+      {
+        "id": "308",
+        "name": "生命的翁瓦克",
+        "group": "planar",
+        "source_line": 163
+      },
+      {
+        "id": "309",
+        "name": "繁星竞技场",
+        "group": "planar",
+        "source_line": 164
+      },
+      {
+        "id": "310",
+        "name": "折断的龙骨",
+        "group": "planar",
+        "source_line": 165
+      },
+      {
+        "id": "311",
+        "name": "苍穹战线格拉默",
+        "group": "planar",
+        "source_line": 166
+      },
+      {
+        "id": "312",
+        "name": "梦想之地匹诺康尼",
+        "group": "planar",
+        "source_line": 167
+      },
+      {
+        "id": "313",
+        "name": "无主荒星茨冈尼亚",
+        "group": "planar",
+        "source_line": 168
+      },
+      {
+        "id": "314",
+        "name": "出云显世与高天神国",
+        "group": "planar",
+        "source_line": 169
+      },
+      {
+        "id": "315",
+        "name": "奔狼的都蓝王朝",
+        "group": "planar",
+        "source_line": 170
+      },
+      {
+        "id": "316",
+        "name": "劫火莲灯铸炼宫",
+        "group": "planar",
+        "source_line": 171
+      },
+      {
+        "id": "317",
+        "name": "沉陆海域露莎卡",
+        "group": "planar",
+        "source_line": 172
+      },
+      {
+        "id": "318",
+        "name": "奇想蕉乐园",
+        "group": "planar",
+        "source_line": 173
+      },
+      {
+        "id": "319",
+        "name": "谧宁拾骨地",
+        "group": "planar",
+        "source_line": 174
+      },
+      {
+        "id": "320",
+        "name": "渊思寂虑的巨树",
+        "group": "planar",
+        "source_line": 175
+      },
+      {
+        "id": "321",
+        "name": "妖精织梦的乐园",
+        "group": "planar",
+        "source_line": 176
+      },
+      {
+        "id": "322",
+        "name": "沉欢醉饮的海隅",
+        "group": "planar",
+        "source_line": 177
+      },
+      {
+        "id": "323",
+        "name": "永恒之地翁法罗斯",
+        "group": "planar",
+        "source_line": 178
+      },
+      {
+        "id": "324",
+        "name": "天国@直播间",
+        "group": "planar",
+        "source_line": 179
+      },
+      {
+        "id": "325",
+        "name": "零号关卡朋克洛德",
+        "group": "planar",
+        "source_line": 180
+      },
+      {
+        "id": "326",
+        "name": "千星荟萃之城",
+        "group": "planar",
+        "source_line": 181
+      },
+      {
+        "id": "327",
+        "name": "坠星启航地",
+        "group": "planar",
+        "source_line": 182
+      },
+      {
+        "id": "328",
+        "name": "寰宇生研院",
+        "group": "planar",
+        "source_line": 183
+      },
+      {
+        "id": "329",
+        "name": "神的瞬息欢愉",
+        "group": "planar",
+        "source_line": 184
+      },
+      {
+        "id": "330",
+        "name": "亚空异容所",
+        "group": "planar",
+        "source_line": 185
+      }
+    ]
+  }
+}

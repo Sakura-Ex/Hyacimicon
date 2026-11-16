@@ -1,0 +1,2593 @@
+{
+  "schema_version": 1,
+  "game_version": "4.7",
+  "season": "S2",
+  "source_documents": [
+    {
+      "path": "docs/game-data/light-cone-data.md",
+      "sha256": "0148db44ce5f8f0447dcc8219713485c474649fc64b369234ea72386475ea257"
+    }
+  ],
+  "data": [
+    {
+      "id": "20002",
+      "name": "天倾",
+      "path": "Warrior",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 370.44,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 36
+    },
+    {
+      "id": "20009",
+      "name": "乐圮",
+      "path": "Warrior",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 370.44,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 37
+    },
+    {
+      "id": "20016",
+      "name": "俱殁",
+      "path": "Warrior",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 370.44,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 38
+    },
+    {
+      "id": "21005",
+      "name": "鼹鼠党欢迎你",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 39
+    },
+    {
+      "id": "21012",
+      "name": "秘密誓心",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 40
+    },
+    {
+      "id": "21019",
+      "name": "在蓝天下",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 41
+    },
+    {
+      "id": "21026",
+      "name": "汪！散步时间！",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 42
+    },
+    {
+      "id": "21033",
+      "name": "无处可逃",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 43
+    },
+    {
+      "id": "21038",
+      "name": "在火的远处",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 44
+    },
+    {
+      "id": "21042",
+      "name": "铭记于心的约定",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 45
+    },
+    {
+      "id": "21058",
+      "name": "一行往日的血",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 46
+    },
+    {
+      "id": "22003",
+      "name": "忍事录•音律狩猎",
+      "path": "Warrior",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 47
+    },
+    {
+      "id": "23002",
+      "name": "无可取代的东西",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 582.12,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 48
+    },
+    {
+      "id": "23009",
+      "name": "到不了的彼岸",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 582.12,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 49
+    },
+    {
+      "id": "23014",
+      "name": "此身为剑",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 582.12,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 50
+    },
+    {
+      "id": "23015",
+      "name": "比阳光更明亮的",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 635.04,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 51
+    },
+    {
+      "id": "23025",
+      "name": "梦应归于何处",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 476.28,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 52
+    },
+    {
+      "id": "23030",
+      "name": "落日时起舞",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 53
+    },
+    {
+      "id": "23039",
+      "name": "血火啊，燃烧前路",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1375.92,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 54
+    },
+    {
+      "id": "23044",
+      "name": "黎明恰如此燃烧",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 687.96,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 55
+    },
+    {
+      "id": "23045",
+      "name": "没有回报的加冕",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 56
+    },
+    {
+      "id": "23062",
+      "name": "所见即我",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 57
+    },
+    {
+      "id": "24000",
+      "name": "记一位星神的陨落",
+      "path": "Warrior",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 58
+    },
+    {
+      "id": "20000",
+      "name": "锋镝",
+      "path": "Rogue",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 66
+    },
+    {
+      "id": "20007",
+      "name": "离弦",
+      "path": "Rogue",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 67
+    },
+    {
+      "id": "20014",
+      "name": "相抗",
+      "path": "Rogue",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 68
+    },
+    {
+      "id": "21003",
+      "name": "唯有沉默",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 69
+    },
+    {
+      "id": "21010",
+      "name": "论剑",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 70
+    },
+    {
+      "id": "21017",
+      "name": "点个关注吧！",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 71
+    },
+    {
+      "id": "21024",
+      "name": "春水初生",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 72
+    },
+    {
+      "id": "21031",
+      "name": "重返幽冥",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 73
+    },
+    {
+      "id": "21037",
+      "name": "最后的赢家",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 74
+    },
+    {
+      "id": "21047",
+      "name": "黑夜如影随行",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 75
+    },
+    {
+      "id": "21062",
+      "name": "于那终点再见",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 76
+    },
+    {
+      "id": "22008",
+      "name": "向着地平线的终点",
+      "path": "Rogue",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 77
+    },
+    {
+      "id": "23001",
+      "name": "于夜色中",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 78
+    },
+    {
+      "id": "23012",
+      "name": "如泥酣眠",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 79
+    },
+    {
+      "id": "23016",
+      "name": "烦恼着，幸福着",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 80
+    },
+    {
+      "id": "23020",
+      "name": "纯粹思维的洗礼",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 81
+    },
+    {
+      "id": "23027",
+      "name": "驶向第二次生命",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 82
+    },
+    {
+      "id": "23031",
+      "name": "我将，巡征追猎",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 83
+    },
+    {
+      "id": "23046",
+      "name": "理想燃烧的地狱",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 84
+    },
+    {
+      "id": "23056",
+      "name": "一场谎言的终幕",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 635.04,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 85
+    },
+    {
+      "id": "24001",
+      "name": "星海巡航",
+      "path": "Rogue",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 86
+    },
+    {
+      "id": "20006",
+      "name": "智库",
+      "path": "Mage",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 94
+    },
+    {
+      "id": "20013",
+      "name": "灵钥",
+      "path": "Mage",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 95
+    },
+    {
+      "id": "20020",
+      "name": "睿见",
+      "path": "Mage",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 96
+    },
+    {
+      "id": "21006",
+      "name": "「我」的诞生",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 97
+    },
+    {
+      "id": "21013",
+      "name": "别让世界静下来",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 98
+    },
+    {
+      "id": "21020",
+      "name": "天才们的休憩",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 99
+    },
+    {
+      "id": "21027",
+      "name": "早餐的仪式感",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 100
+    },
+    {
+      "id": "21034",
+      "name": "今日亦是和平的一日",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 101
+    },
+    {
+      "id": "21040",
+      "name": "银河沦陷日",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 102
+    },
+    {
+      "id": "21045",
+      "name": "谐乐静默之后",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 103
+    },
+    {
+      "id": "21060",
+      "name": "氤氲麦香的梦",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 104
+    },
+    {
+      "id": "22004",
+      "name": "宇宙大生意",
+      "path": "Mage",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 105
+    },
+    {
+      "id": "23000",
+      "name": "银河铁道之夜",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 582.12,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 106
+    },
+    {
+      "id": "23010",
+      "name": "拂晓之前",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 107
+    },
+    {
+      "id": "23018",
+      "name": "片刻，留在眼底",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 108
+    },
+    {
+      "id": "23028",
+      "name": "偏偏希望无价",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 109
+    },
+    {
+      "id": "23033",
+      "name": "忍法帖•缭乱破魔",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 110
+    },
+    {
+      "id": "23037",
+      "name": "向着不可追问处",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 111
+    },
+    {
+      "id": "23041",
+      "name": "生命当付之一炬",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 112
+    },
+    {
+      "id": "23060",
+      "name": "当一颗星照亮夜空",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 635.04,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 113
+    },
+    {
+      "id": "23061",
+      "name": "星火悄然闪耀",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 635.04,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 114
+    },
+    {
+      "id": "24004",
+      "name": "不息的演算",
+      "path": "Mage",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 115
+    },
+    {
+      "id": "20005",
+      "name": "齐颂",
+      "path": "Shaman",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 123
+    },
+    {
+      "id": "20012",
+      "name": "轮契",
+      "path": "Shaman",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 124
+    },
+    {
+      "id": "20019",
+      "name": "调和",
+      "path": "Shaman",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 125
+    },
+    {
+      "id": "21004",
+      "name": "记忆中的模样",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 126
+    },
+    {
+      "id": "21011",
+      "name": "与行星相会",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 423.36,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 127
+    },
+    {
+      "id": "21018",
+      "name": "舞！舞！舞！",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 128
+    },
+    {
+      "id": "21025",
+      "name": "过往未来",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 129
+    },
+    {
+      "id": "21032",
+      "name": "镂月裁云之意",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 130
+    },
+    {
+      "id": "21036",
+      "name": "美梦小镇大冒险",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 131
+    },
+    {
+      "id": "21046",
+      "name": "芳华待灼",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 132
+    },
+    {
+      "id": "21056",
+      "name": "追逐风的时候",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 133
+    },
+    {
+      "id": "22002",
+      "name": "为了明日的旅途",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 134
+    },
+    {
+      "id": "22005",
+      "name": "永远的迷境饭",
+      "path": "Shaman",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 135
+    },
+    {
+      "id": "23003",
+      "name": "但战斗还未结束",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 136
+    },
+    {
+      "id": "23019",
+      "name": "镜中故我",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 137
+    },
+    {
+      "id": "23021",
+      "name": "游戏尘寰",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 138
+    },
+    {
+      "id": "23026",
+      "name": "夜色流光溢彩",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 139
+    },
+    {
+      "id": "23034",
+      "name": "回到大地的飞行",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 476.28,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 140
+    },
+    {
+      "id": "23038",
+      "name": "如果时间是一朵花",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 141
+    },
+    {
+      "id": "23048",
+      "name": "金血铭刻的时代",
+      "path": "Shaman",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 142
+    },
+    {
+      "id": "20004",
+      "name": "幽邃",
+      "path": "Warlock",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 150
+    },
+    {
+      "id": "20011",
+      "name": "渊环",
+      "path": "Warlock",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 151
+    },
+    {
+      "id": "20018",
+      "name": "匿影",
+      "path": "Warlock",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 152
+    },
+    {
+      "id": "21001",
+      "name": "晚安与睡颜",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 153
+    },
+    {
+      "id": "21008",
+      "name": "猎物的视线",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 154
+    },
+    {
+      "id": "21015",
+      "name": "决心如汗珠般闪耀",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 155
+    },
+    {
+      "id": "21022",
+      "name": "延长记号",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 156
+    },
+    {
+      "id": "21029",
+      "name": "后会有期",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 157
+    },
+    {
+      "id": "21041",
+      "name": "好戏开演",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 158
+    },
+    {
+      "id": "21044",
+      "name": "无边曼舞",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 159
+    },
+    {
+      "id": "21061",
+      "name": "假日浴场大冒险",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 160
+    },
+    {
+      "id": "22000",
+      "name": "新手任务开始前",
+      "path": "Warlock",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 161
+    },
+    {
+      "id": "23004",
+      "name": "以世界之名",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 162
+    },
+    {
+      "id": "23006",
+      "name": "只需等待",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 163
+    },
+    {
+      "id": "23007",
+      "name": "雨一直下",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 164
+    },
+    {
+      "id": "23022",
+      "name": "重塑时光之忆",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 165
+    },
+    {
+      "id": "23024",
+      "name": "行于流逝的岸",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 635.04,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 166
+    },
+    {
+      "id": "23029",
+      "name": "那无数个春天",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 167
+    },
+    {
+      "id": "23035",
+      "name": "长路终有归途",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 661.5
+      },
+      "verification": "pending_in_game",
+      "source_line": 168
+    },
+    {
+      "id": "23043",
+      "name": "谎言在风中飘扬",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 169
+    },
+    {
+      "id": "23047",
+      "name": "海洋为何而歌",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 170
+    },
+    {
+      "id": "23050",
+      "name": "勿忘她的火焰",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 171
+    },
+    {
+      "id": "23059",
+      "name": "灼尽炼狱的新骸",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1375.92,
+        "attack": 423.36,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 172
+    },
+    {
+      "id": "24003",
+      "name": "孤独的疗愈",
+      "path": "Warlock",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 173
+    },
+    {
+      "id": "20003",
+      "name": "琥珀",
+      "path": "Knight",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 264.6,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 181
+    },
+    {
+      "id": "20010",
+      "name": "戍御",
+      "path": "Knight",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 264.6,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 182
+    },
+    {
+      "id": "20017",
+      "name": "开疆",
+      "path": "Knight",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 264.6,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 183
+    },
+    {
+      "id": "21002",
+      "name": "余生的第一天",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 370.44,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 184
+    },
+    {
+      "id": "21009",
+      "name": "朗道的选择",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 185
+    },
+    {
+      "id": "21016",
+      "name": "宇宙市场趋势",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 370.44,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 186
+    },
+    {
+      "id": "21023",
+      "name": "我们是地火",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 476.28,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 187
+    },
+    {
+      "id": "21030",
+      "name": "这就是我啦！",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 370.44,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 188
+    },
+    {
+      "id": "21039",
+      "name": "织造命运之线",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 370.44,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 189
+    },
+    {
+      "id": "21043",
+      "name": "两个人的演唱会",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 370.44,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 190
+    },
+    {
+      "id": "21053",
+      "name": "愿旅途永远坦然",
+      "path": "Knight",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 370.44,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 191
+    },
+    {
+      "id": "23005",
+      "name": "制胜的瞬间",
+      "path": "Knight",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 595.35
+      },
+      "verification": "pending_in_game",
+      "source_line": 192
+    },
+    {
+      "id": "23011",
+      "name": "她已闭上双眼",
+      "path": "Knight",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 423.36,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 193
+    },
+    {
+      "id": "23023",
+      "name": "命运从未公平",
+      "path": "Knight",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 423.36,
+        "defense": 661.5
+      },
+      "verification": "pending_in_game",
+      "source_line": 194
+    },
+    {
+      "id": "23051",
+      "name": "纵然山河万程",
+      "path": "Knight",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 195
+    },
+    {
+      "id": "24002",
+      "name": "记忆的质料",
+      "path": "Knight",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 423.36,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 196
+    },
+    {
+      "id": "20001",
+      "name": "物穰",
+      "path": "Priest",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 264.6,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 204
+    },
+    {
+      "id": "20008",
+      "name": "嘉果",
+      "path": "Priest",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 317.52,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 205
+    },
+    {
+      "id": "20015",
+      "name": "蕃息",
+      "path": "Priest",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 317.52,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 206
+    },
+    {
+      "id": "21000",
+      "name": "一场术后对话",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 423.36,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 207
+    },
+    {
+      "id": "21007",
+      "name": "同一种心情",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 208
+    },
+    {
+      "id": "21014",
+      "name": "此时恰好",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 209
+    },
+    {
+      "id": "21021",
+      "name": "等价交换",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 210
+    },
+    {
+      "id": "21028",
+      "name": "暖夜不会漫长",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 370.44,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 211
+    },
+    {
+      "id": "21035",
+      "name": "何物为真",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 423.36,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 212
+    },
+    {
+      "id": "21048",
+      "name": "梦的蒙太奇",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 213
+    },
+    {
+      "id": "21055",
+      "name": "直到明天的明天",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 214
+    },
+    {
+      "id": "22001",
+      "name": "嘿，我在这儿",
+      "path": "Priest",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 215
+    },
+    {
+      "id": "23008",
+      "name": "棺的回响",
+      "path": "Priest",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 582.12,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 216
+    },
+    {
+      "id": "23013",
+      "name": "时节不居",
+      "path": "Priest",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 476.28,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 217
+    },
+    {
+      "id": "23017",
+      "name": "惊魂夜",
+      "path": "Priest",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 476.28,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 218
+    },
+    {
+      "id": "23032",
+      "name": "唯有香如故",
+      "path": "Priest",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 219
+    },
+    {
+      "id": "20021",
+      "name": "焚影",
+      "path": "Memory",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 227
+    },
+    {
+      "id": "20022",
+      "name": "溯忆",
+      "path": "Memory",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 635.04,
+        "attack": 423.36,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 228
+    },
+    {
+      "id": "21050",
+      "name": "胜利只在朝夕间",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 229
+    },
+    {
+      "id": "21051",
+      "name": "天才们的问候",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 230
+    },
+    {
+      "id": "21052",
+      "name": "多流汗，少流泪",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 198.45
+      },
+      "verification": "pending_in_game",
+      "source_line": 231
+    },
+    {
+      "id": "21054",
+      "name": "故事的下一页",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 370.44,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 232
+    },
+    {
+      "id": "21057",
+      "name": "花儿不会忘记",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 233
+    },
+    {
+      "id": "22006",
+      "name": "飞向粉色的明天",
+      "path": "Memory",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 234
+    },
+    {
+      "id": "23036",
+      "name": "将光阴织成黄金",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 635.04,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 235
+    },
+    {
+      "id": "23040",
+      "name": "让告别，更美一些",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 236
+    },
+    {
+      "id": "23042",
+      "name": "愿虹光永驻天空",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 476.28,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 237
+    },
+    {
+      "id": "23049",
+      "name": "致长夜的星光",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 238
+    },
+    {
+      "id": "23052",
+      "name": "爱如此刻永恒",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1270.08,
+        "attack": 476.28,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 239
+    },
+    {
+      "id": "23063",
+      "name": "你将起身歌唱",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 582.12,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 240
+    },
+    {
+      "id": "24005",
+      "name": "记忆永不落幕",
+      "path": "Memory",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 241
+    },
+    {
+      "id": "20023",
+      "name": "嗤笑",
+      "path": "Elation",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 740.88,
+        "attack": 370.44,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 249
+    },
+    {
+      "id": "20024",
+      "name": "残泪",
+      "path": "Elation",
+      "rarity": 3,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 317.52,
+        "defense": 264.6
+      },
+      "verification": "pending_in_game",
+      "source_line": 250
+    },
+    {
+      "id": "21064",
+      "name": "菇菇嘎嘎历险记",
+      "path": "Elation",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 251
+    },
+    {
+      "id": "21065",
+      "name": "今日好手气",
+      "path": "Elation",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 252
+    },
+    {
+      "id": "21066",
+      "name": "放个短假",
+      "path": "Elation",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 423.36,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 253
+    },
+    {
+      "id": "22007",
+      "name": "未来，有我们一起",
+      "path": "Elation",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 476.28,
+        "defense": 330.75
+      },
+      "verification": "pending_in_game",
+      "source_line": 254
+    },
+    {
+      "id": "22009",
+      "name": "在世界尽头相会吧！",
+      "path": "Elation",
+      "rarity": 4,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 846.72,
+        "attack": 476.28,
+        "defense": 396.9
+      },
+      "verification": "pending_in_game",
+      "source_line": 255
+    },
+    {
+      "id": "23053",
+      "name": "花花世界迷人眼",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 582.12,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 256
+    },
+    {
+      "id": "23054",
+      "name": "当她决定看见",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 529.2,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 257
+    },
+    {
+      "id": "23055",
+      "name": "献给明日的色彩",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1058.4,
+        "attack": 476.28,
+        "defense": 595.35
+      },
+      "verification": "pending_in_game",
+      "source_line": 258
+    },
+    {
+      "id": "23057",
+      "name": "欢迎来到银河城",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 1164.24,
+        "attack": 476.28,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 259
+    },
+    {
+      "id": "23058",
+      "name": "邂逅于下一个花季",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 635.04,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 260
+    },
+    {
+      "id": "23064",
+      "name": "向浪花掷下盛夏",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 261
+    },
+    {
+      "id": "23065",
+      "name": "当第一声「阿哈」响起",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 582.12,
+        "defense": 529.2
+      },
+      "verification": "pending_in_game",
+      "source_line": 262
+    },
+    {
+      "id": "24006",
+      "name": "欢愉满溢祝福",
+      "path": "Elation",
+      "rarity": 5,
+      "level": 80,
+      "promotion": 6,
+      "base": {
+        "hp": 952.56,
+        "attack": 529.2,
+        "defense": 463.05
+      },
+      "verification": "pending_in_game",
+      "source_line": 263
+    }
+  ]
+}
