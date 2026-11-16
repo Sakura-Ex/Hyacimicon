@@ -3,6 +3,38 @@ mod common;
 use battle_core::model::{Effect, Outcome, Revival, Termination};
 use common::*;
 use run_core::*;
+use sha2::{Digest, Sha256};
+
+#[test]
+fn automatic_settlement_avoids_caller_ids_without_resampling_on_retry() {
+    let occupied = format!("auto-settle-{:x}", Sha256::digest(b"second"));
+    let mut env = env();
+    let first = env
+        .sample(&request(&env, &occupied), &mut || false)
+        .unwrap();
+    env.settle(&settlement_request(
+        &env,
+        &first,
+        &format!("{occupied}-1"),
+        loss_rules(),
+    ))
+    .unwrap();
+    let command = request(&env, "second");
+    let result = env.step(&command, &mut || false).unwrap();
+    assert_eq!(
+        result.settlement.as_ref().unwrap().request_id,
+        format!("{occupied}-2")
+    );
+    assert_eq!(result.observation.status, RunStatus::Completed);
+    assert_eq!(result.observation.resources.gold, 17);
+    assert_eq!(env.attempts().len(), 2);
+    assert_eq!(env.settlements().len(), 2);
+    let replay = env
+        .step(&command, &mut || panic!("retry sampled again"))
+        .unwrap();
+    assert_eq!(json(&result), json(&replay));
+    assert_eq!(env.transitions().len(), 2);
+}
 
 #[test]
 fn actual_loss_continues_then_actual_victory_finishes_with_failure_experience() {

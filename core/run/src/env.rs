@@ -388,10 +388,22 @@ impl RunEnv {
                 })
             }
         };
-        let auto_id = format!(
+        let auto_prefix = format!(
             "auto-settle-{:x}",
             Sha256::digest(request.request_id.as_bytes())
         );
+        // Caller IDs are unrestricted. Allocate an unused receipt ID in the
+        // shared namespace; successful retries find their existing receipt above.
+        let mut auto_id = auto_prefix.clone();
+        let mut suffix = 0_u64;
+        while self.sample_commands.contains_key(&auto_id)
+            || self.settlement_commands.contains_key(&auto_id)
+        {
+            suffix = suffix
+                .checked_add(1)
+                .ok_or("automatic request ID overflow")?;
+            auto_id = format!("{auto_prefix}-{suffix}");
+        }
         let receipt = self.settle(&SettlementRequest {
             request_id: auto_id,
             node_id: attempt.node_id.clone(),

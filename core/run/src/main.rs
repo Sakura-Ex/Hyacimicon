@@ -4,7 +4,7 @@ use std::{
     io::{self, Read, Write},
 };
 
-fn execute() -> Result<run_core::RunReport, String> {
+fn execute() -> Result<(run_core::RunReport, Option<String>), String> {
     let args: Vec<String> = env::args().collect();
     if args.len() != 4 || args[1] != "simulate-run" {
         return Err("usage: hcwa-run simulate-run RUN_SPEC.json SEED".into());
@@ -23,7 +23,7 @@ fn execute() -> Result<run_core::RunReport, String> {
     let mut run = RunEnv::new(spec, "cli-run".into(), seed)?;
     while run.observe().status == RunStatus::Ready {
         let obs = run.observe();
-        run.step(
+        if let Err(error) = run.step(
             &SampleRequest {
                 request_id: format!("cli-node-{}", obs.node_index),
                 node_id: obs.current_node_id.ok_or("ready run lacks current node")?,
@@ -31,16 +31,24 @@ fn execute() -> Result<run_core::RunReport, String> {
                 trace: true,
             },
             &mut || false,
-        )?;
+        ) {
+            // The battle may already be saved even when settlement fails.
+            // Export that authoritative state before signaling the error.
+            return Ok((run.report(), Some(error)));
+        }
     }
-    Ok(run.report())
+    Ok((run.report(), None))
 }
 
 fn main() {
-    let result = execute().and_then(|report| {
+    let result = execute().and_then(|(report, execution_error)| {
         let mut stdout = io::stdout().lock();
         serde_json::to_writer_pretty(&mut stdout, &report).map_err(|e| e.to_string())?;
-        writeln!(stdout).map_err(|e| e.to_string())
+        writeln!(stdout).map_err(|e| e.to_string())?;
+        match execution_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     });
     if let Err(error) = result {
         eprintln!("{error}");

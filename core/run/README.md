@@ -37,6 +37,12 @@ The CLI stops on completion, run defeat, interruption or missing settlement;
 it never rerolls a pending encounter. Paths are relative to the current working
 directory. Keep generated output outside tracked source.
 
+If a step fails after the environment is created, the CLI still writes its
+partial report to stdout, writes the error to stderr and exits with code 2.
+Earlier transitions and any saved pending battle remain in that report; the
+rejected settlement does not change resources. Invalid input that prevents
+environment creation produces an error without a report.
+
 ## Ownership and calls
 
 | API | Contract |
@@ -57,6 +63,8 @@ Run identity, node identity, request identity and state revision prevent stale
 or conflicting commands from changing state. Repeating a committed settlement
 must not change resources or produce a second transition. Missing rules can be
 supplied later through `settle` without calling the battle engine again.
+Automatic settlement IDs avoid all IDs already used for sampling or settlement;
+callers do not need to reserve an ID prefix.
 
 The run owns HP, maximum HP, gold, crystals and node progress. The battle owns
 unit HP, energy, AV and combat effects. Each node has an explicit initial battle
