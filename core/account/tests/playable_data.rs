@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{
-    RawAccount,
+    RawAccount, RelicInstance, RelicMainStat, RelicSlot,
     attributes::Attribute,
     planning::{MappingAction, PlanRequest, plan_playable_account},
     playable::{CharacterOrigin, ConfigurationMode, PlayableRelics},
@@ -201,7 +201,8 @@ fn preserves_aggregate_trial_relics_unknown_levels_and_special_characters() {
         aha.traces.as_ref().unwrap().base_levels[&SkillKind::AhaBiography],
         1
     );
-    assert_eq!(data.rules.data.pending_triggers.len(), 6);
+    assert_eq!(data.rules.data.pending_triggers.len(), 4);
+    assert_eq!(data.rules.data.relic_mapping_minimum_level, 15);
 }
 
 #[test]
@@ -224,10 +225,15 @@ fn fills_missing_roles_with_trial_sources_and_preserves_original_account() {
         }
     );
     assert_eq!(welt.mapping_decisions.len(), 6);
+    assert_eq!(
+        welt.mapping_decisions[&MappingPart::OuterRelics],
+        MappingAction::UseTemplate
+    );
     assert!(
         welt.mapping_decisions
-            .values()
-            .all(|action| *action == MappingAction::Undetermined)
+            .iter()
+            .filter(|(part, _)| **part != MappingPart::OuterRelics)
+            .all(|(_, action)| *action == MappingAction::Undetermined)
     );
     let clara = plan
         .characters
@@ -367,5 +373,117 @@ fn rejects_duplicate_ids_invalid_aliases_and_stale_choices() {
             .unwrap_err()
             .0,
         "原始账号与目标资料的游戏版本不一致"
+    );
+}
+
+/// 为瓦尔特建立完整的六件 +15 配装，供逐部位检查触发条件。
+fn fully_equipped_account() -> RawAccount {
+    let mut raw = account();
+    raw.relics.clear();
+    raw.characters[0].relic_instance_ids.clear();
+    for (slot, mainstat) in [
+        (RelicSlot::Head, RelicMainStat::Hp),
+        (RelicSlot::Hands, RelicMainStat::Atk),
+        (RelicSlot::Body, RelicMainStat::CritRate),
+        (RelicSlot::Feet, RelicMainStat::Spd),
+        (RelicSlot::PlanarSphere, RelicMainStat::ImaginaryDmgBoost),
+        (RelicSlot::LinkRope, RelicMainStat::EnergyRegenerationRate),
+    ] {
+        let instance_id = format!("example:full:{}", u8::from(slot));
+        raw.characters[0]
+            .relic_instance_ids
+            .insert(slot, instance_id.clone());
+        raw.relics.push(RelicInstance {
+            instance_id,
+            set_id: if u8::from(slot) <= 4 { "112" } else { "303" }.to_owned(),
+            slot,
+            rarity: 5,
+            level: 15,
+            mainstat,
+            substats: BTreeMap::new(),
+        });
+    }
+    raw
+}
+
+#[test]
+fn maps_the_entire_group_when_any_one_piece_is_underleveled() {
+    let data = PlayableData::bundled().unwrap();
+    for changed_index in 0..6 {
+        let mut raw = fully_equipped_account();
+        raw.relics[changed_index].level = 12;
+        let before = raw.clone();
+        let plan = plan_playable_account(&raw, &data, &request(ConfigurationMode::OwnedWithTrials))
+            .unwrap();
+        let welt = plan
+            .characters
+            .iter()
+            .find(|entry| entry.character_id == "1004")
+            .unwrap();
+        assert_eq!(
+            welt.mapping_decisions[&MappingPart::OuterRelics],
+            if changed_index < 4 {
+                MappingAction::UseTemplate
+            } else {
+                MappingAction::KeepOwned
+            }
+        );
+        assert_eq!(
+            welt.mapping_decisions[&MappingPart::PlanarRelics],
+            if changed_index >= 4 {
+                MappingAction::UseTemplate
+            } else {
+                MappingAction::KeepOwned
+            }
+        );
+        assert_eq!(raw, before);
+    }
+    let plan = plan_playable_account(
+        &fully_equipped_account(),
+        &data,
+        &request(ConfigurationMode::OwnedWithTrials),
+    )
+    .unwrap();
+    let welt = plan
+        .characters
+        .iter()
+        .find(|entry| entry.character_id == "1004")
+        .unwrap();
+    assert_eq!(
+        welt.mapping_decisions[&MappingPart::OuterRelics],
+        MappingAction::KeepOwned
+    );
+    assert_eq!(
+        welt.mapping_decisions[&MappingPart::PlanarRelics],
+        MappingAction::KeepOwned
+    );
+}
+
+#[test]
+fn rejects_invalid_relic_references_and_conflicting_manual_choices() {
+    let data = PlayableData::bundled().unwrap();
+    let options = request(ConfigurationMode::OwnedWithTrials);
+    let mut raw = fully_equipped_account();
+    raw.relics[0].level = 12;
+    raw.relics[1].slot = RelicSlot::Feet;
+    assert_eq!(
+        plan_playable_account(&raw, &data, &options).unwrap_err().0,
+        "角色 1004 的遗器 example:full:2 部位不一致"
+    );
+    raw.relics.remove(1);
+    assert_eq!(
+        plan_playable_account(&raw, &data, &options).unwrap_err().0,
+        "角色 1004 引用的遗器 example:full:2 不存在"
+    );
+    let mut raw = fully_equipped_account();
+    raw.relics[0].level = 12;
+    let mut options = options;
+    options.mapping_decisions.insert(
+        "1004".to_owned(),
+        BTreeMap::from([(MappingPart::OuterRelics, MappingAction::KeepOwned)]),
+    );
+    assert_eq!(
+        plan_playable_account(&raw, &data, &options).unwrap_err().0,
+        "角色 1004 的 OuterRelics 选择与遗器等级规则冲突"
     );
 }

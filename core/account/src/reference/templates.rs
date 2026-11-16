@@ -184,6 +184,8 @@ pub struct MappingRules {
     pub force_enhanced_form: bool,
     /// 遗器替换范围。
     pub mapped_relic_scope: RelicReplacementScope,
+    /// 任意一件低于此强化等级时，整圈采用映射模板。
+    pub relic_mapping_minimum_level: u8,
     /// 默认映射光锥的叠影。
     pub default_light_cone_superimposition: u8,
     /// 各命途默认光锥。

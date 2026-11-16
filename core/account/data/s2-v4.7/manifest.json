@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "snapshot_id": "playable-s2-4.7-20095b7e1a6c",
+  "snapshot_id": "playable-s2-4.7-80e6741ced53",
   "game_version": "4.7",
   "season": "S2",
   "files": {
@@ -13,15 +13,15 @@
       "count": 172
     },
     "trial-templates.json": {
-      "sha256": "746d9f603e9667371eadbbfcae504518a32f9ddcab6a3554e590bd8e7d7e8c97",
+      "sha256": "76c606c2ae08588667c4ddaf332fa4bd5105510a6e4d8a3a19d0dabb4960126f",
       "count": 61
     },
     "mapping-templates.json": {
-      "sha256": "0ac1c3639c7fa8a3bd1627d26ae791b96b68c4c506905dfe3c177efd6f4f2b01",
+      "sha256": "b43e5574b3467cad60d338660ab53c42a106a382fb752b3785d2930538183a52",
       "count": 60
     },
     "mapping-rules.json": {
-      "sha256": "5ba92c53600042aa690dd6cd64f6047962d31dc101578be0ede073273cbfff1c",
+      "sha256": "a45a2f288e9ccf46610fb45d02dedbb7bf7512b23ff429b8df68175f8b5c8c69",
       "count": 9
     },
     "gameplay-forms.json": {
@@ -40,7 +40,7 @@
     },
     {
       "key": "mapping_triggers",
-      "description": "角色、星魂、行迹、光锥、内圈及外圈的触发条件待补充"
+      "description": "角色等级与突破、星魂、行迹及光锥的触发条件待补充；内外圈已按任意一件低于 +15 时整圈替换处理"
     },
     {
       "key": "mapping_relic_verification",

@@ -1,6 +1,6 @@
 //! 先确定本体、试用来源和各部分映射选择，再展开完整实际游玩配置。
 //!
-//! 此阶段实现来源选择。自动触发条件尚未明确的部分标为待判断，
+//! 此阶段实现来源选择和遗器整圈映射判断。其余尚未明确的部分标为待判断，
 //! 计划供后续转换器使用，等级、行迹和面板在展开阶段确定。
 
 use std::{
@@ -12,7 +12,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    RAW_ACCOUNT_SCHEMA_VERSION, RawAccount,
+    CharacterConfig, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicInstance, RelicSlot,
     playable::{CharacterOrigin, ConfigurationMode},
     reference::{CharacterKind, MappingPart, PlayableData},
 };
@@ -37,7 +37,7 @@ pub struct PlanRequest {
     pub mode: ConfigurationMode,
     /// 原始角色 ID 到文档角色 ID 的直接对照；由调用方提供已核对关系。
     pub character_aliases: BTreeMap<String, String>,
-    /// 按文档角色 ID 提供的本体映射选择，未提供的部分标为待判断。
+    /// 按文档角色 ID 提供尚未自动确定的选择；与自动遗器判断冲突时返回错误。
     pub mapping_decisions: BTreeMap<String, BTreeMap<MappingPart, MappingAction>>,
 }
 
@@ -84,10 +84,11 @@ impl fmt::Display for PlanError {
 
 impl Error for PlanError {}
 
-/// 按持有情况补齐试用来源，并保留显式给出的分项映射选择。
+/// 按持有情况补齐试用来源，并根据遗器等级判断内外圈整体映射。
 ///
 /// 仅按角色 ID 及调用方已核对的直接别名查找持有情况。两份原始角色映射到
-/// 同一目标时返回冲突。完整配置、自动映射条件和面板由后续阶段展开。
+/// 同一目标时返回冲突。已知遗器未满级时采用整圈模板；全部满级时保留原装。
+/// 空缺部位使“全部满级”尚无法确认，保留待判断。完整配置和面板由后续阶段展开。
 pub fn plan_playable_account(
     raw: &RawAccount,
     data: &PlayableData,
@@ -130,10 +131,7 @@ pub fn plan_playable_account(
             unused.push(character.character_id.clone());
             continue;
         }
-        if owned
-            .insert(target.as_str(), character.character_id.as_str())
-            .is_some()
-        {
+        if owned.insert(target.as_str(), character).is_some() {
             return Err(PlanError(format!(
                 "多个持有条目对应角色 {target}，需要先确定形态关系"
             )));
@@ -164,6 +162,12 @@ pub fn plan_playable_account(
         MappingPart::OuterRelics,
         MappingPart::PlanarRelics,
     ];
+    let mut relics = BTreeMap::new();
+    for relic in &raw.relics {
+        if relics.insert(relic.instance_id.as_str(), relic).is_some() {
+            return Err(PlanError(format!("遗器实例 ID {} 重复", relic.instance_id)));
+        }
+    }
     let mut characters = Vec::with_capacity(data.trials.data.len());
     for trial in &data.trials.data {
         let definition = data
@@ -186,23 +190,54 @@ pub fn plan_playable_account(
                 BTreeMap::new(),
             )
         } else if request.mode == ConfigurationMode::OwnedWithTrials
-            && let Some(raw_id) = owned.get(trial.character_id.as_str())
+            && let Some(character) = owned.get(trial.character_id.as_str())
         {
             let choices = parts
                 .into_iter()
                 .map(|part| {
-                    let action = request
+                    let automatic = match part {
+                        MappingPart::OuterRelics => relic_mapping_action(
+                            character,
+                            &relics,
+                            &[
+                                RelicSlot::Head,
+                                RelicSlot::Hands,
+                                RelicSlot::Body,
+                                RelicSlot::Feet,
+                            ],
+                            data.rules.data.relic_mapping_minimum_level,
+                        )?,
+                        MappingPart::PlanarRelics => relic_mapping_action(
+                            character,
+                            &relics,
+                            &[RelicSlot::PlanarSphere, RelicSlot::LinkRope],
+                            data.rules.data.relic_mapping_minimum_level,
+                        )?,
+                        _ => MappingAction::Undetermined,
+                    };
+                    let specified = request
                         .mapping_decisions
                         .get(&trial.character_id)
                         .and_then(|choices| choices.get(&part))
-                        .copied()
-                        .unwrap_or(MappingAction::Undetermined);
-                    (part, action)
+                        .copied();
+                    let action = match specified {
+                        Some(choice) if automatic == MappingAction::Undetermined => choice,
+                        Some(choice)
+                            if choice != MappingAction::Undetermined && choice != automatic =>
+                        {
+                            return Err(PlanError(format!(
+                                "角色 {} 的 {part:?} 选择与遗器等级规则冲突",
+                                trial.character_id
+                            )));
+                        }
+                        _ => automatic,
+                    };
+                    Ok((part, action))
                 })
-                .collect();
+                .collect::<Result<_, PlanError>>()?;
             (
                 CharacterOrigin::Owned {
-                    raw_character_id: (*raw_id).to_owned(),
+                    raw_character_id: character.character_id.clone(),
                 },
                 choices,
             )
@@ -226,5 +261,47 @@ pub fn plan_playable_account(
         mode: request.mode,
         characters,
         unused_raw_character_ids: unused,
+    })
+}
+
+/// 检查一圈全部装备引用；任意已装备遗器未满级即整圈映射。
+fn relic_mapping_action(
+    character: &CharacterConfig,
+    relics: &BTreeMap<&str, &RelicInstance>,
+    slots: &[RelicSlot],
+    minimum_level: u8,
+) -> Result<MappingAction, PlanError> {
+    let mut has_underleveled = false;
+    let mut has_empty_slot = false;
+    for slot in slots {
+        let Some(instance_id) = character.relic_instance_ids.get(slot) else {
+            has_empty_slot = true;
+            continue;
+        };
+        let relic = relics.get(instance_id.as_str()).ok_or_else(|| {
+            PlanError(format!(
+                "角色 {} 引用的遗器 {instance_id} 不存在",
+                character.character_id
+            ))
+        })?;
+        if relic.slot != *slot {
+            return Err(PlanError(format!(
+                "角色 {} 的遗器 {instance_id} 部位不一致",
+                character.character_id
+            )));
+        }
+        if relic.level > minimum_level {
+            return Err(PlanError(format!(
+                "遗器 {instance_id} 等级超过资料上限 {minimum_level}"
+            )));
+        }
+        has_underleveled |= relic.level < minimum_level;
+    }
+    Ok(if has_underleveled {
+        MappingAction::UseTemplate
+    } else if has_empty_slot {
+        MappingAction::Undetermined
+    } else {
+        MappingAction::KeepOwned
     })
 }
