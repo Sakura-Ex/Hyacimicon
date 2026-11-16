@@ -490,6 +490,11 @@ pub fn simulate(input: &ValidatedScenario, seed: u64, trace: bool) -> Result<Bat
     simulate_cancellable(input, seed, trace, &mut || false)
 }
 /// Check cancellation before each action, including immediate ultimate chains.
+/// Checks occur at action boundaries before selecting an action or advancing AV,
+/// never partway through an action's effects. A callback returning `true` yields
+/// `Ok(BattleResult)` with [`Outcome::Incomplete`] and [`Termination::Cancelled`].
+/// Settled terminal elimination and already exhausted AV take precedence and
+/// return their results without polling cancellation at that boundary.
 pub fn simulate_cancellable(
     input: &ValidatedScenario,
     seed: u64,

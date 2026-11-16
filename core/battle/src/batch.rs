@@ -115,6 +115,8 @@ pub fn wilson_interval(successes: u64, trials: u64) -> Result<Option<WilsonInter
 /// Run independent, fresh engine instances serially. Cancellation is sticky,
 /// checked both between trials and by the engine during a trial. Engine failures
 /// propagate with the trial identity; they never become defeats or valid samples.
+/// [`BatchRequest::trials`] must be in `1..=MAX_TRIALS` (currently 1,000,000);
+/// values outside that range return `Err` before any trial or cancellation check.
 pub fn run_batch(
     validated: &ValidatedScenario,
     request: &BatchRequest,

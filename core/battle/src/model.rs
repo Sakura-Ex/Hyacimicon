@@ -131,13 +131,20 @@ pub struct Provenance {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+/// Explicit effective units, actions, resources and limits for a `basic_v1` battle.
 pub struct Scenario {
     pub schema_version: u32,
     /// The only implemented profile is basic_v1; it is not a full character catalog.
     pub ruleset: String,
     pub provenance: Provenance,
     pub unsupported_mechanics: Vec<String>,
+    /// AV budget including revival penalties; exhaustion yields
+    /// [`Outcome::Defeat`] / [`Termination::AvBudgetExhausted`], unless terminal
+    /// elimination has already settled. Actions at the deadline do not execute.
     pub max_av: f64,
+    /// Maximum executed actions, including ultimates, shared across waves.
+    /// Reaching this safety limit yields [`Outcome::Incomplete`] /
+    /// [`Termination::ActionLimit`] after terminal, elapsed-budget and cancellation checks.
     pub max_actions: u32,
     pub ally_skill_points: SkillPoints,
     pub enemy_skill_points: SkillPoints,
