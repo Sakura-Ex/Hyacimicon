@@ -12,6 +12,8 @@ from research.operations.snapshot import load_snapshot_rule_pack
 def main() -> None:
     parser = argparse.ArgumentParser(description="货币战争运营模拟")
     parser.add_argument("--difficulty", default="standard")
+    parser.add_argument("--enemy-difficulty", type=int, default=None)
+    parser.add_argument("--affix-count", type=int, default=None)
     parser.add_argument("--environment", default=None)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--runs", type=int, default=1)
@@ -44,6 +46,8 @@ def main() -> None:
             seed=args.seed,
             affix_ids=None if args.affix is None else tuple(args.affix),
             battle_progress=args.battle_progress,
+            enemy_difficulty=args.enemy_difficulty,
+            affix_count=args.affix_count,
         )
         payload = {
             "won": environment.won,
@@ -80,6 +84,8 @@ def main() -> None:
             runs=args.runs,
             seed=args.seed,
             battle_progress=args.battle_progress,
+            enemy_difficulty=args.enemy_difficulty,
+            affix_count=args.affix_count,
         )
         payload = {
             "runs": summary.runs,

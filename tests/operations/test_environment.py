@@ -5,7 +5,7 @@ import unittest
 
 from research.operations.catalog import load_rule_pack
 from research.operations.environment import OperationActionError, OperationEnvironment
-from research.operations.models import InvestmentRarity
+from research.operations.models import InvestmentRarity, Position, ShopOffer
 from research.operations.policies import run_greedy
 
 
@@ -163,6 +163,96 @@ class EnvironmentTests(unittest.TestCase):
                     seed=11,
                 )
                 self.assertTrue(env.ended)
+
+    def test_starting_units_use_only_one_to_three_cost_characters(self):
+        for seed in range(20):
+            with self.subTest(seed=seed):
+                env = OperationEnvironment(
+                    pack=self.pack,
+                    rng=random.Random(seed),
+                    difficulty_id="training",
+                    environment_id="silver_age",
+                    affix_ids=(),
+                )
+                for unit in env.market.roster.instances():
+                    self.assertLessEqual(self.pack.units[unit.unit_id].cost, 3)
+
+    def test_custom_difficulty_uses_enemy_level_and_affix_count(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(5),
+            difficulty_id="custom",
+            environment_id="silver_age",
+            enemy_difficulty=100,
+            affix_count=5,
+        )
+
+        self.assertEqual(env.enemy_difficulty, 100)
+        self.assertEqual(env.affix_count, 5)
+        self.assertEqual(len(env.affixes), 5)
+
+    def test_front_row_is_limited_to_four_characters(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(8),
+            difficulty_id="training",
+            environment_id="silver_age",
+            affix_ids=(),
+        )
+        env.market.level = 5
+        for unit in env.active_units():
+            env.set_unit_position(unit.unit_id, unit.star, None)
+        candidates = [
+            definition
+            for definition in self.pack.units.values()
+            if (definition.unit_id, 1) not in env.market.roster.units
+        ][:5]
+        for definition in candidates:
+            env.market.roster.add(definition.unit_id)
+        for definition in candidates[:4]:
+            env.set_unit_position(definition.unit_id, 1, Position.FRONT)
+
+        self.assertEqual(len(env.front_units()), 4)
+        with self.assertRaisesRegex(OperationActionError, "前台已满"):
+            env.set_unit_position(candidates[4].unit_id, 1, Position.FRONT)
+
+    def test_purchased_unit_can_be_deployed_and_bench_is_limited(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(10),
+            difficulty_id="training",
+            environment_id="silver_age",
+            affix_ids=(),
+        )
+        purchased = next(
+            definition
+            for definition in self.pack.units.values()
+            if (definition.unit_id, 1) not in env.market.roster.units
+        )
+        env.market.offers = (ShopOffer(purchased.unit_id),)
+        env.buy_shop_offer(0)
+        self.assertIn(purchased.unit_id, [unit.unit_id for unit in env.bench_units()])
+
+        first_active = env.active_units()[0]
+        env.set_unit_position(first_active.unit_id, first_active.star, None)
+        env.set_unit_position(purchased.unit_id, 1, Position.FRONT)
+        self.assertIn(purchased.unit_id, [unit.unit_id for unit in env.front_units()])
+
+        for unit in env.active_units():
+            env.set_unit_position(unit.unit_id, unit.star, None)
+        for definition in self.pack.units.values():
+            if env.bench_count >= self.pack.rules.bench_capacity:
+                break
+            env.market.roster.add(definition.unit_id)
+        blocked = next(
+            definition
+            for definition in self.pack.units.values()
+            if (definition.unit_id, 1) not in env.market.roster.units
+            and definition.cost <= env.gold
+        )
+        env.market.offers = (ShopOffer(blocked.unit_id),)
+        with self.assertRaisesRegex(OperationActionError, "备战席已满"):
+            env.buy_shop_offer(0)
 
 
 if __name__ == "__main__":

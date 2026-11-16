@@ -28,6 +28,7 @@ class SnapshotRulePackTests(unittest.TestCase):
         self.assertEqual(self.pack.metadata.snapshot_id, "encyclopedia-4.6.54-85a54e5115f8")
         self.assertEqual(len(self.pack.units), 61)
         self.assertEqual(len(self.pack.traits), 38)
+        self.assertEqual(len(self.pack.affixes), 53)
         self.assertEqual(self.pack.rules.game_version, "4.6.54")
 
     def test_latest_character_fields_are_preserved(self):

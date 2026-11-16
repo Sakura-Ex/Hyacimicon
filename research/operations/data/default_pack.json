@@ -18,36 +18,31 @@
     {
       "id": "training",
       "name": "训练",
-      "base_enemy_rating": 3.0,
-      "rating_per_node": 2.2,
+      "enemy_difficulty": 1,
       "affix_count": 0
     },
     {
       "id": "standard",
       "name": "标准",
-      "base_enemy_rating": 4.2,
-      "rating_per_node": 2.8,
+      "enemy_difficulty": 20,
       "affix_count": 2
     },
     {
       "id": "advanced",
       "name": "进阶",
-      "base_enemy_rating": 5.4,
-      "rating_per_node": 3.4,
+      "enemy_difficulty": 40,
       "affix_count": 4
     },
     {
       "id": "expert",
       "name": "专家",
-      "base_enemy_rating": 6.8,
-      "rating_per_node": 4.0,
+      "enemy_difficulty": 60,
       "affix_count": 6
     },
     {
       "id": "apex",
       "name": "极限",
-      "base_enemy_rating": 8.2,
-      "rating_per_node": 4.6,
+      "enemy_difficulty": 80,
       "affix_count": 8
     }
   ],

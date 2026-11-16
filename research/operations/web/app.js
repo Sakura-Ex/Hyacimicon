@@ -76,12 +76,15 @@ function populateMeta(meta) {
   byId("meta-status").textContent =
     `${meta.validation}。角色与羁绊来自私有数据仓库；投资数值仍按当前规则包运行。`;
 
-  byId("difficulty").innerHTML = meta.difficulties
-    .map(
-      (difficulty) =>
-        `<option value="${escapeHtml(difficulty.id)}">${escapeHtml(difficulty.name)} · ${difficulty.affix_count} 词缀</option>`,
-    )
-    .join("");
+  const standard =
+    meta.difficulties.find((difficulty) => difficulty.id === "standard") ||
+    meta.difficulties[0];
+  byId("enemy-difficulty").min = meta.difficulty_limits.enemy_min;
+  byId("enemy-difficulty").max = meta.difficulty_limits.enemy_max;
+  byId("enemy-difficulty").value = standard?.enemy_difficulty ?? 20;
+  byId("affix-count").min = meta.difficulty_limits.affix_min;
+  byId("affix-count").max = meta.difficulty_limits.affix_max;
+  byId("affix-count").value = standard?.affix_count ?? 2;
   byId("environment").innerHTML =
     '<option value="">随机环境</option>' +
     meta.environments
@@ -102,7 +105,8 @@ async function startRun(event) {
     appState.session = await request("/api/sessions", {
       method: "POST",
       body: JSON.stringify({
-        difficulty_id: byId("difficulty").value,
+        enemy_difficulty: Number(byId("enemy-difficulty").value),
+        affix_count: Number(byId("affix-count").value),
         environment_id: byId("environment").value || null,
         seed: Number(byId("seed").value),
         battle_progress: Number(byId("start-progress").value),
@@ -158,20 +162,6 @@ function renderRoute(session) {
     .join("");
 }
 
-function allocateUnits(activeUnits) {
-  const front = activeUnits.filter((unit) => unit.position === "front");
-  const back = activeUnits.filter((unit) => unit.position === "back");
-  const flex = activeUnits.filter((unit) => unit.position === "flex");
-  for (const unit of flex) {
-    if (front.length <= back.length) {
-      front.push(unit);
-    } else {
-      back.push(unit);
-    }
-  }
-  return { front, back };
-}
-
 function unitCard(unit) {
   const cost = unit.costs?.[0] ?? unit.cost;
   return `
@@ -188,7 +178,6 @@ function unitCard(unit) {
 }
 
 function renderUnits(session) {
-  const { front, back } = allocateUnits(session.active_units);
   const expandSlots = (units, minimum) => {
     const cards = units.map(unitCard);
     while (cards.length < minimum) {
@@ -196,17 +185,22 @@ function renderUnits(session) {
     }
     return cards.join("");
   };
-  byId("front-units").innerHTML = expandSlots(front, 5);
-  byId("back-units").innerHTML = expandSlots(back, 6);
+  byId("front-units").innerHTML = expandSlots(session.front_units, 5);
+  byId("back-units").innerHTML = expandSlots(session.back_units, 6);
   byId("active-capacity").textContent =
-    `${session.active_units.length}/${session.resources.level}`;
+    `${session.active_units.length}/${session.team_limits.active}`;
 }
 
 function renderTraits(session) {
   const traits = session.active_traits;
   byId("trait-count").textContent = traits.length;
-  byId("active-traits").innerHTML =
-    traits
+  const renderGroup = (items, label) => {
+    if (!items.length) {
+      return "";
+    }
+    return `
+      <h3 class="trait-section-title">${label}</h3>
+      ${items
       .map((trait) => {
         const icon = trait.icon_path
           ? `<img src="${escapeHtml(trait.icon_path)}" alt="">`
@@ -225,7 +219,14 @@ function renderTraits(session) {
           </article>
         `;
       })
-      .join("") || '<p class="trait-empty">当前阵容尚未形成羁绊</p>';
+      .join("")}`;
+  };
+  const active = traits.filter((trait) => trait.status === "active");
+  const inactive = traits.filter((trait) => trait.status !== "active");
+  byId("active-traits").innerHTML =
+    renderGroup(active, `已激活 · ${active.length}`) +
+      renderGroup(inactive, `未激活 · ${inactive.length}`) ||
+    '<p class="trait-empty">当前阵容尚未形成羁绊</p>';
 }
 
 function renderShop(session) {
@@ -270,7 +271,8 @@ function renderResources(session) {
       ? `${session.resources.xp} · 已满级`
       : `${session.resources.xp}/${session.resources.xp_to_next_level}`;
   byId("run-environment").textContent = session.environment.name;
-  byId("run-difficulty").textContent = session.difficulty.name;
+  byId("run-difficulty").textContent =
+    `敌人难度 ${session.difficulty.enemy_difficulty} · 词缀 ${session.difficulty.affix_count}`;
   byId("run-plane").textContent = `位面 ${session.node.plane}`;
   byId("progress-value").textContent =
     `${session.battle.progress_percent}%`;
@@ -329,15 +331,64 @@ function renderDrawer(session) {
   byId("drawer-title").textContent = title;
 
   if (appState.drawer === "roster") {
+    const placed = [
+      ...session.front_units.map((unit) => ({ ...unit, location: "front" })),
+      ...session.back_units.map((unit) => ({ ...unit, location: "back" })),
+      ...session.bench_units.map((unit) => ({ ...unit, location: "bench" })),
+    ];
+    const activeFull =
+      session.active_units.length >= session.team_limits.active;
+    const frontFull = session.front_units.length >= session.team_limits.front;
+    const backFull = session.back_units.length >= session.team_limits.back;
+    const placementButton = (unit, position, label, disabled = false) => `
+      <button
+        type="button"
+        data-action="position"
+        data-unit-id="${escapeHtml(unit.unit_id)}"
+        data-star="${unit.star}"
+        data-position="${position}"
+        ${disabled ? "disabled" : ""}
+      >${label}</button>
+    `;
     byId("drawer-body").innerHTML =
-      `<div class="roster-list">${session.roster
+      `<p class="muted">上阵 ${session.active_units.length}/${session.team_limits.active} · 前台 ${session.front_units.length}/${session.team_limits.front} · 后台 ${session.back_units.length}/${session.team_limits.back} · 备战席 ${session.team_limits.bench_used}/${session.team_limits.bench}</p>
+       <div class="roster-list">${placed
         .map(
           (unit) => `
             <article class="roster-item">
               ${portraitMarkup(unit)}
               <div>
                 <strong>${escapeHtml(unit.name)} · ${starText(unit.star)}</strong>
-                <small>${unit.cost}费 · ${escapeHtml(unit.position)} · ${escapeHtml(unit.traits.join(" / "))}</small>
+                <small>${unit.cost}费 · ${{ front: "前台", back: "后台", bench: "备战席" }[unit.location]} · ${escapeHtml(unit.traits.join(" / "))}</small>
+                <div class="deploy-actions">
+                  ${
+                    unit.location !== "front"
+                      ? placementButton(
+                          unit,
+                          "front",
+                          "前台",
+                          frontFull ||
+                            (unit.location === "bench" && activeFull),
+                        )
+                      : ""
+                  }
+                  ${
+                    unit.location !== "back"
+                      ? placementButton(
+                          unit,
+                          "back",
+                          "后台",
+                          backFull ||
+                            (unit.location === "bench" && activeFull),
+                        )
+                      : ""
+                  }
+                  ${
+                    unit.location !== "bench"
+                      ? placementButton(unit, "", "备战席")
+                      : ""
+                  }
+                </div>
               </div>
               <button type="button" data-action="sell" data-unit-id="${escapeHtml(unit.unit_id)}" data-star="${unit.star}" ${session.capabilities.sell_unit ? "" : "disabled"}>
                 出售
@@ -497,6 +548,13 @@ document.addEventListener("click", async (event) => {
       await runAction({
         type: "choose_investment",
         index: Number(actionTarget.dataset.index),
+      });
+    } else if (action === "position") {
+      await runAction({
+        type: "set_unit_position",
+        unit_id: actionTarget.dataset.unitId,
+        star: Number(actionTarget.dataset.star),
+        position: actionTarget.dataset.position || null,
       });
     }
     return;

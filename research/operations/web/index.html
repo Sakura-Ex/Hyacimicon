@@ -172,13 +172,19 @@
         </div>
         <form id="start-form" class="start-form">
           <label>
-            难度
-            <select id="difficulty" required></select>
-          </label>
-          <label>
             投资环境
             <select id="environment"></select>
           </label>
+          <div class="form-grid">
+            <label>
+              敌人难度
+              <input id="enemy-difficulty" type="number" value="20" min="1" max="211" step="1" required>
+            </label>
+            <label>
+              词缀数量
+              <input id="affix-count" type="number" value="2" min="0" max="53" step="1" required>
+            </label>
+          </div>
           <div class="form-grid">
             <label>
               随机种子

@@ -236,13 +236,16 @@ class Market:
         count: int,
         *,
         cost: int | None = None,
+        max_cost: int | None = None,
     ) -> tuple[UnitInstance, ...]:
         """免费加入角色，用于开局补给或投资环境。"""
 
         candidates = [
             unit_id
             for unit_id, unit in self.units.items()
-            if self.pool[unit_id] > 0 and (cost is None or unit.cost == cost)
+            if self.pool[unit_id] > 0
+            and (cost is None or unit.cost == cost)
+            and (max_cost is None or unit.cost <= max_cost)
         ]
         if not candidates:
             raise MarketActionError("角色牌池没有符合条件的角色")

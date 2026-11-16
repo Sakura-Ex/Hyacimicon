@@ -120,12 +120,11 @@ class Affix:
 
 @dataclass(frozen=True)
 class DifficultyPreset:
-    """可自选的模拟难度。"""
+    """敌人难度与词缀数量的默认组合。"""
 
     difficulty_id: str
     name: str
-    base_enemy_rating: float
-    rating_per_node: float
+    enemy_difficulty: int
     affix_count: int
 
 
@@ -206,7 +205,13 @@ class GameRules:
     starting_gold: int
     starting_level: int
     starting_supply: int
+    starting_unit_max_cost: int
+    enemy_difficulty_max: int
+    affix_count_max: int
     shop_size: int
+    bench_capacity: int
+    front_capacity: int
+    back_capacity: int
     refresh_cost: int
     xp_purchase_cost: int
     xp_purchase_amount: int

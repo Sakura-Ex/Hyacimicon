@@ -4,9 +4,9 @@ import random
 from dataclasses import dataclass
 
 from .battle_progress import FixedBattleProgressProvider
-from .environment import OperationEnvironment
+from .environment import OperationActionError, OperationEnvironment
 from .market import MarketActionError
-from .models import Investment, RulePack
+from .models import Investment, Position, RulePack
 
 
 @dataclass(frozen=True)
@@ -51,6 +51,8 @@ def run_greedy(
     seed: int,
     affix_ids: tuple[str, ...] | None = None,
     battle_progress: int = 100,
+    enemy_difficulty: int | None = None,
+    affix_count: int | None = None,
 ) -> OperationEnvironment:
     """运行一局贪心运营策略，返回完整可回放环境。"""
 
@@ -62,6 +64,8 @@ def run_greedy(
         environment_id=environment_id,
         affix_ids=affix_ids,
         battle_progress=FixedBattleProgressProvider(battle_progress),
+        enemy_difficulty=enemy_difficulty,
+        affix_count=affix_count,
     )
     while not env.ended:
         _choose_investment(env)
@@ -78,6 +82,8 @@ def run_batch(
     runs: int,
     seed: int,
     battle_progress: int = 100,
+    enemy_difficulty: int | None = None,
+    affix_count: int | None = None,
 ) -> SimulationSummary:
     """用连续随机种子评估贪心策略。"""
 
@@ -90,6 +96,8 @@ def run_batch(
             environment_id=environment_id,
             seed=seed + offset,
             battle_progress=battle_progress,
+            enemy_difficulty=enemy_difficulty,
+            affix_count=affix_count,
         )
         for offset in range(runs)
     ]
@@ -127,7 +135,25 @@ def _operate_market(env: OperationEnvironment) -> None:
                 affordable.append((unit.cost, index))
         if affordable:
             _, index = max(affordable)
-            env.buy_shop_offer(index)
+            offer = env.observe().shop_offers[index]
+            unit_id = offer.unit_id
+            try:
+                env.buy_shop_offer(index)
+            except OperationActionError:
+                return
+            if unit_id is not None and (unit_id, 1) in env.market.roster.units:
+                preferred = env.pack.units[unit_id].position
+                positions = (
+                    (Position.BACK, Position.FRONT)
+                    if preferred is Position.BACK
+                    else (Position.FRONT, Position.BACK)
+                )
+                for position in positions:
+                    try:
+                        env.set_unit_position(unit_id, 1, position)
+                        break
+                    except OperationActionError:
+                        continue
             continue
 
         if env.market.level < 8 and env.gold >= 14:

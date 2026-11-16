@@ -9,10 +9,12 @@
 - 10 级商店费用概率，以及公开记录的五种角色费用和每种角色的牌池数量。
 - 商店自动刷新、锁店、免费刷新、金币刷新、购买和出售。
 - 等级经验表、购买经验、团队规模与三星角色合成。
+- 开局角色只从 1～3 费抽取；购买和合成后的角色进入备战席，可手动部署到前台或后台。
+- 上阵总人数不超过商店等级，前台最多 4 人、后台最多 6 人、备战席最多 9 人。
 - 按真实编号排列的 20 节点模板：第一位面 8 个、第二位面 6 个、第三位面 6 个；统计为 5 个奖励、9 个战斗、3 个遭遇和 3 个首领节点。
 - 固定节点生成三个不重复投资策略，应用当前规则包支持的金币、经验、刷新、延迟收益、利息上限和强度效果。
 - 开局投资环境和敌人词缀。支持指定词缀，或按难度随机生成。
-- 五档自选难度和用于调试的抽象阵容强度估算。
+- 使用游戏原生“敌人难度 + 词缀数量”两个参数配置难度，敌人难度范围为 1～211。
 - 玩家观测与商店隐藏牌池分离；相同种子和动作产生相同回放。
 - 可注入的战斗进度接口。默认返回 100%，100% 判胜，低于 100% 判负。
 - 游戏式本地网页，按顶部节点路线、左侧羁绊、中央前后台、底部商店组织，并使用数据快照中的角色与羁绊图标。
@@ -32,7 +34,7 @@ uv run python -m examples.operations.web
 单局运行：
 
 ```powershell
-uv run python -m examples.operations.simulate --difficulty standard --environment silver_age --seed 7
+uv run python -m examples.operations.simulate --enemy-difficulty 20 --affix-count 2 --environment silver_age --seed 7
 ```
 
 通过 `--battle-progress 0-100` 指定自动运行使用的战斗进度，默认 `100`。
@@ -40,7 +42,7 @@ uv run python -m examples.operations.simulate --difficulty standard --environmen
 批量评估：
 
 ```powershell
-uv run python -m examples.operations.simulate --difficulty advanced --environment silver_age --seed 7 --runs 1000
+uv run python -m examples.operations.simulate --enemy-difficulty 40 --affix-count 4 --environment silver_age --seed 7 --runs 1000
 ```
 
 验证：

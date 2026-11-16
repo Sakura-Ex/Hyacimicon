@@ -100,6 +100,54 @@ class OperationServiceTests(unittest.TestCase):
                 {"type": "set_battle_progress", "progress": 101},
             )
 
+    def test_custom_difficulty_and_manual_deployment_actions(self):
+        session = self.service.create_session(
+            {
+                "difficulty_id": "training",
+                "environment_id": "silver_age",
+                "seed": 14,
+                "enemy_difficulty": 100,
+                "affix_count": 3,
+                "battle_progress": 100,
+            }
+        )
+        session_id = str(session["session_id"])
+        difficulty = session["difficulty"]
+        self.assertIsInstance(difficulty, dict)
+        self.assertEqual(difficulty["enemy_difficulty"], 100)
+        self.assertEqual(difficulty["affix_count"], 3)
+
+        active = session["active_units"]
+        self.assertTrue(active)
+        first = active[0]
+        self.assertIsInstance(first, dict)
+        session = self.service.apply_action(
+            session_id,
+            {
+                "type": "set_unit_position",
+                "unit_id": first["unit_id"],
+                "star": first["star"],
+                "position": None,
+            },
+        )
+        self.assertIn(
+            first["unit_id"],
+            [unit["unit_id"] for unit in session["bench_units"]],
+        )
+        session = self.service.apply_action(
+            session_id,
+            {
+                "type": "set_unit_position",
+                "unit_id": first["unit_id"],
+                "star": first["star"],
+                "position": "front",
+            },
+        )
+        self.assertIn(
+            first["unit_id"],
+            [unit["unit_id"] for unit in session["front_units"]],
+        )
+
 
 class OperationHTTPServerTests(unittest.TestCase):
     """验证静态页面和 API 能通过本地 HTTP 使用。"""
@@ -123,8 +171,11 @@ class OperationHTTPServerTests(unittest.TestCase):
             meta = json.load(response)
 
         self.assertIn("货币战争运营实验台", page)
+        self.assertIn("enemy-difficulty", page)
+        self.assertIn("affix-count", page)
         self.assertEqual(meta["game_version"], "4.7.0")
         self.assertTrue(meta["difficulties"])
+        self.assertEqual(meta["difficulty_limits"]["enemy_max"], 211)
 
     def test_create_session_over_http(self):
         request = Request(

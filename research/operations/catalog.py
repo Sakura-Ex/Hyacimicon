@@ -29,7 +29,13 @@ DEFAULT_RULES = GameRules(
     starting_gold=10,
     starting_level=3,
     starting_supply=3,
+    starting_unit_max_cost=3,
+    enemy_difficulty_max=211,
+    affix_count_max=53,
     shop_size=5,
+    bench_capacity=9,
+    front_capacity=4,
+    back_capacity=6,
     refresh_cost=2,
     xp_purchase_cost=1,
     xp_purchase_amount=4,
@@ -377,13 +383,13 @@ def _parse_environment(value: object) -> InvestmentEnvironment:
 def _parse_difficulty(value: object) -> DifficultyPreset:
     data = _as_object(value, "difficulty")
     affix_count = _as_int(data.get("affix_count"), "difficulty.affix_count")
-    if affix_count < 0:
-        raise ValueError("difficulty.affix_count 不能小于 0")
+    enemy_difficulty = _as_int(data.get("enemy_difficulty"), "difficulty.enemy_difficulty")
+    if affix_count < 0 or enemy_difficulty < 1:
+        raise ValueError("difficulty 数值非法")
     return DifficultyPreset(
         difficulty_id=_as_string(data.get("id"), "difficulty.id"),
         name=_as_string(data.get("name"), "difficulty.name"),
-        base_enemy_rating=_as_float(data.get("base_enemy_rating"), "difficulty.base_enemy_rating"),
-        rating_per_node=_as_float(data.get("rating_per_node"), "difficulty.rating_per_node"),
+        enemy_difficulty=enemy_difficulty,
         affix_count=affix_count,
     )
 

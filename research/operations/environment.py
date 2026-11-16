@@ -18,6 +18,7 @@ from .models import (
     NodeDefinition,
     NodeResult,
     NodeType,
+    Position,
     RulePack,
     RunObservation,
     UnitInstance,
@@ -50,6 +51,8 @@ class OperationEnvironment:
     difficulty_id: str
     environment_id: str | None = None
     affix_ids: tuple[str, ...] | None = None
+    enemy_difficulty: int | None = None
+    affix_count: int | None = None
     battle_progress: BattleProgressProvider = field(default_factory=FixedBattleProgressProvider)
     market: Market = field(init=False)
     investments: InvestmentEngine = field(init=False)
@@ -75,18 +78,33 @@ class OperationEnvironment:
     won: bool = field(init=False, default=False)
     last_battle_progress: int | None = field(init=False, default=None)
     last_battle_provider: str | None = field(init=False, default=None)
+    front_team: dict[tuple[str, int], int] = field(init=False, default_factory=dict)
+    back_team: dict[tuple[str, int], int] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.difficulty_id not in self.pack.difficulties:
+        difficulty = self.pack.difficulties.get(self.difficulty_id)
+        if difficulty is None and (self.enemy_difficulty is None or self.affix_count is None):
             raise ValueError(f"未知难度：{self.difficulty_id}")
+        if self.enemy_difficulty is None:
+            self.enemy_difficulty = difficulty.enemy_difficulty
+        if self.affix_count is None:
+            self.affix_count = difficulty.affix_count
+        if not 1 <= self.enemy_difficulty <= self.pack.rules.enemy_difficulty_max:
+            raise ValueError("敌人难度超出允许范围")
+        if (
+            not 0
+            <= self.affix_count
+            <= min(
+                self.pack.rules.affix_count_max,
+                len(self.pack.affixes),
+            )
+        ):
+            raise ValueError("词缀数量超出允许范围")
         if self.environment_id is not None and self.environment_id not in self.pack.environments:
             raise ValueError(f"未知投资环境：{self.environment_id}")
-        difficulty = self.pack.difficulties[self.difficulty_id]
 
         if self.affix_ids is None:
-            if difficulty.affix_count > len(self.pack.affixes):
-                raise ValueError("难度要求的词缀数量超过规则包")
-            selected_ids = tuple(self.rng.sample(sorted(self.pack.affixes), difficulty.affix_count))
+            selected_ids = tuple(self.rng.sample(sorted(self.pack.affixes), self.affix_count))
         else:
             unknown = set(self.affix_ids) - set(self.pack.affixes)
             if unknown:
@@ -115,12 +133,23 @@ class OperationEnvironment:
         self.investments = InvestmentEngine(self.pack, self.rng, environment.effect)
 
         if environment.effect.starting_unit_count:
+            starting_cost = environment.effect.starting_unit_cost
+            if starting_cost is not None:
+                starting_cost = min(
+                    starting_cost,
+                    self.pack.rules.starting_unit_max_cost,
+                )
             self.market.take_random_units(
                 environment.effect.starting_unit_count,
-                cost=environment.effect.starting_unit_cost,
+                cost=starting_cost,
+                max_cost=self.pack.rules.starting_unit_max_cost,
             )
         else:
-            self.market.take_random_units(self.pack.rules.starting_supply)
+            self.market.take_random_units(
+                self.pack.rules.starting_supply,
+                max_cost=self.pack.rules.starting_unit_max_cost,
+            )
+        self._auto_deploy()
         self._enter_node()
 
     @property
@@ -205,9 +234,16 @@ class OperationEnvironment:
         """购买一个商店角色，返回合成事件。"""
 
         self._ensure_market_phase()
+        if offer_index < 0 or offer_index >= len(self.market.offers):
+            raise OperationActionError("商店位置不存在")
+        if self.bench_count >= self.pack.rules.bench_capacity:
+            offer = self.market.offers[offer_index]
+            if offer.unit_id is None or not self._purchase_would_merge(offer.unit_id):
+                raise OperationActionError("备战席已满")
         gold, merges = self.market.buy_unit(offer_index, self.gold)
         self.gold = gold
         self.spent_this_node = True
+        self._normalize_team()
         return merges
 
     def sell_unit(self, unit_id: str, star: int) -> None:
@@ -215,6 +251,73 @@ class OperationEnvironment:
 
         self._ensure_market_phase()
         self.gold = self.market.sell_unit(unit_id, star, self.gold)
+        self._normalize_team()
+
+    @property
+    def bench_count(self) -> int:
+        """当前备战席角色实例数量。"""
+
+        return len(self.market.roster.instances()) - self.active_count
+
+    @property
+    def active_count(self) -> int:
+        return sum(self.front_team.values()) + sum(self.back_team.values())
+
+    def front_units(self) -> tuple[UnitInstance, ...]:
+        return self._instances_for(self.front_team)
+
+    def back_units(self) -> tuple[UnitInstance, ...]:
+        return self._instances_for(self.back_team)
+
+    def bench_units(self) -> tuple[UnitInstance, ...]:
+        """返回未上阵角色实例。"""
+
+        remaining = dict(self.market.roster.units)
+        for team in (self.front_team, self.back_team):
+            for key, count in team.items():
+                remaining[key] -= count
+                if remaining[key] <= 0:
+                    del remaining[key]
+        return self._instances_for(remaining)
+
+    def set_unit_position(
+        self,
+        unit_id: str,
+        star: int,
+        position: Position | None,
+    ) -> None:
+        """把一名角色移动到前台、后台或备战席。"""
+
+        self._ensure_market_phase()
+        key = (unit_id, star)
+        if self.market.roster.units.get(key, 0) == 0:
+            raise OperationActionError("没有可部署的指定角色")
+        if position is not None and position not in (Position.FRONT, Position.BACK):
+            raise OperationActionError("角色只能部署到前台或后台")
+        current = self.front_team.get(key, 0) + self.back_team.get(key, 0)
+        if position is None:
+            if current == 0:
+                return
+            if self.bench_count >= self.pack.rules.bench_capacity:
+                raise OperationActionError("备战席已满")
+            self._remove_team_instance(key)
+            return
+        if current:
+            self._remove_team_instance(key, normalize=False)
+        else:
+            if self.active_count >= self.market.active_capacity:
+                raise OperationActionError("上阵人数已达到商店等级上限")
+            if current >= self.market.roster.units.get(key, 0):
+                raise OperationActionError("备战席没有该角色")
+        target = self.front_team if position is Position.FRONT else self.back_team
+        capacity = (
+            self.pack.rules.front_capacity
+            if position is Position.FRONT
+            else self.pack.rules.back_capacity
+        )
+        if sum(target.values()) >= capacity:
+            raise OperationActionError(f"{'前台' if position is Position.FRONT else '后台'}已满")
+        target[key] = target.get(key, 0) + 1
 
     def buy_xp(self, purchase_count: int = 1) -> tuple[int, ...]:
         """购买经验，返回本次达到的等级。"""
@@ -331,20 +434,85 @@ class OperationEnvironment:
         return result
 
     def active_units(self) -> tuple[UnitInstance, ...]:
-        """按当前等级选择强度最高的上阵角色。"""
+        """返回玩家当前手动部署的前后台角色。"""
 
-        candidates = self.market.roster.instances()
-        ordered = sorted(
-            candidates,
-            key=lambda unit: (
-                self._unit_power(unit),
-                unit.star,
-                self.pack.units[unit.unit_id].cost,
-                unit.unit_id,
-            ),
-            reverse=True,
+        return self.front_units() + self.back_units()
+
+    def _auto_deploy(self) -> None:
+        """开局时按角色站位自动部署默认阵容。"""
+
+        for unit in self.market.roster.instances():
+            if self.active_count >= self.market.active_capacity:
+                break
+            preferred = self.pack.units[unit.unit_id].position
+            candidates = (
+                (Position.FRONT, Position.BACK)
+                if preferred is not Position.BACK
+                else (Position.BACK, Position.FRONT)
+            )
+            for position in candidates:
+                team = self.front_team if position is Position.FRONT else self.back_team
+                capacity = (
+                    self.pack.rules.front_capacity
+                    if position is Position.FRONT
+                    else self.pack.rules.back_capacity
+                )
+                if sum(team.values()) < capacity:
+                    key = (unit.unit_id, unit.star)
+                    team[key] = team.get(key, 0) + 1
+                    break
+
+    def _normalize_team(self) -> None:
+        """删除合成或出售后已不存在的上阵实例。"""
+
+        for key in set(self.front_team) | set(self.back_team):
+            owned = self.market.roster.units.get(key, 0)
+            while self.front_team.get(key, 0) + self.back_team.get(key, 0) > owned:
+                if self.back_team.get(key, 0):
+                    self._remove_one_from(self.back_team, key)
+                else:
+                    self._remove_one_from(self.front_team, key)
+        while self.active_count > self.market.active_capacity:
+            if self.back_team:
+                self._remove_one_from(self.back_team)
+            else:
+                self._remove_one_from(self.front_team)
+
+    def _purchase_would_merge(self, unit_id: str) -> bool:
+        counts = dict(self.market.roster.units)
+        key = (unit_id, 1)
+        while key[1] < 4:
+            if counts.get(key, 0) >= 2:
+                return True
+            key = (unit_id, key[1] + 1)
+        return False
+
+    def _remove_team_instance(self, key: tuple[str, int], *, normalize: bool = True) -> None:
+        for team in (self.front_team, self.back_team):
+            if team.get(key, 0):
+                self._remove_one_from(team, key)
+                if normalize:
+                    self._normalize_team()
+                return
+        raise OperationActionError("该角色当前没有上阵")
+
+    @staticmethod
+    def _remove_one_from(
+        team: dict[tuple[str, int], int],
+        key: tuple[str, int] | None = None,
+    ) -> None:
+        selected = key if key is not None else next(iter(team))
+        team[selected] -= 1
+        if team[selected] == 0:
+            del team[selected]
+
+    @staticmethod
+    def _instances_for(counts: dict[tuple[str, int], int]) -> tuple[UnitInstance, ...]:
+        return tuple(
+            UnitInstance(unit_id, star)
+            for (unit_id, star), count in sorted(counts.items())
+            for _ in range(count)
         )
-        return tuple(ordered[: self.market.active_capacity])
 
     def team_power(self) -> float:
         """计算抽象阵容强度。"""
@@ -372,7 +540,6 @@ class OperationEnvironment:
 
         if node is None:
             node = self.current_node
-        difficulty = self.pack.difficulties[self.difficulty_id]
         node_multiplier = {
             NodeType.BATTLE: 1.0,
             NodeType.REWARD: 0.8,
@@ -384,7 +551,7 @@ class OperationEnvironment:
             * affix.effect.plane_enemy_rating_multipliers[node.plane - 1]
             for affix in self.affixes
         )
-        base = difficulty.base_enemy_rating + node.index * difficulty.rating_per_node
+        base = float(self.enemy_difficulty)
         return max(0.1, base * node_multiplier * affix_multiplier + self.enemy_rating_adjustment)
 
     def _unit_power(self, unit: UnitInstance) -> float:

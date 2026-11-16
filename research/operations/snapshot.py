@@ -7,6 +7,8 @@ from pathlib import Path
 
 from .catalog import RulePack, load_rule_pack
 from .models import (
+    Affix,
+    AffixEffect,
     NodeType,
     Position,
     RuleMetadata,
@@ -16,6 +18,7 @@ from .models import (
 )
 
 SNAPSHOT_FILES = (
+    "affixes",
     "characters",
     "traits",
     "trait_details",
@@ -58,13 +61,16 @@ def load_snapshot_rule_pack(
         name: _load_verified_json(repository_root, manifest, name) for name in SNAPSHOT_FILES
     }
     characters = _as_list(verified["characters"], "characters")
+    affix_values = _as_list(verified["affixes"], "affixes")
     traits = _as_list(verified["traits"], "traits")
     trait_details = _as_object(verified["trait_details"], "trait_details")
     presentation = _as_object(verified["presentation"], "presentation")
     numerics = _as_object(verified["numerics"], "numerics")
 
+    base = load_rule_pack() if base_pack is None else base_pack
     trait_by_name, trait_ids = _parse_traits(traits, trait_details, presentation)
     units = _parse_units(characters, trait_by_name, presentation)
+    affixes = _parse_affixes(affix_values, base.affixes)
     nodes = _as_list(numerics.get("nodes"), "numerics.nodes")
     node_ids: list[str] = []
     node_types: list[NodeType] = []
@@ -82,7 +88,6 @@ def load_snapshot_rule_pack(
     if not node_ids or len(node_ids) != len(set(node_ids)):
         raise ValueError("节点 ID 不能为空或重复")
 
-    base = load_rule_pack() if base_pack is None else base_pack
     metadata_data = _as_object(manifest, "manifest")
     snapshot_id = _as_string(metadata_data.get("snapshot_id"), "manifest.snapshot_id")
     content_hash = _as_string(metadata_data.get("content_sha256"), "manifest.content_sha256")
@@ -110,7 +115,7 @@ def load_snapshot_rule_pack(
         metadata=metadata,
         units=units,
         difficulties=base.difficulties,
-        affixes=base.affixes,
+        affixes=affixes,
         investments=base.investments,
         environments=base.environments,
         traits=trait_ids,
@@ -263,6 +268,28 @@ def _parse_units(
             trait_ids=tuple(trait_by_name[trait] for trait in traits),
         )
     return units
+
+
+def _parse_affixes(
+    values: list[object],
+    base_affixes: dict[str, Affix],
+) -> dict[str, Affix]:
+    effects_by_name = {affix.name: affix.effect for affix in base_affixes.values()}
+    affixes: dict[str, Affix] = {}
+    for value in values:
+        data = _as_object(value, "affixes[]")
+        affix_id = _as_string(data.get("id"), "affixes[].id")
+        name = _as_string(data.get("name"), "affixes[].name")
+        description = _as_string(data.get("description"), "affixes[].description")
+        if affix_id in affixes:
+            raise ValueError(f"词缀 ID 重复：{affix_id}")
+        affixes[affix_id] = Affix(
+            affix_id=affix_id,
+            name=name,
+            description=description,
+            effect=effects_by_name.get(name, AffixEffect()),
+        )
+    return affixes
 
 
 def _position(value: str) -> Position:

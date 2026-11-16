@@ -9,7 +9,7 @@ from pathlib import Path
 from .battle_progress import FixedBattleProgressProvider
 from .catalog import RulePack, load_rule_pack
 from .environment import OperationEnvironment
-from .models import Affix, Investment, NodeResult, RunObservation, UnitInstance
+from .models import Affix, Investment, NodeResult, Position, RunObservation, UnitInstance
 
 
 class SessionNotFoundError(LookupError):
@@ -50,6 +50,8 @@ class OperationSession:
         seed: int,
         affix_ids: tuple[str, ...] | None,
         battle_progress: int,
+        enemy_difficulty: int | None = None,
+        affix_count: int | None = None,
     ) -> "OperationSession":
         """创建一局并记录初始状态。"""
 
@@ -60,6 +62,8 @@ class OperationSession:
             difficulty_id=difficulty_id,
             environment_id=environment_id,
             affix_ids=affix_ids,
+            enemy_difficulty=enemy_difficulty,
+            affix_count=affix_count,
             battle_progress=provider,
         )
         session = cls(
@@ -72,7 +76,8 @@ class OperationSession:
         session._append_event(
             "start",
             (
-                f"创建对局：难度 {pack.difficulties[difficulty_id].name}，"
+                f"创建对局：敌人难度 {environment.enemy_difficulty}，"
+                f"词缀 {environment.affix_count}，"
                 f"环境 {pack.environments[environment.environment_id].name}，"
                 f"种子 {seed}，战斗进度 {battle_progress}%"
             ),
@@ -130,6 +135,26 @@ class OperationSession:
             self._append_event(
                 "sell",
                 f"出售 {star} 星 {unit.name}，获得 {gold_gained} 金币",
+            )
+            return
+        if action_type == "set_unit_position":
+            unit_id = _string(action, "unit_id")
+            star = _integer(action, "star")
+            position_value = action.get("position")
+            position = (
+                None
+                if position_value is None
+                else Position(_required_string(position_value, "position"))
+            )
+            self.environment.set_unit_position(unit_id, star, position)
+            labels = {
+                None: "备战席",
+                Position.FRONT: "前台",
+                Position.BACK: "后台",
+            }
+            self._append_event(
+                "deployment",
+                f"将 {star} 星 {self.pack.units[unit_id].name} 移至{labels[position]}",
             )
             return
         if action_type == "buy_xp":
@@ -208,6 +233,16 @@ class OperationSession:
             "shop_locked": observation.shop_locked,
             "roster": [self._unit_view(unit) for unit in observation.roster],
             "active_units": [self._unit_view(unit) for unit in observation.active_units],
+            "front_units": [self._unit_view(unit) for unit in self.environment.front_units()],
+            "back_units": [self._unit_view(unit) for unit in self.environment.back_units()],
+            "bench_units": [self._unit_view(unit) for unit in self.environment.bench_units()],
+            "team_limits": {
+                "active": observation.level,
+                "front": self.pack.rules.front_capacity,
+                "back": self.pack.rules.back_capacity,
+                "bench": self.pack.rules.bench_capacity,
+                "bench_used": self.environment.bench_count,
+            },
             "active_traits": self._active_trait_view(observation),
             "investments": {
                 "selected": [
@@ -255,10 +290,20 @@ class OperationSession:
                 {
                     "id": difficulty.difficulty_id,
                     "name": difficulty.name,
+                    "enemy_difficulty": difficulty.enemy_difficulty,
                     "affix_count": difficulty.affix_count,
                 }
                 for difficulty in self.pack.difficulties.values()
             ],
+            "difficulty_limits": {
+                "enemy_min": 1,
+                "enemy_max": self.pack.rules.enemy_difficulty_max,
+                "affix_min": 0,
+                "affix_max": min(
+                    self.pack.rules.affix_count_max,
+                    len(self.pack.affixes),
+                ),
+            },
             "environments": [
                 {
                     "id": environment.environment_id,
@@ -303,6 +348,7 @@ class OperationSession:
             "buy_offer": preparation
             and any(offer.unit_id is not None for offer in observation.shop_offers),
             "sell_unit": preparation and bool(observation.roster),
+            "set_unit_position": preparation and bool(observation.roster),
             "buy_xp": preparation and observation.level < 10,
             "choose_investment": bool(observation.investment_offers),
             "advance_node": preparation,
@@ -372,6 +418,7 @@ class OperationSession:
                     "next_tier": None if next_tier is None else next_tier.level,
                     "active_text": "" if active_tier is None else active_tier.text,
                     "next_text": "" if next_tier is None else next_tier.text,
+                    "status": "active" if active_tier is not None else "inactive",
                 }
             )
         return sorted(traits, key=lambda trait: (-int(trait["count"]), str(trait["name"])))
@@ -405,11 +452,12 @@ class OperationSession:
         }
 
     def _difficulty_view(self) -> dict[str, object]:
-        difficulty = self.pack.difficulties[self.environment.difficulty_id]
+        difficulty = self.pack.difficulties.get(self.environment.difficulty_id)
         return {
-            "id": difficulty.difficulty_id,
-            "name": difficulty.name,
-            "affix_count": difficulty.affix_count,
+            "id": self.environment.difficulty_id,
+            "name": "自定义" if difficulty is None else difficulty.name,
+            "enemy_difficulty": self.environment.enemy_difficulty,
+            "affix_count": self.environment.affix_count,
         }
 
     def _debug_view(self, observation: RunObservation) -> dict[str, object]:
@@ -484,6 +532,23 @@ class OperationService:
 
         data = _object(payload)
         difficulty_id = _string(data, "difficulty_id", default=next(iter(self.pack.difficulties)))
+        enemy_value = data.get("enemy_difficulty")
+        affix_value_count = data.get("affix_count")
+        enemy_difficulty = (
+            None if enemy_value is None else _required_int(enemy_value, "enemy_difficulty")
+        )
+        affix_count = (
+            None if affix_value_count is None else _required_int(affix_value_count, "affix_count")
+        )
+        if enemy_difficulty is not None or affix_count is not None:
+            defaults = self.pack.difficulties.get(difficulty_id)
+            if defaults is None:
+                defaults = next(iter(self.pack.difficulties.values()))
+            enemy_difficulty = (
+                defaults.enemy_difficulty if enemy_difficulty is None else enemy_difficulty
+            )
+            affix_count = defaults.affix_count if affix_count is None else affix_count
+            difficulty_id = "custom"
         environment_value = data.get("environment_id")
         environment_id = (
             None
@@ -508,6 +573,8 @@ class OperationService:
                 seed=seed,
                 affix_ids=affix_ids,
                 battle_progress=progress,
+                enemy_difficulty=enemy_difficulty,
+                affix_count=affix_count,
             )
         except ValueError as error:
             raise SessionInputError(str(error)) from error
@@ -582,6 +649,12 @@ def _integer(
     value = data.get(key, default)
     if not isinstance(value, int) or isinstance(value, bool):
         raise SessionInputError(f"{key} 必须是整数")
+    return value
+
+
+def _required_int(value: object, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SessionInputError(f"{label} 必须是整数")
     return value
 
 
