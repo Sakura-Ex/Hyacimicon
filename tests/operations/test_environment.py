@@ -206,6 +206,7 @@ class EnvironmentTests(unittest.TestCase):
             definition
             for definition in self.pack.units.values()
             if (definition.unit_id, 1) not in env.market.roster.units
+            and definition.position is not Position.BACK
         ][:5]
         for definition in candidates:
             env.market.roster.add(definition.unit_id)
@@ -322,6 +323,59 @@ class EnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(OperationActionError, "上阵人数"):
             env.swap_unit_slots("bench", 0, "front", empty_front)
 
+        self.assertEqual(
+            (env.front_slots, env.back_slots, env.bench_slots),
+            before,
+        )
+
+    def test_character_position_requirements_are_enforced(self):
+        env = OperationEnvironment(
+            pack=self.pack,
+            rng=random.Random(17),
+            difficulty_id="training",
+            environment_id="silver_age",
+            affix_ids=(),
+        )
+        env.market.level = 6
+        for unit in env.active_units():
+            env.set_unit_position(unit.unit_id, unit.star, None)
+        front_only = next(
+            definition
+            for definition in self.pack.units.values()
+            if definition.position is Position.FRONT
+            and (definition.unit_id, 1) not in env.market.roster.units
+        )
+        back_only = next(
+            definition
+            for definition in self.pack.units.values()
+            if definition.position is Position.BACK
+            and (definition.unit_id, 1) not in env.market.roster.units
+        )
+        flex = next(
+            definition
+            for definition in self.pack.units.values()
+            if definition.position is Position.FLEX
+            and (definition.unit_id, 1) not in env.market.roster.units
+        )
+        for definition in (front_only, back_only, flex):
+            env.market.roster.add(definition.unit_id)
+
+        with self.assertRaisesRegex(OperationActionError, "站位"):
+            env.set_unit_position(front_only.unit_id, 1, Position.BACK)
+        with self.assertRaisesRegex(OperationActionError, "站位"):
+            env.set_unit_position(back_only.unit_id, 1, Position.FRONT)
+
+        env.set_unit_position(front_only.unit_id, 1, Position.FRONT)
+        env.set_unit_position(back_only.unit_id, 1, Position.BACK)
+        env.set_unit_position(flex.unit_id, 1, Position.FRONT)
+
+        before = (
+            list(env.front_slots),
+            list(env.back_slots),
+            list(env.bench_slots),
+        )
+        with self.assertRaisesRegex(OperationActionError, "站位"):
+            env.swap_unit_slots("front", 0, "back", 0)
         self.assertEqual(
             (env.front_slots, env.back_slots, env.bench_slots),
             before,

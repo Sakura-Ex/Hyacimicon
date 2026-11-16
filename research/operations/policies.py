@@ -143,11 +143,12 @@ def _operate_market(env: OperationEnvironment) -> None:
                 return
             if unit_id is not None and (unit_id, 1) in env.market.roster.units:
                 preferred = env.pack.units[unit_id].position
-                positions = (
-                    (Position.BACK, Position.FRONT)
-                    if preferred is Position.BACK
-                    else (Position.FRONT, Position.BACK)
-                )
+                if preferred is Position.BACK:
+                    positions = (Position.BACK,)
+                elif preferred is Position.FRONT:
+                    positions = (Position.FRONT,)
+                else:
+                    positions = (Position.FRONT, Position.BACK)
                 for position in positions:
                     try:
                         env.set_unit_position(unit_id, 1, position)

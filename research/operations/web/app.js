@@ -4,6 +4,8 @@ const appState = {
   busy: false,
   drawer: null,
   shopOpen: true,
+  dragPosition: null,
+  dragLocation: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -59,6 +61,19 @@ function setBusy(busy) {
 
 function starText(star) {
   return "★".repeat(Math.max(1, Number(star)));
+}
+
+function canPlacePosition(position, location) {
+  if (location === "bench") {
+    return true;
+  }
+  if (location === "front") {
+    return position !== "back";
+  }
+  if (location === "back") {
+    return position !== "front";
+  }
+  return false;
 }
 
 function portraitMarkup(unit, className = "") {
@@ -174,6 +189,7 @@ function unitCard(unit, location, index) {
       data-drag-star="${unit.star}"
       data-drag-location="${location}"
       data-drag-index="${index}"
+      data-unit-position="${unit.position}"
       data-slot-location="${location}"
       data-slot-index="${index}"
     >
@@ -398,7 +414,8 @@ function renderDrawer(session) {
                           "front",
                           "前台",
                           frontFull ||
-                            (unit.location === "bench" && activeFull),
+                            (unit.location === "bench" && activeFull) ||
+                            !canPlacePosition(unit.position, "front"),
                         )
                       : ""
                   }
@@ -409,7 +426,8 @@ function renderDrawer(session) {
                           "back",
                           "后台",
                           backFull ||
-                            (unit.location === "bench" && activeFull),
+                            (unit.location === "bench" && activeFull) ||
+                            !canPlacePosition(unit.position, "back"),
                         )
                       : ""
                   }
@@ -659,14 +677,21 @@ document.addEventListener("dragstart", (event) => {
       index: Number(card.dataset.dragIndex),
     }),
   );
+  appState.dragPosition = card.dataset.unitPosition;
+  appState.dragLocation = card.dataset.dragLocation;
   card.classList.add("is-dragging");
 });
 
 document.addEventListener("dragend", (event) => {
   event.target.closest("[data-drag-unit-id]")?.classList.remove("is-dragging");
+  appState.dragPosition = null;
+  appState.dragLocation = null;
   document
-    .querySelectorAll(".drop-zone.is-drag-over")
-    .forEach((zone) => zone.classList.remove("is-drag-over"));
+    .querySelectorAll(".drop-zone.is-drag-over, .drop-zone.is-drag-invalid")
+    .forEach((zone) => {
+      zone.classList.remove("is-drag-over");
+      zone.classList.remove("is-drag-invalid");
+    });
 });
 
 document.addEventListener("dragover", (event) => {
@@ -677,6 +702,19 @@ document.addEventListener("dragover", (event) => {
   ) {
     return;
   }
+  const targetSlot = event.target.closest("[data-slot-location]");
+  const targetPosition = targetSlot?.dataset.slotLocation;
+  const targetUnitPosition = targetSlot?.dataset.unitPosition;
+  if (
+    targetPosition &&
+    (!canPlacePosition(appState.dragPosition, targetPosition) ||
+      (targetUnitPosition &&
+        !canPlacePosition(targetUnitPosition, appState.dragLocation)))
+  ) {
+    zone.classList.add("is-drag-invalid");
+    return;
+  }
+  zone.classList.remove("is-drag-invalid");
   event.preventDefault();
   event.dataTransfer.dropEffect = "move";
   zone.classList.add("is-drag-over");
@@ -686,6 +724,7 @@ document.addEventListener("dragleave", (event) => {
   const zone = event.target.closest("[data-drop-position]");
   if (zone && !zone.contains(event.relatedTarget)) {
     zone.classList.remove("is-drag-over");
+    zone.classList.remove("is-drag-invalid");
   }
 });
 
@@ -696,6 +735,7 @@ document.addEventListener("drop", async (event) => {
   }
   event.preventDefault();
   zone.classList.remove("is-drag-over");
+  zone.classList.remove("is-drag-invalid");
   let payload;
   try {
     payload = JSON.parse(event.dataTransfer.getData("application/json"));

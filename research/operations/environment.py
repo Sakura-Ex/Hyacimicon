@@ -310,6 +310,8 @@ class OperationEnvironment:
             self._set_slot(source, None)
             return
         target_location = "front" if position is Position.FRONT else "back"
+        if not self._can_place(unit, target_location):
+            raise OperationActionError("角色站位不符合前台或后台要求")
         target = self._slots_for(target_location)
         target_index = self._first_empty(target)
         if target_index is None:
@@ -344,6 +346,10 @@ class OperationEnvironment:
             return
         source_unit = source_slots[source_index]
         target_unit = target_slots[target_index]
+        if not self._can_place(source_unit, target_location):
+            raise OperationActionError("角色站位不符合目标区域要求")
+        if target_unit is not None and not self._can_place(target_unit, source_location):
+            raise OperationActionError("交换后角色站位不合法")
         next_active = self.active_count
         if source_location == "bench" and target_location != "bench" and target_unit is None:
             next_active += 1
@@ -361,6 +367,16 @@ class OperationEnvironment:
         if not self._slots_match_roster():
             self.front_slots, self.back_slots, self.bench_slots = before
             raise OperationActionError("交换后角色归属不合法")
+
+    def _can_place(self, unit: UnitInstance, location: str) -> bool:
+        if location == "bench":
+            return True
+        position = self.pack.units[unit.unit_id].position
+        if location == "front":
+            return position is not Position.BACK
+        if location == "back":
+            return position is not Position.FRONT
+        return False
 
     def buy_xp(self, purchase_count: int = 1) -> tuple[int, ...]:
         """购买经验，返回本次达到的等级。"""
