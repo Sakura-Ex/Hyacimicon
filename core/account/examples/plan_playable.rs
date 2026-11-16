@@ -4,8 +4,10 @@ use std::{collections::BTreeMap, env, error::Error, fs, io};
 
 use account_core::{
     RawAccount,
-    planning::{PlanRequest, plan_playable_account},
-    playable::ConfigurationMode,
+    playable::{
+        ConfigurationMode,
+        planning::{PlanRequest, plan_playable_account},
+    },
     reference::PlayableData,
 };
 

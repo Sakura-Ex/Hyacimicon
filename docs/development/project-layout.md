@@ -10,6 +10,10 @@ hsr-currency-wars-ai/
 │   ├── Cargo.toml                       # account-core crate
 │   ├── data/                            # 行迹绑定及版本化基础数据、试用和映射模板
 │   ├── src/                             # 账号类型、来源导入、参考数据及配置计划
+│   │   ├── raw/                         # 原始账号、角色与装备实例
+│   │   ├── playable/                    # 实际配置、属性与映射计划
+│   │   ├── reference/                   # 版本化资料类型与载入
+│   │   └── import/                      # 来源适配器
 │   ├── tests/                           # 模型样例与序列化验证
 │   └── examples/                        # 统一格式读取示例
 ├── research/account_generation/         # 原始账号配置生成

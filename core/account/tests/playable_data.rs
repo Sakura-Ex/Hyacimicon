@@ -4,9 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{
     RawAccount, RelicInstance, RelicMainStat, RelicSlot,
-    attributes::Attribute,
-    planning::{MappingAction, PlanRequest, plan_playable_account},
-    playable::{CharacterOrigin, ConfigurationMode, PlayableRelics},
+    playable::{
+        CharacterOrigin, ConfigurationMode, PlayableRelics,
+        attributes::Attribute,
+        planning::{MappingAction, PlanRequest, plan_playable_account},
+    },
     reference::{MappingPart, PlayableData, SkillKind, Verification},
 };
 

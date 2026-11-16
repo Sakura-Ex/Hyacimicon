@@ -7,17 +7,12 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-pub mod attributes;
-pub mod character;
-pub mod equipment;
 pub mod import;
-pub mod planning;
 pub mod playable;
 pub mod raw;
 pub mod reference;
-pub mod stats;
 
-pub use character::{CharacterConfig, TraceConfig};
-pub use equipment::{InvalidRelicSlot, LightConeInstance, RelicInstance, RelicSlot};
-pub use raw::{RAW_ACCOUNT_SCHEMA_VERSION, RawAccount};
-pub use stats::{RelicMainStat, RelicSubStat};
+pub use raw::{
+    CharacterConfig, InvalidRelicSlot, LightConeInstance, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount,
+    RelicInstance, RelicMainStat, RelicSlot, RelicSubStat, TraceConfig,
+};

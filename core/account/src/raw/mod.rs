@@ -1,8 +1,14 @@
 //! 原始账号的统一库存、配置标识和资料版本。
 
-use serde::{Deserialize, Serialize};
+pub mod character;
+pub mod equipment;
+pub mod stats;
 
-use crate::{CharacterConfig, LightConeInstance, RelicInstance};
+pub use character::{CharacterConfig, TraceConfig};
+pub use equipment::{InvalidRelicSlot, LightConeInstance, RelicInstance, RelicSlot};
+pub use stats::{RelicMainStat, RelicSubStat};
+
+use serde::{Deserialize, Serialize};
 
 /// 本 crate 当前定义的原始账号序列化格式版本。
 pub const RAW_ACCOUNT_SCHEMA_VERSION: u32 = 1;

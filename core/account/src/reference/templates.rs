@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::models::{GamePath, Verification};
 use crate::{
     RelicSlot,
-    attributes::{Attribute, AttributeBonus, AttributeValues},
+    playable::attributes::{Attribute, AttributeBonus, AttributeValues},
 };
 
 /// 模板中的技能类别，实际节点 ID 在配置展开时绑定。

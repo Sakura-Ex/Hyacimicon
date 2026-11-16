@@ -24,7 +24,7 @@ flowchart LR
 
 ## Rust 数据结构
 
-类型放在 `core/account/`，继续使用根 Cargo workspace。数据载入、来源选择和最终配置分别放在 `reference/`、`planning.rs` 和 `playable.rs`。
+类型放在 `core/account/`，继续使用根 Cargo workspace。原始账号类型放在 `src/raw/`，数据载入放在 `src/reference/`，来源选择和最终配置分别放在 `src/playable/planning.rs` 与 `src/playable/mod.rs`。
 
 | 类型 | 保存内容 |
 | --- | --- |

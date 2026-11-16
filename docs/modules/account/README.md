@@ -14,15 +14,17 @@ core/account/
 │   └── s2-v4.7/                # 实际游玩配置所需的文档数值与模板
 ├── src/
 │   ├── lib.rs          # 公开类型
-│   ├── raw.rs          # 账号标识、版本与完整库存
-│   ├── character.rs    # 角色、行迹与装备引用
-│   ├── equipment.rs    # 光锥、遗器实例和部位
-│   ├── stats.rs        # 统一主副词条键
-│   ├── import/reliquary/  # 来源字段、行迹与装备转换
-│   ├── attributes.rs    # 静态属性键与单位
-│   ├── reference/       # 文档数据类型及 JSON 载入
-│   ├── planning.rs      # 角色来源与分项映射计划
-│   └── playable.rs      # 完整实际游玩配置的目标结构
+│   ├── raw/            # 原始账号与实际持有资源
+│   │   ├── mod.rs      # 账号标识、版本、完整库存及公开类型
+│   │   ├── character.rs  # 角色、行迹与装备引用
+│   │   ├── equipment.rs  # 光锥、遗器实例和部位
+│   │   └── stats.rs    # 遗器主副词条键
+│   ├── playable/       # 实际配置与转换计划
+│   │   ├── mod.rs      # 生效配置、面板与机制引用
+│   │   ├── planning.rs  # 角色来源与分项映射计划
+│   │   └── attributes.rs  # 静态属性键与单位
+│   ├── reference/      # 文档数据类型及 JSON 载入
+│   └── import/reliquary/  # 来源字段、行迹与装备转换
 ├── examples/           # 统一格式读取与实际文件导入
 └── tests/
     ├── raw_account.rs
@@ -32,6 +34,8 @@ core/account/
 ```
 
 所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，当前成员为 `core/account`。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
+
+原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，来源计划位于 `account_core::playable::planning`，文档数据位于 `account_core::reference`。
 
 ## 统一配置
 

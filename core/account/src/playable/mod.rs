@@ -3,15 +3,19 @@
 //! 等级、面板和技能等级均为生效值。原始账号保持独立，试用与映射装备
 //! 随对应角色保存；局内星级、站位和投资在战斗组装时加入。
 
+pub mod attributes;
+pub mod planning;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     LightConeInstance, RelicInstance, TraceConfig,
-    attributes::AttributeValues,
     reference::{Element, EnergyCapacity, RelicGroupTemplate, TrialRelics},
 };
+
+use self::attributes::AttributeValues;
 
 /// 实际游玩配置的序列化格式版本。
 pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 1;
