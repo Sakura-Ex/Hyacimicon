@@ -6,7 +6,7 @@
 pub mod attributes;
 pub mod conversion;
 mod panel;
-pub mod planning;
+mod selection;
 pub mod traces;
 
 use std::collections::BTreeMap;
@@ -15,11 +15,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     RelicInstance,
-    reference::{Element, EnergyCapacity, RelicGroupTemplate, TrialRelics},
+    reference::{Element, RelicGroupTemplate, TrialRelics},
 };
 
 /// 实际游玩配置的序列化格式版本。
-pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 1;
+pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 2;
 
 /// 玩法中角色与光锥的统一等级。
 pub const PLAYABLE_LEVEL: u8 = 80;
@@ -33,10 +33,6 @@ pub const RELIC_MAPPING_LEVEL: u8 = 15;
 pub const BASE_CRIT_RATE: f64 = 0.05;
 /// 角色统一基础暴击伤害。
 pub const BASE_CRIT_DAMAGE: f64 = 0.5;
-/// 玩法基础幸运率。
-pub const BASE_LUCKY_RATE: f64 = 0.05;
-/// 玩法基础幸运伤害。
-pub const BASE_LUCKY_DAMAGE: f64 = 1.0;
 
 /// 一次配置转换使用的账号资源模式。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -58,15 +54,7 @@ pub enum CharacterOrigin {
         raw_character_id: String,
     },
     /// 未持有或全试用模式采用的模板。
-    Trial {
-        /// 当前快照中的试用模板条目 ID。
-        template_id: String,
-    },
-    /// 玩法专属角色采用的模板。
-    GameplayExclusive {
-        /// 玩法专属角色的试用模板条目 ID。
-        template_id: String,
-    },
+    Trial,
 }
 
 /// 装备使用原始库存实例，或来自某个角色专用模板。
@@ -79,15 +67,9 @@ pub enum EquipmentOrigin {
         instance_id: String,
     },
     /// 随角色使用的试用装备。
-    Trial {
-        /// 来源模板条目 ID。
-        template_id: String,
-    },
+    Trial,
     /// 规则替换后的装备。
-    Mapped {
-        /// 来源映射模板条目 ID。
-        template_id: String,
-    },
+    Mapped,
 }
 
 /// 使用统一等级与进阶的生效光锥。
@@ -113,8 +95,6 @@ pub enum PlayableRelicGroup {
     },
     /// 使用文档给出的整圈配置。
     Mapped {
-        /// 映射模板条目 ID。
-        template_id: String,
         /// 整圈套装和主副词条合计。
         configuration: RelicGroupTemplate,
     },
@@ -133,8 +113,6 @@ pub enum PlayableRelics {
     },
     /// 试用表提供的六件合计，直接作为完整配置保存。
     TrialAggregate {
-        /// 试用模板条目 ID。
-        template_id: String,
         /// 两套装 ID 及六件主副词条合计。
         configuration: TrialRelics,
     },
@@ -203,8 +181,6 @@ pub struct CharacterPanel {
     pub elemental_damage_boost: BTreeMap<Element, f64>,
     /// 欢愉度。
     pub elation: f64,
-    /// 文档或后续资料确认的能量、专属资源容量。
-    pub energy: EnergyCapacity,
 }
 
 /// 已完成模板展开、映射和面板计算的一种角色配置。

@@ -26,9 +26,8 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 | --- | --- |
 | `account` | 统一的 `RawAccount`，含原始练度、真实行迹节点和完整库存 |
 | `report` | 导出器版本、来源格式版本、行迹绑定依据及缺失或未知字段 |
-| `source_data` | 按 JSON 值保留的完整来源内容，含锁定、弃置、预览和重掷词条、材料、抽卡资源、名称与原始实例标识等 |
 
-`source_data` 可能包含账号标识，调用方按玩家数据保存。示例向磁盘写入统一账号与报告，完整来源继续保存在原输入文件中。
+示例向磁盘写入统一账号与报告。名称、锁定、弃置、预览和重掷词条、材料等非计算字段保留在原始导出文件中，导入结果仅保存参与计算的字段和提示。
 
 ## 字段转换
 
@@ -44,7 +43,7 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 | 固定副词条、速度 | 保留原数值与小数精度 |
 | `skills / memosprite / traces` | 按角色 ID、能力版本和固定资料绑定到真实行迹节点 ID |
 
-完整库存和各角色形态按来源顺序保留。当前遗器属性采用 `substats`；预览与重掷内容分别保留在 `source_data`，供对应功能使用。
+完整库存和各角色形态按来源顺序保留。当前遗器属性采用 `substats` 的最终数值；来源的获得次数、档位统计、预览和重掷内容由原始文件保留。
 
 来源文件未声明游戏版本与完整游戏数据快照，统一配置中的 `game_version` 和 `data_snapshot` 保持未知。行迹映射使用的资料单独记录在 `report.trace_bindings_snapshot`，后续转换再关联完整游戏资料。
 
@@ -59,11 +58,11 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 - 快照 ID：`reliquary-traces-4.7-dfdfe3337bcf`；条目类别：`character_trace_binding`；条目 ID：`角色 ID:能力版本`。
 - 游戏资料版本：4.7；来源提交：`dfdfe3337bcfa14f000074d2dae7058118193ea6`。
 - 节点来源：[AvatarSkillTreeConfig.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput/AvatarSkillTreeConfig.json) 与 [AvatarSkillTreeConfigLD.json](https://github.com/DimbreathBot/TurnBasedGameData/blob/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput/AvatarSkillTreeConfigLD.json)。转换共用该资料的实际技能 ID，以及 `AvatarRankConfig.json`／`AvatarRankConfigLD.json` 中的星魂加级列表。
-- 按一级记录的 `AvatarID + EnhancedID + AnchorType` 提取真实节点 ID 与等级上限，得到 99 种角色形态、109 个角色与能力版本组合。
+- 按一级记录的 `AvatarID + EnhancedID + AnchorType` 提取真实节点 ID 与等级上限，得到 99 种角色形态、109 个角色与能力版本组合。技能节点保存等级上限和技能 ID，一次性节点直接保存标签到节点 ID 的对应关系。
 
 来源标签 `basic/skill/ult/talent` 分别对应 `Point01`～`Point04`，`ability_1`～`ability_3` 对应 `Point06`～`Point08`，`stat_1`～`stat_10` 对应 `Point09`～`Point18`；忆灵技能对应 `Point19/Point20`，`special` 对应 `Point21`，欢愉技对应 `Point22`。
 
-来源省略了秘技等级。资料中 `Point05` 明确为默认解锁、固定一级时，导入器据此记录一级，并在报告中统计数量。导出器为无 `special` 节点的角色也写出 `special=false`，导入器跳过该格式占位；存在节点时保留真实布尔状态。
+来源省略了秘技等级。资料中 `Point05` 明确为默认解锁、固定一级时，导入器据此记录一级。导出器为无 `special` 节点的角色也写出 `special=false`，导入器跳过该格式占位；存在节点时保留真实布尔状态。
 
 更新绑定资料时，从固定提交的节点与星魂配置提取所需字段，核对角色与版本组合的唯一性、节点标签、默认一级技能条件和技能加级引用，再运行相关回归用例。游戏资料按仓库分工维护，crate 内保留运行所需的精简快照。
 
@@ -71,9 +70,9 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 
 导入器检查来源名称和格式版本、必需字段及类型、重复角色与装备实例、装备归属、同角色同部位冲突、等级突破范围、主副词条标签及当前词条重复。错误通过 `ImportError` 返回字段路径或 JSON 解析位置。
 
-角色或能力版本超出绑定资料时，返回具体缺项。来源缺少某项技能等级或行迹解锁状态时，统一配置保留未知状态，并在报告中列出字段路径。未识别的来源扩展字段保留原始值，同时提示其含义待适配。
+角色或能力版本超出绑定资料时，返回具体缺项。来源缺少某项技能等级或行迹解锁状态时，统一配置保留未知状态，并在报告中列出字段路径。未识别的来源扩展字段只报告路径，提示其含义待适配。
 
-导入保留角色实际练度。试用补齐、练度保底、完整规则合法性、生效面板及局内资源限制在后续配置转换中处理。
+导入保留角色实际练度。账号转换执行试用补齐、练度保底和静态面板计算。局面模拟检查实际阵容的资源使用限制，战斗输入由组装步骤准备。
 
 ## 验证结果
 

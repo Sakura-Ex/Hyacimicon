@@ -87,13 +87,3 @@ pub struct MappingTemplate {
     /// 内圈整体替换配置。
     pub planar: RelicGroupTemplate,
 }
-
-/// 独立判断是否整体映射的遗器范围。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MappingPart {
-    /// 外圈遗器。
-    OuterRelics,
-    /// 内圈遗器。
-    PlanarRelics,
-}

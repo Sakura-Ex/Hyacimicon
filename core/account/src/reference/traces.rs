@@ -25,8 +25,8 @@ pub struct TraceBinding {
     pub ability_version: u32,
     /// 技能类别到节点的映射，一级上限技能固定为一级。
     pub skills: BTreeMap<String, TraceNode>,
-    /// 一次性行迹标签到节点的映射。
-    pub nodes: BTreeMap<String, TraceNode>,
+    /// 一次性行迹标签到节点 ID 的映射。
+    pub nodes: BTreeMap<String, String>,
     /// 星魂序号到技能 ID 与附加等级的映射。
     pub rank_bonuses: BTreeMap<u8, BTreeMap<String, u8>>,
 }

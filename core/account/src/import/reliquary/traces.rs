@@ -37,7 +37,6 @@ impl Catalog {
             .filter(|node| node.max_level == 1)
             .map(|node| (node.node_id.clone(), 1))
             .collect();
-        report.default_techniques += usize::from(binding.skills.contains_key("technique"));
         let mut source_skills = character.skills.clone();
         for name in character.skills.keys() {
             if !["basic", "skill", "ult", "talent", "elation"].contains(&name.as_str()) {
@@ -75,7 +74,7 @@ impl Catalog {
         let mut node_unlocks = BTreeMap::new();
         for (name, unlocked) in &character.traces {
             if let Some(node) = binding.nodes.get(name) {
-                node_unlocks.insert(node.node_id.clone(), *unlocked);
+                node_unlocks.insert(node.clone(), *unlocked);
             } else if name != "special" || *unlocked {
                 return Err(invalid(
                     format!("{path}.traces.{name}"),

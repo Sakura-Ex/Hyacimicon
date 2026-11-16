@@ -27,8 +27,6 @@ pub struct PlayableData {
     pub mappings: Vec<MappingTemplate>,
     /// 各命途的默认映射光锥 ID。
     pub default_light_cones: BTreeMap<GamePath, String>,
-    /// 局内星级参数，供后续组装阶段选择。
-    pub gameplay_forms: Vec<GameplayFormData>,
     /// 各角色小行迹节点及其属性贡献。
     pub minor_traces: Vec<CharacterMinorTraces>,
     /// 共用的行迹节点与星魂技能加级资料。
@@ -52,9 +50,6 @@ impl PlayableData {
             ))?,
             default_light_cones: serde_json::from_str(include_str!(
                 "../../data/s2-v4.7/default-light-cones.json"
-            ))?,
-            gameplay_forms: serde_json::from_str(include_str!(
-                "../../data/s2-v4.7/gameplay-forms.json"
             ))?,
             minor_traces: serde_json::from_str(include_str!(
                 "../../data/s2-v4.7/minor-traces.json"

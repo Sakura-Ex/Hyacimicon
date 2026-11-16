@@ -82,7 +82,6 @@ pub(super) fn calculate(
         all_damage_boost: bonus(values, Attribute::AllDamageBoost),
         elemental_damage_boost,
         elation: bonus(values, Attribute::Elation),
-        energy: character.energy.clone(),
     }
 }
 

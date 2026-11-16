@@ -74,14 +74,12 @@ fn imports_complete_inventory_and_keeps_source_fields_separate() {
             .contains_key(&RelicSubStat::BreakEffect)
     );
     assert!(!account.relics[0].substats.contains_key(&RelicSubStat::Atk));
-    assert_eq!(imported.source_data, fixture());
     assert_eq!(imported.report.format_version, 4);
     assert_eq!(imported.report.build, "0.19.0");
     assert_eq!(
         imported.report.trace_bindings_snapshot,
         "reliquary-traces-4.7-dfdfe3337bcf"
     );
-    assert_eq!(imported.report.default_techniques, 3);
     assert!(imported.report.warnings.is_empty());
 }
 
@@ -283,11 +281,10 @@ fn reports_malformed_json_and_missing_required_fields() {
 }
 
 #[test]
-fn preserves_unknown_extensions_and_reports_their_paths() {
+fn reports_unknown_extension_paths_without_retaining_source_values() {
     let mut value = fixture();
     value["characters"][0]["future_configuration"] = json!({"variant": 2});
     let imported = import_reliquary_archive(&value.to_string(), "fixture").unwrap();
-    assert_eq!(imported.source_data, value);
     assert_eq!(imported.report.warnings.len(), 1);
     assert_eq!(
         imported.report.warnings[0].path,

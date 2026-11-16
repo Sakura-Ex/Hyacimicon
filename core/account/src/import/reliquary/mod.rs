@@ -1,7 +1,7 @@
 //! 导入 reliquary-archiver v4 的原始账号。
 //!
 //! 来源语义依据导出器 v0.19.0 的格式与转换实现；行迹绑定使用随 crate
-//! 提供的版本快照。调用方接收统一账号、导入报告及保留的来源内容。
+//! 提供的版本快照。调用方接收统一账号和导入报告。
 
 mod equipment;
 mod source;
@@ -10,21 +10,16 @@ mod traces;
 use std::{collections::BTreeMap, error::Error, fmt};
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::{CharacterConfig, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount};
 
-/// 一次成功导入的账号、报告和来源记录。
+/// 一次成功导入的账号和报告。
 #[derive(Debug, Serialize)]
 pub struct ReliquaryImport {
     /// 项目统一的原始账号，供后续配置转换使用。
     pub account: RawAccount,
     /// 来源版本、行迹依据和缺失信息。
     pub report: ImportReport,
-    /// 按 JSON 值保留的来源内容，包含锁定、预览词条、材料等扩展信息。
-    ///
-    /// 此字段可能包含账号标识，调用方按玩家数据保存并控制日志输出。
-    pub source_data: Value,
 }
 
 /// 导入依据与需要补齐的信息，独立于原始账号保存。
@@ -38,8 +33,6 @@ pub struct ImportReport {
     pub format_version: u32,
     /// 行迹标签到真实节点 ID 的绑定快照。
     pub trace_bindings_snapshot: String,
-    /// 来源未提供、但版本资料明确默认解锁且固定一级的秘技数量。
-    pub default_techniques: usize,
     /// 需要后续补齐或适配的字段。
     pub warnings: Vec<ImportWarning>,
 }
@@ -122,7 +115,6 @@ pub fn import_reliquary_archive(
         build: export.build.clone(),
         format_version: export.version,
         trace_bindings_snapshot: catalog.snapshot_id.clone(),
-        default_techniques: 0,
         warnings: Vec::new(),
     };
     source::report_extensions(&export, &mut report);
@@ -163,7 +155,6 @@ pub fn import_reliquary_archive(
             relics,
         },
         report,
-        source_data: serde_json::from_str(input)?,
     })
 }
 

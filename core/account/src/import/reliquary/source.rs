@@ -1,9 +1,8 @@
-//! reliquary-archiver v4 的来源字段；扩展字段随导入结果保留。
+//! reliquary-archiver v4 的计算字段；扩展字段仅报告路径。
 
 use std::collections::BTreeMap;
 
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, de::IgnoredAny};
 
 use super::{ImportReport, ImportWarning};
 
@@ -15,7 +14,7 @@ pub(super) struct Header {
 }
 
 /// 参与转换的顶层字段及其余来源内容。
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub(super) struct Export {
     pub source: String,
     pub build: String,
@@ -24,11 +23,11 @@ pub(super) struct Export {
     pub light_cones: Vec<LightCone>,
     pub relics: Vec<Relic>,
     #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
+    pub extra: BTreeMap<String, IgnoredAny>,
 }
 
 /// 来源角色；技能等级直接来自账号技能树。
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub(super) struct Character {
     pub id: String,
     pub level: u8,
@@ -37,14 +36,13 @@ pub(super) struct Character {
     pub ability_version: u32,
     pub skills: BTreeMap<String, u8>,
     pub traces: BTreeMap<String, bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub memosprite: Option<BTreeMap<String, u8>>,
     #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
+    pub extra: BTreeMap<String, IgnoredAny>,
 }
 
 /// 来源光锥，装备归属通过 `location` 引用角色。
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub(super) struct LightCone {
     pub id: String,
     #[serde(rename = "_uid")]
@@ -54,11 +52,11 @@ pub(super) struct LightCone {
     pub superimposition: u8,
     pub location: String,
     #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
+    pub extra: BTreeMap<String, IgnoredAny>,
 }
 
 /// 来源遗器，当前与预览、重掷词条分别保存。
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub(super) struct Relic {
     #[serde(rename = "_uid")]
     pub uid: String,
@@ -70,18 +68,16 @@ pub(super) struct Relic {
     pub substats: Vec<Substat>,
     pub location: String,
     #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
+    pub extra: BTreeMap<String, IgnoredAny>,
 }
 
 /// 来源当前副词条，百分比数值使用百分数。
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize)]
 pub(super) struct Substat {
     pub key: String,
     pub value: f64,
-    pub count: u32,
-    pub step: u32,
     #[serde(flatten)]
-    pub extra: BTreeMap<String, Value>,
+    pub extra: BTreeMap<String, IgnoredAny>,
 }
 
 /// 标注超出已核对 v4 格式的扩展字段，供调用方确认其影响。
@@ -126,16 +122,16 @@ pub(super) fn report_extensions(export: &Export, report: &mut ImportReport) {
             extension_fields(
                 &stat.extra,
                 &format!("{path}.substats[{index}]"),
-                &[],
+                &["count", "step"],
                 report,
             );
         }
     }
 }
 
-/// 保留未知扩展的原始值，并报告尚未参与统一配置转换的字段路径。
+/// 报告尚未参与统一配置转换的字段路径。
 fn extension_fields(
-    extra: &BTreeMap<String, Value>,
+    extra: &BTreeMap<String, IgnoredAny>,
     path: &str,
     known: &[&str],
     report: &mut ImportReport,
@@ -147,7 +143,7 @@ fn extension_fields(
             } else {
                 format!("{path}.{name}")
             },
-            message: "来源扩展字段已保留于 source_data，其配置含义待适配".to_owned(),
+            message: "来源扩展字段未参与转换，其配置含义待适配".to_owned(),
         });
     }
 }

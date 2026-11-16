@@ -1,128 +1,81 @@
-# 实际游玩配置、试用补齐与映射
+# 账号静态配置、试用补齐与保底映射
 
-状态：完整转换入口、试用补齐、保底映射和静态面板计算已实现。适用游戏版本为 4.7，玩法为货币战争 S2。
+状态：静态配置转换已实现。适用游戏版本为 4.7，玩法角色范围为货币战争 S2。
 
 ## 输入与交付
 
-公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID、资源模式和已核对的角色 ID 对照。模型编码和战斗组装共用结果。角色与光锥统一为 80 级、进阶 6，由 Rust 共用常量定义。
+公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID、本体加试用或全试用模式，以及已核对的角色 ID 对照。缺少必需资料或资源引用冲突时返回 `ConversionError`。
 
-转换复用 `ConfigurationPlan` 选择本体、试用和内外圈映射，再展开行迹、装备和面板。缺少必需资料时返回具体错误。
+账号模块完成来源选择、练度保底、技能加级和静态属性计算。局面模拟使用这份配置维护实际阵容。战斗输入组装再根据局面、敌人和游戏资料计算开战属性、固定系数及动作参数；战斗引擎执行战斗流程，实时处理 buff 和触发效果。调用关系见[账号数据流](../account-generation/data-flow.md)。
 
-```mermaid
-flowchart LR
-    raw[RawAccount] --> plan[来源选择与分项映射计划]
-    data[版本化 JSON] --> plan
-    mode[资源模式与已核对 ID 对照] --> plan
-    plan --> expand[模板展开与规则映射]
-    rule[已确认的触发条件] --> expand
-    expand --> panel[静态属性计算]
-    effects[角色、行迹、光锥与套装效果] --> panel
-    panel --> playable[PlayableAccount]
-    playable --> model[模型输入编码]
-    playable --> battle[加入局内配置后组装战斗输入]
-```
+## 数据结构
 
-## Rust 数据结构
-
-类型放在 `core/account/`，继续使用根 Cargo workspace。原始账号类型放在 `src/raw/`，数据载入放在 `src/reference/`，来源选择和最终配置分别放在 `src/playable/planning.rs` 与 `src/playable/mod.rs`。
+类型位于 `core/account/src/playable/`。格式版本 `PLAYABLE_ACCOUNT_SCHEMA_VERSION` 当前为 2。
 
 | 类型 | 保存内容 |
 | --- | --- |
-| `PlayableAccount` | 格式版本、配置 ID、原始配置 ID、游戏版本、赛季、快照、转换规则版本、资源模式、角色列表及持有装备库存 |
-| `PlayableCharacter` | 角色 ID、来源、星魂、能力版本、行迹、光锥、遗器和静态面板 |
-| `CharacterOrigin` | 本体及原始角色 ID、试用模板，或玩法专属模板 |
-| `PlayableTraces` | 节点解锁状态与计入星魂加级后的技能等级 |
-| `PlayableLightCone` | 光锥种类、叠影及库存实例或模板来源 |
-| `PlayableRelics` | 本体按内外圈保存，或直接采用试用的六件属性合计 |
-| `PlayableRelicGroup` | 一圈采用的原始实例 ID，或整圈映射的套装与属性合计 |
-| `CharacterPanel` | 生命、攻击、防御和速度各自的 `base` 与 `added`，以及嘲讽、暴击、命中、抵抗、击破、回能、治疗、增伤、欢愉度和能量容量 |
+| `PlayableAccount` | 配置关联、游戏版本、赛季、资料与规则版本、资源模式、角色列表和持有库存 |
+| `PlayableCharacter` | 角色 ID、本体或试用来源、星魂、能力版本、行迹、光锥、遗器和静态面板 |
+| `CharacterOrigin` | 本体及原始角色 ID，或试用来源；玩法专属角色同样采用模板 |
+| `PlayableTraces` | 计入星魂加级后的实际技能等级，以及一次性节点激活状态 |
+| `PlayableLightCone` | 光锥种类、叠影及来源；本体通过实例 ID 关联库存 |
+| `PlayableRelics` | 本体内外圈配置，或试用六件属性合计 |
+| `PlayableRelicGroup` | 一圈原装实例 ID，或映射后的套装及主副词条合计 |
+| `CharacterPanel` | 生命、攻击、防御、速度、嘲讽、暴击、命中、抵抗、击破、回能、治疗、增伤与欢愉度 |
 
-`PLAYABLE_ACCOUNT_SCHEMA_VERSION` 当前为 1。固定值保留小数，百分比保存比例值，例如 `0.08` 表示 8%。属性键沿用原始遗器及 Python 生成器约定。面板的能量恢复效率以 `1.0` 为基础值；遗器提供的回能属性表示增加量。
+角色与光锥统一采用 `PLAYABLE_LEVEL = 80`、`PLAYABLE_PROMOTION = 6`。试用与默认映射光锥叠影采用共用常量 1。
 
-生命、攻击和防御的 `base` 为角色与光锥基础值之和，`added = base × 百分比加成合计 + 固定加成合计`。速度的 `base` 为角色基础速度，采用同样的加成公式。最终值通过 `PanelStat::total()` 读取。
+生命、攻击、防御、速度使用 `PanelStat { base, added }`。前三项的基础值为角色与光锥基础值之和；速度采用角色基础速度。`added = base × 百分比加成合计 + 固定加成合计`，总值由 `PanelStat::total()` 计算。百分比使用比例值，例如 `0.08` 表示 8%。能量恢复效率以 `1.0` 为基础值。
 
-持有装备按原始实例 ID 关联。光锥库存采用统一等级和进阶，保留种类、叠影与实例来源；遗器库存保留实际品质、等级和词条。试用和映射装备随角色配置保存。全试用模式由资源选择排除本体装备，角色形态共用限制由组装入口检查。
+静态属性计入已激活小行迹、遗器主副词条、套装无条件常驻属性和命途匹配的光锥无条件常驻属性。动态效果由战斗引擎计算，组装时按这一约定衔接各来源，保证静态贡献只计入一次。换装后重新计算静态面板。
 
-局内星级、前后台、投资、羁绊和当前生命等在后续流程加入。`gameplay-forms.json` 提供对应资料，账号转换保留常规角色 ID；战斗组装再选择玩法 ID 与局内星级。
+持有库存保存可分配的实际实例。角色引用库存装备；试用和映射遗器保存原表提供的合计配置。全试用模式下角色统一采用试用配置，库存使用权限由后续资源选择检查。
 
-## 文档数据文件
+## 计算资料
 
-文件位于 `core/account/data/s2-v4.7/`，由 `PlayableData::bundled()` 载入。数值口径见[角色基础数据](../../game-data/character-data.md)、[光锥基础数据](../../game-data/light-cone-data.md)、[试用与映射配置](../../game-data/character-trial-mapping.md)及[玩法角色数据](../../game-data/currency-wars-character-data.md)。
+`PlayableData::bundled()` 读取以下运行数据：
 
-| 文件 | 条目 | 内容 |
-| --- | --- | --- |
-| `characters.json` | 61 | 60 个常规角色及帕姆大王的基础属性、命途、属性、能量容量 |
-| `light-cones.json` | 172 | 光锥 ID、命途、品质、基础属性及各叠影的常驻属性 |
-| `trial-templates.json` | 61 | 试用星魂、技能基础等级、未激活小行迹、光锥、套装及六件属性合计 |
-| `mapping-templates.json` | 60 | 常规角色的外圈与内圈映射配置 |
-| `default-light-cones.json` | 9 个命途 | 各命途的默认映射光锥 ID |
-| `gameplay-forms.json` | 63 个形态 | 每个形态保存费用、站位及各星级参数，共 216 组星级数值 |
-| `minor-traces.json` | 600 个节点 | 60 个角色的 201～210 小行迹节点及属性加成，见[小行迹表](../../game-data/currency-wars-minor-traces.md) |
-| `mainstats.json` | 19 | 保留的五星 +15 遗器主词条数值 |
-| `set-properties.json` | 64 个套装 | 达到指定件数时生效的常驻属性 |
-| `manifest.json` | 1 份 | 程序使用的游戏版本、赛季和快照 ID |
+| 文件 | 内容 |
+| --- | --- |
+| `s2-v4.7/characters.json` | 61 个角色的身份、命途、稀有度及静态基础属性 |
+| `s2-v4.7/light-cones.json` | 172 个光锥的命途、基础属性和各叠影常驻属性 |
+| `s2-v4.7/trial-templates.json` | 61 份试用星魂、基础行迹、光锥与六件遗器配置 |
+| `s2-v4.7/mapping-templates.json` | 60 个常规角色的内外圈映射配置 |
+| `s2-v4.7/default-light-cones.json` | 各命途默认光锥 |
+| `s2-v4.7/minor-traces.json` | 60 个角色的 201～210 小行迹属性 |
+| `s2-v4.7/mainstats.json` | 五星 +15 遗器主词条数值 |
+| `s2-v4.7/set-properties.json` | 达到指定件数时生效的套装常驻属性 |
+| `s2-v4.7/manifest.json` | 游戏版本、赛季和资料快照 ID |
+| `reliquary-traces-v4.json` | 导入与转换共用的节点、实际技能 ID 和星魂加级关系 |
 
-数据文件直接保存数组或规则对象，Rust 按对应类型读取。游戏版本、赛季和快照 ID 在 `manifest.json` 中统一维护，供版本核对和结果关联使用。
+数值口径见[角色基础数据](../../game-data/character-data.md)、[光锥基础数据](../../game-data/light-cone-data.md)、[试用与映射](../../game-data/character-trial-mapping.md)及[小行迹表](../../game-data/currency-wars-minor-traces.md)。节点与常驻属性采用 [TurnBasedGameData 4.7 固定配置](https://github.com/DimbreathBot/TurnBasedGameData/tree/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput)。局内形态、星级、强度和伤害修正的共用数值见[货币战争角色数据](../../game-data/currency-wars-character-data.md)，由后续模块使用。
 
-导入和转换共用 `reference::TraceCatalog` 的节点、技能 ID 与星魂加级资料。节点及常驻属性取自 [TurnBasedGameData 4.7 配置](https://github.com/DimbreathBot/TurnBasedGameData/tree/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput)。
+## 转换规则
 
-试用表给出六件总属性，`TrialRelics` 直接保存该总量。映射表分别给出四件外圈和两件内圈总属性，`RelicGroupTemplate` 按圈保存。两者都包含主副词条，套装效果另外计算。试用瓦尔特的虚数增伤为 `0.3888`，映射内圈为 `0.388803`，各自保留原表精度。
+入口先检查账号版本、重复 ID、装备引用、部位和跨角色占用，再按试用表顺序生成全部角色配置。普通模式采用持有角色本体，缺席角色补齐试用；全试用模式统一采用试用。玩法专属角色从模板取得。
 
-可选数值缺项通过缺少字段表示。玩法数值按形态分组，各星级共用角色 ID、费用和站位。星神★阿哈的三个玩法 ID 关联同一常规角色和模板；帕姆大王保留玩法专属来源。固定等级、进阶、模板光锥叠影及基础幸运值使用 Rust 共用规则。基础暴击率仅保存角色的特殊取值。
+角色 ID 对照由调用方显式提供。例如已确认的开拓者 `8010 → 8009` 会保留原始 ID；多个持有条目对应同一目标时返回冲突。
 
-## 试用补齐算法
+| 部分 | 转换规则 |
+| --- | --- |
+| 星魂 | 本体取实际星魂与保底的较大值：四星下限 6、五星下限 0；试用采用试用星魂 |
+| 行迹 | 选择最终能力版本，转移本体进度，基础等级逐项补到试用下限，再按实际技能 ID 加星魂等级一次 |
+| 激活节点 | 补齐试用已激活节点，保留本体已激活节点；所需未知状态返回具体缺项 |
+| 光锥 | 本体保留种类和叠影，空装采用命途默认光锥；试用采用模板光锥 |
+| 遗器 | 内外圈分别判断，任意一件低于 +15 或部位为空就整圈映射；全部 +15 时保留原装 |
 
-当前公开入口为 `plan_playable_account(raw, data, request)`，返回 `ConfigurationPlan`。
-
-1. 检查原始账号格式版本；账号已标明游戏版本时，与目标资料版本核对。
-2. 建立原始角色 ID 索引，拒绝重复 ID。调用方可传入已核对的直接 ID 对照；多个持有条目对应同一目标时报告冲突。
-3. 按试用表顺序遍历全部玩法角色。普通模式中，持有的角色采用本体，缺席的角色采用试用；全试用模式采用试用表。玩法专属角色采用专属模板。
-4. 对本体分别判断内外圈是否采用映射配置。等级不足或空部位均触发所在圈整体替换。
-5. 返回来源计划，并列出资料范围之外的原始角色 ID。原始账号保持原值。
-
-ID 对照由明确的形态关系提供。例如文档开拓者使用 `8009`，导入可能出现 `8010`；调用方确认两者适用同一模板后，传入 `8010 → 8009`。来源计划保留原始 ID。其他命途或形态继续按各自 ID 处理。
-
-## 映射算法设计
-
-来源计划对原始配置判断内外圈，得到 `KeepOwned` 或 `UseTemplate`。完整转换按下表展开其余配置。
-
-| 部分 | 判断所需输入 | 转换结果 |
-| --- | --- | --- |
-| 星魂 | 本体星魂与角色稀有度 | 取本体与映射下限的较大值；四星下限 6，五星下限 0 |
-| 行迹 | 同一角色和能力版本的本体、试用基础行迹 | 逐项补到试用下限，保留本体更高等级和已激活节点 |
-| 光锥 | 本体装备或试用模板 | 本体保留原光锥及叠影，空装使用命途默认光锥；试用使用其指定光锥和叠影 1 |
-| 外圈遗器 | 外圈任意一件低于 +15 | 外圈四件的套装与主副词条整圈采用模板 |
-| 内圈遗器 | 内圈任意一件低于 +15 | 内圈两件的套装与主副词条整圈采用模板 |
-
-一圈任意一件低于 +15 或为空时选择 `UseTemplate`，全部达到 +15 时选择 `KeepOwned`。例如外圈头部为 +12，其余三件为 +15，外圈完整采用映射套装和属性；内圈独立判断。装备引用缺失或部位不一致时报告错误。
-
-内外圈映射读取独立模板，星魂映射目标由稀有度计算，行迹保底直接读取试用行迹。
-
-行迹保底由 `playable::traces::raise_traces_to_trial` 执行，接收已绑定真实节点 ID 的本体和试用行迹。基础技能等级逐项取 `max(本体等级, 试用等级)`，随后按实际技能 ID 计算星魂加级。试用已激活的一次性节点补齐，本体已激活的节点保留。模板通过 `inactive_minor_nodes` 引用小行迹 ID，属性从小行迹表读取。
-
-完整转换按以下顺序执行：
-
-1. 检查装备实例存在、部位一致和跨角色占用，并解析角色能力版本。有强化形态时使用该版本对应的技能、行迹和星魂资料；具体版本 ID 从资料查询。
-2. 对本体求出内外圈映射选择，并应用星魂保底；试用角色直接展开试用模板。
-3. 按最终能力版本绑定真实行迹节点和技能 ID。按试用配置补齐基础行迹，再按最终星魂加级一次。小行迹表使用 201～210 节点 ID，结合角色 ID 和能力版本绑定完整节点；每个试用模板明确列出未激活节点。
-4. 展开光锥和遗器来源。原装遗器通过实例读取实际主副词条；模板遗器读取合计属性。外圈和内圈分别替换，套装 ID 与该圈属性一起更新。
-5. 汇总基础属性、已激活小行迹、遗器主副词条、套装常驻属性和命途匹配的光锥常驻属性。依赖敌人、动作、生命比例或队伍条件的效果在战斗阶段通过配置中的 ID 查询。
-6. 计算静态面板。例如生命按“角色与光锥基础生命之和 ×（1 + 百分比加成）+ 固定加成”计算；速度及其他转换效果按各自已确认公式处理。
-7. 输出 `PlayableAccount`。转换保持原始账号不变。
-
-示例：瓦尔特采用本体、外圈选择 `UseTemplate`、内圈选择 `KeepOwned` 时，外圈使用映射套装 `117` 及其整圈属性，内圈仍读取账号原有实例。试用瓦尔特直接采用试用套装 `112`／`303` 及六件合计。属性汇总对每份遗器来源计入一次。
+例如外圈头部 +12、其余三件 +15，外圈采用整圈映射套装及属性，内圈独立判断。试用表提供六件属性合计，映射表提供内外圈各自合计，两者都已包含主副词条，套装常驻属性另算。每份遗器属性计入一次，转换保持原始账号不变。
 
 ## 运行与验证
 
-在仓库根目录运行：
+在仓库根目录运行，输出目录需预先存在：
 
 ```powershell
-cargo run --locked -p account-core --example convert_playable -- <导出.json> <游玩配置.json>
-cargo run --locked -p account-core --example convert_playable -- <导出.json> <游玩配置.json> 8010=8009
+cargo run --locked -p account-core --example convert_playable -- <导出.json> <静态配置.json> 8010=8009
 cargo run --locked -p account-core --example convert_playable -- <导出.json> <全试用配置.json> --trials-only
 cargo test --locked -p account-core
 cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings
 ```
 
-示例从 reliquary-archiver 文件生成完整配置，输出目录需预先存在。测试覆盖角色和光锥保底、逐技能星魂加级、面板数值、资源引用、玩法专属角色、全试用模式及内外圈独立映射。
+测试直接检查完整转换结果，覆盖本体与试用来源、逐技能星魂加级、静态面板、角色 ID 对照、每个遗器部位的缺件或等级不足、内外圈独立映射及资源引用冲突。

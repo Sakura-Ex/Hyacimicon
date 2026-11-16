@@ -255,10 +255,7 @@ fn four_star_eidolons_are_raised_to_six_before_per_skill_rank_bonuses() {
     assert_eq!(natasha.traces.skill_levels["110503"], 12);
     assert_eq!(natasha.traces.skill_levels["110504"], 10);
     assert_eq!(natasha.light_cone.light_cone_id, "21021");
-    assert!(matches!(
-        natasha.light_cone.origin,
-        EquipmentOrigin::Mapped { .. }
-    ));
+    assert!(matches!(natasha.light_cone.origin, EquipmentOrigin::Mapped));
 }
 
 #[test]
@@ -282,5 +279,236 @@ fn reports_missing_required_data_and_shared_equipment_instead_of_filling_zeroes(
             .unwrap_err()
             .0,
         "光锥实例 test:cone 被多个角色装备"
+    );
+}
+
+/// 为瓦尔特建立完整的六件 +15 配装，供逐部位检查触发条件。
+fn fully_equipped_account() -> RawAccount {
+    let mut raw = account();
+    raw.relics.clear();
+    raw.characters[0].relic_instance_ids.clear();
+    for (slot, mainstat) in [
+        (RelicSlot::Head, RelicMainStat::Hp),
+        (RelicSlot::Hands, RelicMainStat::Atk),
+        (RelicSlot::Body, RelicMainStat::CritRate),
+        (RelicSlot::Feet, RelicMainStat::Spd),
+        (RelicSlot::PlanarSphere, RelicMainStat::ImaginaryDmgBoost),
+        (RelicSlot::LinkRope, RelicMainStat::EnergyRegenerationRate),
+    ] {
+        let instance_id = format!("example:full:{}", u8::from(slot));
+        raw.characters[0]
+            .relic_instance_ids
+            .insert(slot, instance_id.clone());
+        raw.relics.push(RelicInstance {
+            instance_id,
+            set_id: if u8::from(slot) <= 4 { "112" } else { "303" }.to_owned(),
+            slot,
+            rarity: 5,
+            level: 15,
+            mainstat,
+            substats: BTreeMap::new(),
+        });
+    }
+    raw
+}
+
+#[test]
+fn fills_trial_sources_and_keeps_owned_inventory_available() {
+    let raw = account();
+    let before = raw.clone();
+    let result =
+        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    assert_eq!(
+        result
+            .characters
+            .iter()
+            .filter(|role| matches!(role.origin, CharacterOrigin::Owned { .. }))
+            .count(),
+        1
+    );
+    assert_eq!(
+        result
+            .characters
+            .iter()
+            .filter(|role| role.origin == CharacterOrigin::Trial)
+            .count(),
+        60
+    );
+    assert_eq!(
+        result
+            .characters
+            .iter()
+            .find(|role| role.character_id == "6042")
+            .unwrap()
+            .origin,
+        CharacterOrigin::Trial
+    );
+    assert_eq!(raw, before);
+}
+
+#[test]
+fn explicit_form_aliases_preserve_source_and_do_not_raise_five_stars_to_trial_eidolons() {
+    let mut raw = account();
+    let role = &mut raw.characters[0];
+    role.character_id = "8010".to_owned();
+    role.eidolons = 0;
+    role.light_cone_instance_id = None;
+    role.traces.skill_levels = [(1, 6), (2, 10), (3, 10), (4, 10), (420, 10)]
+        .into_iter()
+        .map(|(suffix, level)| (format!("8010{suffix:03}"), level))
+        .collect();
+    role.traces.node_unlocks = [
+        101, 102, 103, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210,
+    ]
+    .into_iter()
+    .map(|suffix| (format!("8010{suffix}"), false))
+    .collect();
+    let data = PlayableData::bundled().unwrap();
+    let mut options = request();
+    let without = convert_playable_account(&raw, &data, &options).unwrap();
+    let trial = without
+        .characters
+        .iter()
+        .find(|role| role.character_id == "8009")
+        .unwrap();
+    assert_eq!(trial.origin, CharacterOrigin::Trial);
+    assert_eq!(trial.eidolons, 6);
+    options
+        .character_aliases
+        .insert("8010".to_owned(), "8009".to_owned());
+    let with = convert_playable_account(&raw, &data, &options).unwrap();
+    let owned = with
+        .characters
+        .iter()
+        .find(|role| role.character_id == "8009")
+        .unwrap();
+    assert_eq!(
+        owned.origin,
+        CharacterOrigin::Owned {
+            raw_character_id: "8010".to_owned()
+        }
+    );
+    assert_eq!(owned.eidolons, 0);
+    assert_eq!(owned.traces.skill_levels["800901"], 6);
+    assert_eq!(owned.traces.skill_levels["800920"], 10);
+    let mut duplicate = raw.characters[0].clone();
+    duplicate.character_id = "8009".to_owned();
+    raw.characters.push(duplicate);
+    assert!(
+        convert_playable_account(&raw, &data, &options)
+            .unwrap_err()
+            .0
+            .contains("多个持有条目对应角色 8009")
+    );
+}
+
+#[test]
+fn maps_each_whole_group_for_every_underleveled_or_empty_slot() {
+    let data = PlayableData::bundled().unwrap();
+    let options = request();
+    let full = convert_playable_account(&fully_equipped_account(), &data, &options).unwrap();
+    let welt = full
+        .characters
+        .iter()
+        .find(|role| role.character_id == "1004")
+        .unwrap();
+    assert!(matches!(
+        &welt.relics,
+        PlayableRelics::Partitioned {
+            outer: PlayableRelicGroup::Owned { .. },
+            planar: PlayableRelicGroup::Owned { .. }
+        }
+    ));
+    for changed in 0..6 {
+        for empty in [false, true] {
+            let mut raw = fully_equipped_account();
+            if empty {
+                raw.characters[0]
+                    .relic_instance_ids
+                    .remove(&raw.relics[changed].slot);
+            } else {
+                raw.relics[changed].level = 12;
+            }
+            let before = raw.clone();
+            let output = convert_playable_account(&raw, &data, &options).unwrap();
+            let welt = output
+                .characters
+                .iter()
+                .find(|role| role.character_id == "1004")
+                .unwrap();
+            let PlayableRelics::Partitioned { outer, planar } = &welt.relics else {
+                panic!("本体应分别保存内外圈")
+            };
+            assert_eq!(
+                matches!(outer, PlayableRelicGroup::Mapped { .. }),
+                changed < 4
+            );
+            assert_eq!(
+                matches!(planar, PlayableRelicGroup::Mapped { .. }),
+                changed >= 4
+            );
+            assert_eq!(raw, before);
+        }
+    }
+}
+
+#[test]
+fn rejects_duplicate_ids_unknown_alias_targets_and_incompatible_versions() {
+    let data = PlayableData::bundled().unwrap();
+    let mut raw = account();
+    raw.characters.push(raw.characters[0].clone());
+    assert_eq!(
+        convert_playable_account(&raw, &data, &request())
+            .unwrap_err()
+            .0,
+        "原始角色 ID 1004 重复"
+    );
+    let mut options = request();
+    options
+        .character_aliases
+        .insert("8010".to_owned(), "9999".to_owned());
+    assert_eq!(
+        convert_playable_account(&account(), &data, &options)
+            .unwrap_err()
+            .0,
+        "别名目标 9999 未包含在资料中"
+    );
+    let mut raw = account();
+    raw.game_version = Some("4.6".to_owned());
+    assert_eq!(
+        convert_playable_account(&raw, &data, &request())
+            .unwrap_err()
+            .0,
+        "原始账号与目标资料的游戏版本不一致"
+    );
+}
+
+#[test]
+fn rejects_bad_relic_references_even_when_another_piece_triggers_mapping() {
+    let data = PlayableData::bundled().unwrap();
+    let mut raw = fully_equipped_account();
+    raw.relics.push(raw.relics[0].clone());
+    assert_eq!(
+        convert_playable_account(&raw, &data, &request())
+            .unwrap_err()
+            .0,
+        "遗器实例 ID example:full:1 重复"
+    );
+    let mut raw = fully_equipped_account();
+    raw.relics[0].level = 12;
+    raw.relics[1].slot = RelicSlot::Feet;
+    raw.relics[1].mainstat = RelicMainStat::Spd;
+    assert_eq!(
+        convert_playable_account(&raw, &data, &request())
+            .unwrap_err()
+            .0,
+        "角色 1004 的遗器 example:full:2 部位不一致"
+    );
+    raw.relics.remove(1);
+    assert_eq!(
+        convert_playable_account(&raw, &data, &request())
+            .unwrap_err()
+            .0,
+        "角色 1004 引用的遗器 example:full:2 不存在"
     );
 }

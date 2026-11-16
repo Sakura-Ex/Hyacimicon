@@ -1,8 +1,8 @@
 # Rust 账号数据与配置
 
-状态：原始账号模型、reliquary-archiver v4 导入、完整游玩配置转换和静态面板计算已实现。Python 生成结果接入与绑定待实现。
+状态：原始账号模型、reliquary-archiver v4 导入、账号静态配置转换和静态面板计算已实现。Python 生成结果接入与绑定待实现。
 
-`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[实际游玩配置](playable-configuration.md)说明完整转换入口、保底规则和面板结构。整体流程见[账号数据流](../account-generation/data-flow.md)。
+`core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[账号静态配置](playable-configuration.md)说明转换入口、保底规则和面板结构。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
 ## 目录与入口
 
@@ -19,9 +19,9 @@ core/account/
 │   │   ├── character.rs  # 角色、行迹与装备引用
 │   │   ├── equipment.rs  # 光锥、遗器实例和部位
 │   │   └── stats.rs    # 遗器主副词条键
-│   ├── playable/       # 实际配置与转换计划
+│   ├── playable/       # 实际配置与静态计算
 │   │   ├── mod.rs      # 生效配置、面板及共用规则常量
-│   │   ├── planning.rs  # 角色来源与分项映射计划
+│   │   ├── selection.rs  # 内部资源检查与本体索引
 │   │   ├── attributes.rs  # 静态属性键与单位
 │   │   ├── traces.rs   # 按试用基础行迹补齐
 │   │   ├── conversion.rs  # 完整配置转换入口
@@ -40,7 +40,7 @@ core/account/
 
 所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，当前成员为 `core/account`。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
 
-原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，来源计划位于 `account_core::playable::planning`，文档数据位于 `account_core::reference`。
+原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
 
 ## 统一配置
 
@@ -58,7 +58,7 @@ core/account/
 
 角色和库存使用列表，保留来源顺序和重复条目，供后续接入接口报告重复 ID。每件装备使用实例 ID，光锥种类 ID 可以重复。装备归属集中在角色上维护：光锥引用为 `None` 表示空装，遗器按部位映射，缺少的部位表示未装备；库存中未被引用的装备保持闲置。
 
-角色形态按常规角色 ID 分别保存。多形态之间的共享资源关系和使用限制在后续配置转换中处理。
+角色形态按常规角色 ID 分别保存。多形态之间的共享资源关系和使用限制由局面模拟检查。
 
 ## 行迹与单位
 
@@ -72,13 +72,13 @@ core/account/
 
 百分比副词条使用比例值，例如 `0.0324` 表示 3.24%；固定生命、攻击、防御和速度使用实际值，保留小数精度。主词条保存已经区分固定值与百分比的键，最终数值在配置转换中按品质、强化等级和快照查询。属性键约定见[遗器数据](../../game-data/relic-data.md#字段与单位)。
 
-reliquary-archiver v4 适配器已完成主词条歧义处理、百分比换算和行迹绑定。来源技能等级直接取账号技能树，保留基础等级。锁定、弃置、预览与重掷词条等来源字段保存在导入结果的 `source_data` 中；当前副词条由 `substats` 表达。字段依据与支持范围见[导入说明](reliquary-import.md)。
+reliquary-archiver v4 适配器已完成主词条歧义处理、百分比换算和行迹绑定。来源技能等级直接取账号技能树，保留基础等级。当前副词条由 `substats` 表达；锁定、弃置、预览与重掷等字段保留在原始导出文件中。字段依据与支持范围见[导入说明](reliquary-import.md)。
 
 ## 接入与转换
 
-统一数据类型表达字段与单位。Serde 检查统一格式的字段类型、已知枚举和必需字段；统一结构体拒绝未知字段。来源适配器保留原始 JSON 中的扩展信息，并报告尚待适配的字段。
+统一数据类型表达字段与单位。Serde 检查统一格式的字段类型、已知枚举和必需字段；统一结构体拒绝未知字段。来源适配器忽略非计算字段，并报告尚待适配的扩展字段路径。
 
-reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突、等级与突破范围、当前词条和行迹绑定。缺失的行迹信息保持未知并写入报告。直接构造或反序列化 `RawAccount` 时仍需由对应入口检查；完整规则合法性、游戏资料兼容性与玩法约束由后续转换处理。
+reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突、等级与突破范围、当前词条和行迹绑定。缺失的行迹信息保持未知并写入报告。直接构造或反序列化 `RawAccount` 时仍需由对应入口检查；转换入口核对游戏版本和资源引用，局面模拟检查实际阵容的玩法约束。
 
 导入报告在原始账号之外保存错误、缺失字段和未知编码。生成器在自己的结果中保存生成参数、随机种子、投入评分与搜索统计。`convert_playable_account` 接收 `RawAccount`，完成试用补齐、练度保底、星魂技能加级和静态面板计算。
 

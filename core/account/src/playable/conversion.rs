@@ -1,14 +1,13 @@
 //! 将原始账号、试用模板和共用规则展开为完整游玩配置。
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, error::Error, fmt};
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
     CharacterConfig, LightConeInstance, RawAccount, RelicInstance, RelicSlot, TraceConfig,
     reference::{
-        CharacterData, CharacterKind, MappingPart, PlayableData, SkillKind, TraceBinding,
-        TrialTemplate,
+        CharacterData, CharacterKind, PlayableData, SkillKind, TraceBinding, TrialTemplate,
     },
 };
 
@@ -18,7 +17,7 @@ use super::{
     PlayableTraces, TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
     attributes::AttributeValues,
     panel,
-    planning::{MappingAction, PlanError, PlanRequest, mapped_eidolons, plan_playable_account},
+    selection::{mapped_eidolons, owned_characters},
     traces::raise_traces_to_trial,
 };
 
@@ -37,55 +36,54 @@ pub struct ConversionRequest {
     pub character_aliases: BTreeMap<String, String>,
 }
 
+/// 账号版本、资源引用或静态配置转换中的具体错误。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversionError(
+    /// 具体错误原因。
+    pub String,
+);
+
+impl fmt::Display for ConversionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Error for ConversionError {}
+
 /// 展开全部玩法角色的行迹、光锥、遗器和静态面板，保留原始账号。
 pub fn convert_playable_account(
     raw: &RawAccount,
     data: &PlayableData,
     request: &ConversionRequest,
-) -> Result<PlayableAccount, PlanError> {
+) -> Result<PlayableAccount, ConversionError> {
     if request.config_id.trim().is_empty() {
-        return Err(PlanError("游玩配置标识不能为空".to_owned()));
+        return Err(ConversionError("游玩配置标识不能为空".to_owned()));
     }
-    let plan = plan_playable_account(
-        raw,
-        data,
-        &PlanRequest {
-            mode: request.mode,
-            character_aliases: request.character_aliases.clone(),
-        },
-    )?;
-    let mut characters = Vec::with_capacity(plan.characters.len());
-    for selected in plan.characters {
-        let id = &selected.character_id;
+    let owned_index = owned_characters(raw, data, &request.character_aliases)?;
+    let mut characters = Vec::with_capacity(data.trials.len());
+    for trial in &data.trials {
+        let id = &trial.character_id;
         let definition = data
             .characters
             .iter()
             .find(|entry| &entry.id == id)
-            .ok_or_else(|| PlanError(format!("缺少角色 {id} 的基础数据")))?;
-        let trial = data
-            .trials
-            .iter()
-            .find(|entry| &entry.character_id == id)
-            .ok_or_else(|| PlanError(format!("缺少角色 {id} 的试用模板")))?;
-        let owned = match &selected.origin {
-            CharacterOrigin::Owned { raw_character_id } => Some(
-                raw.characters
-                    .iter()
-                    .find(|entry| &entry.character_id == raw_character_id)
-                    .ok_or_else(|| PlanError(format!("原始角色 {raw_character_id} 不存在")))?,
-            ),
-            _ => None,
+            .ok_or_else(|| ConversionError(format!("缺少角色 {id} 的基础数据")))?;
+        let owned = if request.mode == ConfigurationMode::OwnedWithTrials {
+            owned_index.get(id).copied()
+        } else {
+            None
         };
         let eidolons = match owned {
             Some(character) => character.eidolons.max(mapped_eidolons(definition)?),
             None => trial.eidolons,
         };
         if eidolons > 6 {
-            return Err(PlanError(format!("角色 {id} 的星魂超出 0～6")));
+            return Err(ConversionError(format!("角色 {id} 的星魂超出 0～6")));
         }
         let binding = data.traces.latest(id);
         if binding.is_none() && definition.kind != CharacterKind::GameplayExclusive {
-            return Err(PlanError(format!("缺少角色 {id} 的行迹绑定")));
+            return Err(ConversionError(format!("缺少角色 {id} 的行迹绑定")));
         }
         let traces = match binding {
             Some(binding) => expand_traces(owned, trial, binding, eidolons, data)?,
@@ -93,7 +91,7 @@ pub fn convert_playable_account(
                 skill_levels: BTreeMap::new(),
                 node_unlocks: BTreeMap::new(),
             },
-            None => return Err(PlanError(format!("角色 {id} 的行迹缺少节点绑定"))),
+            None => return Err(ConversionError(format!("角色 {id} 的行迹缺少节点绑定"))),
         };
         let light_cone = expand_light_cone(owned, definition, trial, raw, data)?;
         let cone_data = data
@@ -101,7 +99,7 @@ pub fn convert_playable_account(
             .iter()
             .find(|entry| entry.id == light_cone.light_cone_id)
             .ok_or_else(|| {
-                PlanError(format!("缺少光锥 {} 的基础数据", light_cone.light_cone_id))
+                ConversionError(format!("缺少光锥 {} 的基础数据", light_cone.light_cone_id))
             })?;
         let mut values = AttributeValues::new();
         let mut sets = BTreeMap::<String, u8>::new();
@@ -110,44 +108,42 @@ pub fn convert_playable_account(
                 .mappings
                 .iter()
                 .find(|entry| &entry.character_id == id)
-                .ok_or_else(|| PlanError(format!("缺少角色 {id} 的遗器映射模板")))?;
+                .ok_or_else(|| ConversionError(format!("缺少角色 {id} 的遗器映射模板")))?;
             let mut group =
-                |part, slots: &[RelicSlot], template: &crate::reference::RelicGroupTemplate| {
-                    match selected.mapping_decisions.get(&part) {
-                        Some(MappingAction::UseTemplate) => {
-                            panel::add_values(&mut values, &template.stats);
-                            *sets.entry(template.set_id.clone()).or_default() += slots.len() as u8;
-                            Ok(PlayableRelicGroup::Mapped {
-                                template_id: id.clone(),
-                                configuration: template.clone(),
-                            })
+                |slots: &[RelicSlot], template: &crate::reference::RelicGroupTemplate| {
+                    let mut originals = Vec::with_capacity(slots.len());
+                    let mut mapped = false;
+                    for slot in slots {
+                        let Some(instance_id) = character.relic_instance_ids.get(slot) else {
+                            mapped = true;
+                            continue;
+                        };
+                        let relic = raw
+                            .relics
+                            .iter()
+                            .find(|entry| &entry.instance_id == instance_id)
+                            .ok_or_else(|| ConversionError(format!("遗器 {instance_id} 不存在")))?;
+                        mapped |= relic.level < super::RELIC_MAPPING_LEVEL;
+                        originals.push(relic);
+                    }
+                    if mapped {
+                        panel::add_values(&mut values, &template.stats);
+                        *sets.entry(template.set_id.clone()).or_default() += slots.len() as u8;
+                        Ok(PlayableRelicGroup::Mapped {
+                            configuration: template.clone(),
+                        })
+                    } else {
+                        let mut instance_ids = Vec::with_capacity(slots.len());
+                        for relic in originals {
+                            add_owned_relic(relic, data, &mut values)?;
+                            *sets.entry(relic.set_id.clone()).or_default() += 1;
+                            instance_ids.push(relic.instance_id.clone());
                         }
-                        Some(MappingAction::KeepOwned) => {
-                            let mut instance_ids = Vec::with_capacity(slots.len());
-                            for slot in slots {
-                                let instance_id =
-                                    character.relic_instance_ids.get(slot).ok_or_else(|| {
-                                        PlanError(format!("角色 {id} 的 {slot:?} 未装备"))
-                                    })?;
-                                let relic = raw
-                                    .relics
-                                    .iter()
-                                    .find(|entry| &entry.instance_id == instance_id)
-                                    .ok_or_else(|| {
-                                        PlanError(format!("遗器 {instance_id} 不存在"))
-                                    })?;
-                                add_owned_relic(relic, data, &mut values)?;
-                                *sets.entry(relic.set_id.clone()).or_default() += 1;
-                                instance_ids.push(instance_id.clone());
-                            }
-                            Ok(PlayableRelicGroup::Owned { instance_ids })
-                        }
-                        _ => Err(PlanError(format!("角色 {id} 的 {part:?} 尚未确定"))),
+                        Ok(PlayableRelicGroup::Owned { instance_ids })
                     }
                 };
             PlayableRelics::Partitioned {
                 outer: group(
-                    MappingPart::OuterRelics,
                     &[
                         RelicSlot::Head,
                         RelicSlot::Hands,
@@ -157,7 +153,6 @@ pub fn convert_playable_account(
                     &mapping.outer,
                 )?,
                 planar: group(
-                    MappingPart::PlanarRelics,
                     &[RelicSlot::PlanarSphere, RelicSlot::LinkRope],
                     &mapping.planar,
                 )?,
@@ -167,7 +162,6 @@ pub fn convert_playable_account(
             *sets.entry(trial.relics.outer_set_id.clone()).or_default() += 4;
             *sets.entry(trial.relics.planar_set_id.clone()).or_default() += 2;
             PlayableRelics::TrialAggregate {
-                template_id: id.clone(),
                 configuration: trial.relics.clone(),
             }
         };
@@ -175,7 +169,7 @@ pub fn convert_playable_account(
             let properties = data
                 .set_properties
                 .get(&set_id)
-                .ok_or_else(|| PlanError(format!("缺少套装 {set_id} 的常驻属性资料")))?;
+                .ok_or_else(|| ConversionError(format!("缺少套装 {set_id} 的常驻属性资料")))?;
             for (required, stats) in properties {
                 if pieces >= *required {
                     panel::add_values(&mut values, stats);
@@ -193,24 +187,28 @@ pub fn convert_playable_account(
                 .minor_traces
                 .iter()
                 .find(|entry| &entry.character_id == id)
-                .ok_or_else(|| PlanError(format!("缺少角色 {id} 的小行迹属性")))?;
+                .ok_or_else(|| ConversionError(format!("缺少角色 {id} 的小行迹属性")))?;
             for (suffix, bonus) in &minors.nodes {
                 let label = format!("stat_{}", suffix - 200);
-                let node = binding
-                    .nodes
-                    .get(&label)
-                    .ok_or_else(|| PlanError(format!("缺少角色 {id} 的小行迹 {suffix} 绑定")))?;
-                if traces.node_unlocks.get(&node.node_id) == Some(&true) {
+                let node = binding.nodes.get(&label).ok_or_else(|| {
+                    ConversionError(format!("缺少角色 {id} 的小行迹 {suffix} 绑定"))
+                })?;
+                if traces.node_unlocks.get(node) == Some(&true) {
                     *values.entry(bonus.attribute).or_default() += bonus.value;
                 }
             }
         }
         if values.values().any(|value| !value.is_finite()) {
-            return Err(PlanError(format!("角色 {id} 的属性包含非有限数值")));
+            return Err(ConversionError(format!("角色 {id} 的属性包含非有限数值")));
         }
         characters.push(PlayableCharacter {
             character_id: id.clone(),
-            origin: selected.origin,
+            origin: match owned {
+                Some(character) => CharacterOrigin::Owned {
+                    raw_character_id: character.character_id.clone(),
+                },
+                None => CharacterOrigin::Trial,
+            },
             eidolons,
             ability_version: binding.map(|entry| entry.ability_version),
             traces,
@@ -256,11 +254,11 @@ fn expand_traces(
     binding: &TraceBinding,
     eidolons: u8,
     data: &PlayableData,
-) -> Result<PlayableTraces, PlanError> {
+) -> Result<PlayableTraces, ConversionError> {
     let template = trial
         .traces
         .as_ref()
-        .ok_or_else(|| PlanError(format!("缺少角色 {} 的试用行迹", trial.character_id)))?;
+        .ok_or_else(|| ConversionError(format!("缺少角色 {} 的试用行迹", trial.character_id)))?;
     let mut floor = TraceConfig {
         skill_levels: BTreeMap::new(),
         node_unlocks: BTreeMap::new(),
@@ -273,14 +271,14 @@ fn expand_traces(
                 .and_then(|kind| template.base_levels.get(&kind))
                 .copied()
                 .ok_or_else(|| {
-                    PlanError(format!(
+                    ConversionError(format!(
                         "角色 {} 的试用配置缺少 {label}",
                         trial.character_id
                     ))
                 })?
         };
         if level > node.max_level || level == 0 {
-            return Err(PlanError(format!(
+            return Err(ConversionError(format!(
                 "角色 {} 的试用 {label} 等级超出范围",
                 trial.character_id
             )));
@@ -291,23 +289,23 @@ fn expand_traces(
         let active = if let Some(index) = label.strip_prefix("stat_") {
             let suffix = index
                 .parse::<u16>()
-                .map_err(|_| PlanError(format!("无效的小行迹标签 {label}")))?
+                .map_err(|_| ConversionError(format!("无效的小行迹标签 {label}")))?
                 + 200;
             !template.inactive_minor_nodes.contains(&suffix)
         } else {
             true
         };
-        floor.node_unlocks.insert(node.node_id.clone(), active);
+        floor.node_unlocks.insert(node.clone(), active);
     }
     let effective = if let Some(character) = owned {
         let version = character.ability_version.ok_or_else(|| {
-            PlanError(format!("原始角色 {} 缺少能力版本", character.character_id))
+            ConversionError(format!("原始角色 {} 缺少能力版本", character.character_id))
         })?;
         let source = data
             .traces
             .binding(&character.character_id, version)
             .ok_or_else(|| {
-                PlanError(format!(
+                ConversionError(format!(
                     "缺少原始角色 {} 的能力版本 {version}",
                     character.character_id
                 ))
@@ -326,13 +324,13 @@ fn expand_traces(
                     .get(&original.node_id)
                     .copied()
                     .ok_or_else(|| {
-                        PlanError(format!(
+                        ConversionError(format!(
                             "原始角色 {} 缺少技能节点 {} 的基础等级",
                             character.character_id, original.node_id
                         ))
                     })?;
                 if level == 0 || level > original.max_level || level > node.max_level {
-                    return Err(PlanError(format!(
+                    return Err(ConversionError(format!(
                         "原始角色 {} 的 {label} 基础等级超出范围",
                         character.character_id
                     )));
@@ -346,27 +344,31 @@ fn expand_traces(
         }
         for (label, node) in &binding.nodes {
             if let Some(original) = source.nodes.get(label)
-                && let Some(active) = character.traces.node_unlocks.get(&original.node_id)
+                && let Some(active) = character.traces.node_unlocks.get(original)
             {
-                rebased.node_unlocks.insert(node.node_id.clone(), *active);
+                rebased.node_unlocks.insert(node.clone(), *active);
             }
         }
-        raise_traces_to_trial(&rebased, &floor).map_err(|error| PlanError(error.to_string()))?
+        raise_traces_to_trial(&rebased, &floor)
+            .map_err(|error| ConversionError(error.to_string()))?
     } else {
         floor
     };
     for node in binding.nodes.values() {
-        if !effective.node_unlocks.contains_key(&node.node_id) {
-            return Err(PlanError(format!(
+        if !effective.node_unlocks.contains_key(node) {
+            return Err(ConversionError(format!(
                 "角色 {} 缺少节点 {} 的解锁状态",
-                trial.character_id, node.node_id
+                trial.character_id, node
             )));
         }
     }
     let mut skill_levels = BTreeMap::new();
     for node in binding.skills.values() {
         if node.skill_ids.is_empty() {
-            return Err(PlanError(format!("行迹节点 {} 缺少技能 ID", node.node_id)));
+            return Err(ConversionError(format!(
+                "行迹节点 {} 缺少技能 ID",
+                node.node_id
+            )));
         }
         for skill_id in &node.skill_ids {
             let extra: u8 = binding
@@ -376,9 +378,11 @@ fn expand_traces(
                 .sum();
             let level = effective.skill_levels[&node.node_id]
                 .checked_add(extra)
-                .ok_or_else(|| PlanError(format!("技能 {skill_id} 的生效等级溢出")))?;
+                .ok_or_else(|| ConversionError(format!("技能 {skill_id} 的生效等级溢出")))?;
             if skill_levels.insert(skill_id.clone(), level).is_some() {
-                return Err(PlanError(format!("技能 {skill_id} 重复绑定到多个行迹节点")));
+                return Err(ConversionError(format!(
+                    "技能 {skill_id} 重复绑定到多个行迹节点"
+                )));
             }
         }
     }
@@ -395,7 +399,7 @@ fn expand_light_cone(
     trial: &TrialTemplate,
     raw: &RawAccount,
     data: &PlayableData,
-) -> Result<PlayableLightCone, PlanError> {
+) -> Result<PlayableLightCone, ConversionError> {
     let result = match owned {
         Some(character) => match &character.light_cone_instance_id {
             Some(instance_id) => {
@@ -403,7 +407,7 @@ fn expand_light_cone(
                     .light_cones
                     .iter()
                     .find(|entry| &entry.instance_id == instance_id)
-                    .ok_or_else(|| PlanError(format!("光锥实例 {instance_id} 不存在")))?;
+                    .ok_or_else(|| ConversionError(format!("光锥实例 {instance_id} 不存在")))?;
                 owned_light_cone(cone)
             }
             None => {
@@ -411,23 +415,19 @@ fn expand_light_cone(
                     .path
                     .and_then(|path| data.default_light_cones.get(&path))
                     .ok_or_else(|| {
-                        PlanError(format!("缺少角色 {} 的默认映射光锥", definition.id))
+                        ConversionError(format!("缺少角色 {} 的默认映射光锥", definition.id))
                     })?;
                 PlayableLightCone {
                     light_cone_id: cone_id.clone(),
                     superimposition: TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
-                    origin: EquipmentOrigin::Mapped {
-                        template_id: definition.id.clone(),
-                    },
+                    origin: EquipmentOrigin::Mapped,
                 }
             }
         },
         None => PlayableLightCone {
             light_cone_id: trial.light_cone_id.clone(),
             superimposition: TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
-            origin: EquipmentOrigin::Trial {
-                template_id: definition.id.clone(),
-            },
+            origin: EquipmentOrigin::Trial,
         },
     };
     Ok(result)
@@ -449,17 +449,11 @@ fn add_owned_relic(
     relic: &RelicInstance,
     data: &PlayableData,
     values: &mut AttributeValues,
-) -> Result<(), PlanError> {
-    if relic.rarity != 5 || relic.level != super::RELIC_MAPPING_LEVEL {
-        return Err(PlanError(format!(
-            "保留的遗器 {} 应为五星 +15",
-            relic.instance_id
-        )));
-    }
+) -> Result<(), ConversionError> {
     let main = data
         .mainstats
         .get(&relic.mainstat)
-        .ok_or_else(|| PlanError(format!("缺少遗器 {} 的主词条数值", relic.instance_id)))?;
+        .ok_or_else(|| ConversionError(format!("缺少遗器 {} 的主词条数值", relic.instance_id)))?;
     *values.entry(relic.mainstat.into()).or_default() += main;
     for (attribute, value) in &relic.substats {
         *values.entry((*attribute).into()).or_default() += value;
