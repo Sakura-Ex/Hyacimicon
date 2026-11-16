@@ -30,6 +30,64 @@ class RulePackTests(unittest.TestCase):
         self.assertEqual(counts[NodeType.ENCOUNTER], 3)
         self.assertEqual(counts[NodeType.BOSS], 3)
 
+    def test_node_order_matches_current_currency_wars_routes(self):
+        pack = load_rule_pack()
+
+        self.assertEqual(
+            pack.rules.node_ids,
+            (
+                "1-1",
+                "1-2",
+                "1-3",
+                "1-4",
+                "1-6",
+                "1-7",
+                "1-8",
+                "1-9",
+                "2-1",
+                "2-2",
+                "2-4",
+                "2-5",
+                "2-6",
+                "2-7",
+                "3-1",
+                "3-2",
+                "3-4",
+                "3-5",
+                "3-6",
+                "3-7",
+            ),
+        )
+        self.assertEqual(
+            pack.rules.node_types,
+            (
+                NodeType.REWARD,
+                NodeType.REWARD,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.ENCOUNTER,
+                NodeType.REWARD,
+                NodeType.BOSS,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.ENCOUNTER,
+                NodeType.REWARD,
+                NodeType.BOSS,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.BATTLE,
+                NodeType.ENCOUNTER,
+                NodeType.REWARD,
+                NodeType.BOSS,
+            ),
+        )
+        self.assertEqual(
+            pack.rules.node_planes,
+            (1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3),
+        )
+
     def test_shop_odds_each_level_sum_to_one(self):
         pack = load_rule_pack()
 

@@ -51,27 +51,50 @@ DEFAULT_RULES = GameRules(
     xp_to_next_level=(0, 0, 4, 6, 20, 40, 52, 72, 84),
     card_copies_by_cost=(30, 25, 18, 10, 9),
     node_types=(
-        NodeType.BATTLE,
         NodeType.REWARD,
+        NodeType.REWARD,
+        NodeType.BATTLE,
         NodeType.BATTLE,
         NodeType.BATTLE,
         NodeType.ENCOUNTER,
-        NodeType.BOSS,
         NodeType.REWARD,
-        NodeType.BATTLE,
-        NodeType.REWARD,
-        NodeType.BATTLE,
-        NodeType.ENCOUNTER,
-        NodeType.BATTLE,
         NodeType.BOSS,
         NodeType.BATTLE,
-        NodeType.REWARD,
         NodeType.BATTLE,
-        NodeType.REWARD,
         NodeType.BATTLE,
         NodeType.ENCOUNTER,
+        NodeType.REWARD,
+        NodeType.BOSS,
+        NodeType.BATTLE,
+        NodeType.BATTLE,
+        NodeType.BATTLE,
+        NodeType.ENCOUNTER,
+        NodeType.REWARD,
         NodeType.BOSS,
     ),
+    node_ids=(
+        "1-1",
+        "1-2",
+        "1-3",
+        "1-4",
+        "1-6",
+        "1-7",
+        "1-8",
+        "1-9",
+        "2-1",
+        "2-2",
+        "2-4",
+        "2-5",
+        "2-6",
+        "2-7",
+        "3-1",
+        "3-2",
+        "3-4",
+        "3-5",
+        "3-6",
+        "3-7",
+    ),
+    node_planes=(1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3),
     investment_nodes=(2, 7, 13),
     strategy_rarity_weights=(0.68, 0.27, 0.05),
     strategy_enemy_rating_delta=(0, 3, 7),
@@ -389,6 +412,19 @@ def load_rule_pack(path: Path = DEFAULT_PACK) -> RulePack:
             metadata_data.get("validation_status"), "metadata.validation_status"
         ),
         assumptions=_string_tuple(metadata_data.get("assumptions"), "metadata.assumptions"),
+        snapshot_id=(
+            ""
+            if metadata_data.get("snapshot_id") is None
+            else _as_string(metadata_data.get("snapshot_id"), "metadata.snapshot_id")
+        ),
+        content_sha256=(
+            ""
+            if metadata_data.get("content_sha256") is None
+            else _as_string(
+                metadata_data.get("content_sha256"),
+                "metadata.content_sha256",
+            )
+        ),
     )
 
     unit_items = list(map(_parse_unit, _as_list(root.get("units"), "units")))
@@ -440,4 +476,5 @@ def load_rule_pack(path: Path = DEFAULT_PACK) -> RulePack:
         affixes=affixes,
         investments=investments,
         environments=environments,
+        traits={},
     )

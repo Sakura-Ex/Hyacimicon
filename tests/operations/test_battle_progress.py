@@ -70,7 +70,7 @@ class BattleProgressTests(unittest.TestCase):
 
         self.assertEqual(len(captured), 1)
         context = captured[0]
-        self.assertEqual(context.node_type, NodeType.BATTLE)
+        self.assertEqual(context.node_type, NodeType.REWARD)
         self.assertEqual(context.level, 3)
         self.assertEqual(context.difficulty_id, "training")
         self.assertTrue(context.active_units)

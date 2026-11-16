@@ -1,6 +1,7 @@
 """本地运营模拟网页服务。"""
 
 import json
+import mimetypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -48,6 +49,12 @@ class OperationRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/meta":
             self._send_json(HTTPStatus.OK, self.server.service.meta())
             return
+        if path.startswith("/assets/"):
+            body = self.server.service.read_asset(path)
+            if body is not None:
+                content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+                self._send_bytes(HTTPStatus.OK, body, content_type)
+                return
         if path.startswith("/api/sessions/"):
             session_id = path.removeprefix("/api/sessions/")
             if "/" not in session_id and session_id:

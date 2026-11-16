@@ -3,215 +3,221 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#120e29">
     <title>货币战争运营实验台</title>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <header class="topbar">
-      <div>
-        <p class="eyebrow">CURRENCY WAR OPERATIONS LAB</p>
-        <h1>货币战争运营实验台</h1>
-      </div>
-      <div class="build-info">
-        <span id="game-version">规则载入中</span>
-        <span id="validation-status"></span>
-      </div>
-    </header>
+    <div class="game-shell">
+      <header class="top-hud">
+        <button id="new-run" class="brand-block" type="button" title="创建新对局">
+          <span class="brand-mark">CW</span>
+          <span>
+            <small>OPERATIONS LAB</small>
+            <strong>货币战争</strong>
+          </span>
+        </button>
 
-    <main class="layout">
-      <aside class="control-panel">
-        <section>
-          <div class="section-title">
-            <h2>新对局</h2>
-            <span class="section-note">手动运营与检查</span>
+        <section class="route-hud">
+          <div class="stage-caption">
+            <small>备战阶段</small>
+            <strong id="stage-number">--</strong>
           </div>
-          <form id="start-form" class="stack">
-            <label>
-              难度
-              <select id="difficulty" required></select>
-            </label>
-            <label>
-              投资环境
-              <select id="environment"></select>
-            </label>
+          <div id="node-track" class="node-track"></div>
+          <div class="health-orb" title="当前生命">
+            <span>♥</span>
+            <strong id="health">--</strong>
+          </div>
+        </section>
+
+        <div class="build-chip">
+          <span id="game-version">等待数据</span>
+          <small id="snapshot-id"></small>
+        </div>
+      </header>
+
+      <main class="battle-layout">
+        <aside class="trait-rail panel">
+          <div class="rail-heading">
+            <div>
+              <small>当前阵容</small>
+              <h2>羁绊</h2>
+            </div>
+            <span id="trait-count">0</span>
+          </div>
+          <div id="active-traits" class="trait-list"></div>
+        </aside>
+
+        <section class="battlefield">
+          <div class="field-glow field-glow-a"></div>
+          <div class="field-glow field-glow-b"></div>
+          <div class="team-counter">
+            <span class="team-icon">♙</span>
+            <strong id="active-capacity">0/0</strong>
+            <small>上阵角色</small>
+          </div>
+
+          <section class="unit-row front-row">
+            <div class="row-label">
+              <span></span>
+              <strong>前台区域</strong>
+              <span></span>
+            </div>
+            <div id="front-units" class="unit-slots"></div>
+          </section>
+
+          <section class="unit-row back-row">
+            <div class="row-label">
+              <span></span>
+              <strong>后台区域</strong>
+              <span></span>
+            </div>
+            <div id="back-units" class="unit-slots"></div>
+          </section>
+
+          <div class="arena-footer">
+            <div class="run-context">
+              <span id="run-environment">--</span>
+              <span id="run-difficulty">--</span>
+              <span id="run-plane">--</span>
+            </div>
+            <div class="progress-mini">
+              <span>战斗进度</span>
+              <strong id="progress-value">100%</strong>
+            </div>
+          </div>
+        </section>
+
+        <aside class="tool-rail">
+          <button type="button" data-drawer="roster">
+            <span>▦</span>
+            <small>阵容</small>
+          </button>
+          <button type="button" data-drawer="investments">
+            <span>◆</span>
+            <small>投资</small>
+          </button>
+          <button type="button" data-drawer="log">
+            <span>≡</span>
+            <small>记录</small>
+          </button>
+          <button type="button" data-drawer="debug">
+            <span>⌕</span>
+            <small>检查</small>
+          </button>
+          <button id="export-run" type="button">
+            <span>⇩</span>
+            <small>导出</small>
+          </button>
+        </aside>
+      </main>
+
+      <footer class="shop-dock">
+        <section class="level-card">
+          <div>
+            <small>购买经验</small>
+            <strong>Lv.<span id="level">--</span></strong>
+            <span id="xp-line">--</span>
+          </div>
+          <button id="buy-xp" type="button">
+            <span>经验</span>
+            <b>+4</b>
+          </button>
+        </section>
+
+        <section class="shop-area">
+          <div class="shop-title">
+            <div>
+              <small>商店</small>
+              <strong id="shop-gold">-- 金币</strong>
+            </div>
+            <div class="shop-actions">
+              <button id="toggle-lock" class="icon-button" type="button" title="锁定商店">锁</button>
+              <button id="reroll-shop" class="icon-button" type="button" title="刷新商店">↻</button>
+              <span class="free-rerolls">免费 <b id="free-rerolls">0</b></span>
+            </div>
+          </div>
+          <div id="shop" class="shop-row"></div>
+        </section>
+
+        <section class="battle-controls">
+          <div class="combat-progress">
+            <label for="battle-progress">战斗进度</label>
+            <div>
+              <input id="battle-progress" type="number" min="0" max="100" step="1" value="100">
+              <span>%</span>
+              <button id="apply-progress" type="button">应用</button>
+            </div>
+          </div>
+          <button id="advance-node" class="battle-button" type="button">
+            <span>出战</span>
+            <small id="advance-label">结算当前节点</small>
+          </button>
+        </section>
+      </footer>
+    </div>
+
+    <section id="start-screen" class="overlay start-screen">
+      <div class="start-card">
+        <div class="start-copy">
+          <p class="eyebrow">CURRENCY WAR • OPERATIONS LAB</p>
+          <h1>货币战争运营实验台</h1>
+          <p>
+            手动执行商店、升级、投资和节点结算。战斗只读取进度，不运行动画或伤害计算。
+          </p>
+          <div class="data-ribbon">
+            <strong id="start-snapshot">正在读取图鉴快照</strong>
+            <span id="start-counts"></span>
+          </div>
+        </div>
+        <form id="start-form" class="start-form">
+          <label>
+            难度
+            <select id="difficulty" required></select>
+          </label>
+          <label>
+            投资环境
+            <select id="environment"></select>
+          </label>
+          <div class="form-grid">
             <label>
               随机种子
               <input id="seed" type="number" value="7" step="1" required>
             </label>
             <label>
-              初始战斗进度
-              <div class="inline-input">
+              战斗进度
+              <div class="input-suffix">
                 <input id="start-progress" type="number" value="100" min="0" max="100" step="1">
                 <span>%</span>
               </div>
             </label>
-            <button class="primary" type="submit">开始对局</button>
-          </form>
-        </section>
-
-        <section class="battle-control">
-          <div class="section-title">
-            <h2>战斗进度</h2>
-            <span class="status-pill" id="progress-status">100%</span>
           </div>
-          <p class="muted">
-            100% 判胜，低于 100% 判负。该值只影响下一次节点结算，不消耗商店随机数。
-          </p>
-          <form id="progress-form" class="inline-form">
-            <input id="battle-progress" type="number" min="0" max="100" step="1" value="100">
-            <button type="submit">应用</button>
-          </form>
-        </section>
+          <button class="primary" type="submit">开始对局</button>
+          <p id="meta-status" class="form-note"></p>
+        </form>
+      </div>
+    </section>
 
-        <section>
-          <div class="section-title">
-            <h2>规则提示</h2>
-          </div>
-          <p id="validation-copy" class="muted"></p>
-          <details>
-            <summary>当前规则假设</summary>
-            <ul id="assumptions" class="compact-list"></ul>
-          </details>
-        </section>
-      </aside>
+    <section id="investment-modal" class="overlay investment-overlay" hidden>
+      <div class="investment-card">
+        <p class="eyebrow">投资策略</p>
+        <h2>选择一项投资</h2>
+        <div id="investment-options" class="investment-options"></div>
+      </div>
+    </section>
 
-      <section class="workspace">
-        <div id="empty-state" class="empty-state">
-          <p class="eyebrow">NO ACTIVE RUN</p>
-          <h2>创建一局，开始检查运营流程</h2>
-          <p>所有操作由后端状态机验证。网页不自行修改金币、经验、牌池或投资效果。</p>
+    <aside id="drawer" class="drawer" hidden>
+      <header>
+        <div>
+          <small id="drawer-kicker">运行信息</small>
+          <h2 id="drawer-title">检查</h2>
         </div>
+        <button id="close-drawer" type="button">×</button>
+      </header>
+      <div id="drawer-body" class="drawer-body"></div>
+    </aside>
 
-        <div id="run-view" hidden>
-          <section class="run-header">
-            <div>
-              <p class="eyebrow">ACTIVE RUN <span id="session-id"></span></p>
-              <h2 id="run-title">节点 1 / 20</h2>
-              <p id="run-context" class="muted"></p>
-            </div>
-            <div class="button-row">
-              <button id="refresh-run" class="ghost" type="button">刷新状态</button>
-              <button id="export-run" class="ghost" type="button">导出当前状态</button>
-            </div>
-          </section>
-
-          <section id="finish-banner" class="finish-banner" hidden></section>
-
-          <section class="resource-grid">
-            <article class="metric">
-              <span>生命</span>
-              <strong id="health">-</strong>
-            </article>
-            <article class="metric">
-              <span>金币</span>
-              <strong id="gold">-</strong>
-            </article>
-            <article class="metric">
-              <span>等级 / 经验</span>
-              <strong id="level">-</strong>
-            </article>
-            <article class="metric">
-              <span>连胜</span>
-              <strong id="streak">-</strong>
-            </article>
-            <article class="metric">
-              <span>免费刷新</span>
-              <strong id="free-rerolls">-</strong>
-            </article>
-          </section>
-
-          <section class="panel">
-            <div class="section-title">
-              <h2>节点路线</h2>
-              <span id="phase-label" class="status-pill"></span>
-            </div>
-            <div id="node-track" class="node-track"></div>
-          </section>
-
-          <section id="investment-panel" class="panel accent-panel" hidden>
-            <div class="section-title">
-              <h2>选择投资策略</h2>
-              <span class="section-note">必须先选择，才能继续商店操作</span>
-            </div>
-            <div id="investment-offers" class="choice-grid"></div>
-          </section>
-
-          <div class="content-grid">
-            <section class="panel">
-              <div class="section-title">
-                <h2>商店</h2>
-                <div class="button-row">
-                  <button id="toggle-lock" type="button">锁定</button>
-                  <button id="reroll-shop" type="button">刷新</button>
-                </div>
-              </div>
-              <div id="shop" class="shop-grid"></div>
-              <div class="footer-actions">
-                <button id="buy-xp" type="button">购买经验</button>
-                <button id="advance-node" class="primary" type="button">结算并推进节点</button>
-              </div>
-            </section>
-
-            <section class="panel">
-              <div class="section-title">
-                <h2>阵容</h2>
-                <span id="roster-count" class="section-note"></span>
-              </div>
-              <h3>上阵</h3>
-              <div id="active-units" class="unit-grid compact"></div>
-              <h3>全部角色</h3>
-              <div id="roster" class="unit-grid"></div>
-            </section>
-          </div>
-
-          <div class="content-grid">
-            <section class="panel">
-              <div class="section-title">
-                <h2>已选投资</h2>
-              </div>
-              <div id="selected-investments" class="stack-list"></div>
-              <h3>敌人词缀</h3>
-              <div id="affixes" class="stack-list"></div>
-            </section>
-
-            <section class="panel">
-              <div class="section-title">
-                <h2>节点结果</h2>
-              </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>节点</th>
-                      <th>类型</th>
-                      <th>结果</th>
-                      <th>进度</th>
-                      <th>生命</th>
-                      <th>金币</th>
-                    </tr>
-                  </thead>
-                  <tbody id="results"></tbody>
-                </table>
-              </div>
-            </section>
-          </div>
-
-          <section class="panel">
-            <div class="section-title">
-              <h2>动作记录</h2>
-            </div>
-            <ol id="events" class="event-list"></ol>
-          </section>
-
-          <details class="panel debug-panel">
-            <summary>检查数据：牌池、战力与节点强度</summary>
-            <div id="debug-summary" class="debug-summary"></div>
-            <div id="pool" class="pool-grid"></div>
-          </details>
-        </div>
-      </section>
-    </main>
-
+    <div id="finish-banner" class="finish-banner" hidden></div>
     <div id="toast" class="toast" hidden></div>
     <script src="/static/app.js"></script>
   </body>

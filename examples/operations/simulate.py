@@ -2,9 +2,11 @@
 
 import argparse
 import json
+from pathlib import Path
 
 from research.operations.catalog import load_rule_pack
 from research.operations.policies import run_batch, run_greedy
+from research.operations.snapshot import load_snapshot_rule_pack
 
 
 def main() -> None:
@@ -20,6 +22,12 @@ def main() -> None:
         help="战斗节点进度（0-100），100 表示胜利",
     )
     parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=None,
+        help="hsr-currency-wars-data 仓库目录；提供时使用最新图鉴角色、羁绊和节点",
+    )
+    parser.add_argument(
         "--affix",
         action="append",
         default=None,
@@ -27,7 +35,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    pack = load_rule_pack()
+    pack = load_rule_pack() if args.data_root is None else load_snapshot_rule_pack(args.data_root)
     if args.runs == 1:
         environment = run_greedy(
             pack,

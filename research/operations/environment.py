@@ -130,14 +130,24 @@ class OperationEnvironment:
         if self.node_index >= len(self.pack.rules.node_types):
             raise OperationActionError("对局已经结束")
         node_type = self.pack.rules.node_types[self.node_index]
-        return NodeDefinition(self.node_index, self._plane_for_node(self.node_index), node_type)
+        return NodeDefinition(
+            self.node_index,
+            self.pack.rules.node_ids[self.node_index],
+            self.pack.rules.node_planes[self.node_index],
+            node_type,
+        )
 
     @property
     def node_template(self) -> tuple[NodeDefinition, ...]:
         """返回整局节点模板，供网页显示路线。"""
 
         return tuple(
-            NodeDefinition(index, self._plane_for_node(index), node_type)
+            NodeDefinition(
+                index,
+                self.pack.rules.node_ids[index],
+                self.pack.rules.node_planes[index],
+                node_type,
+            )
             for index, node_type in enumerate(self.pack.rules.node_types)
         )
 
@@ -512,10 +522,5 @@ class OperationEnvironment:
         if self.investments.current_offers:
             raise OperationActionError("需要先选择一个投资策略")
 
-    @staticmethod
-    def _plane_for_node(index: int) -> int:
-        if index < 6:
-            return 1
-        if index < 13:
-            return 2
-        return 3
+    def _plane_for_node(self, index: int) -> int:
+        return self.pack.rules.node_planes[index]

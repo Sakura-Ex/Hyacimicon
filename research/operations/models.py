@@ -39,6 +39,33 @@ class UnitDefinition:
     position: Position
     tags: tuple[str, ...]
     traits: tuple[str, ...]
+    description: str = ""
+    costs: tuple[int, ...] = ()
+    roles: tuple[str, ...] = ()
+    portrait_path: str | None = None
+    trait_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TraitTier:
+    """羁绊的一个激活档位。"""
+
+    level: int
+    text: str
+    quality: str
+
+
+@dataclass(frozen=True)
+class TraitDefinition:
+    """羁绊名称、分类、图标和激活档位。"""
+
+    trait_id: str
+    name: str
+    description: str
+    group: str
+    icon_path: str | None
+    tiers: tuple[TraitTier, ...] = ()
+    members: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -190,6 +217,8 @@ class GameRules:
     xp_to_next_level: tuple[int, ...]
     card_copies_by_cost: tuple[int, int, int, int, int]
     node_types: tuple[NodeType, ...]
+    node_ids: tuple[str, ...]
+    node_planes: tuple[int, ...]
     investment_nodes: tuple[int, ...]
     strategy_rarity_weights: tuple[float, float, float]
     strategy_enemy_rating_delta: tuple[int, int, int]
@@ -206,6 +235,8 @@ class RuleMetadata:
     local_client_build: str
     validation_status: str
     assumptions: tuple[str, ...]
+    snapshot_id: str = ""
+    content_sha256: str = ""
 
 
 @dataclass(frozen=True)
@@ -219,6 +250,7 @@ class RulePack:
     affixes: dict[str, Affix]
     investments: dict[str, Investment]
     environments: dict[str, InvestmentEnvironment]
+    traits: dict[str, TraitDefinition] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -226,6 +258,7 @@ class NodeDefinition:
     """节点模板中的一项。"""
 
     index: int
+    node_id: str
     plane: int
     node_type: NodeType
 

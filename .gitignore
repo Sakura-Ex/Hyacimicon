@@ -24,6 +24,7 @@ Desktop.ini
 /checkpoints/
 /runs/
 /artifacts/
+/hsr-currency-wars-data/
 
 # Common build and dependency outputs
 /target/

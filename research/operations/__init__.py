@@ -14,8 +14,10 @@ from .models import (
     Investment,
     InvestmentRarity,
     NodeType,
+    TraitDefinition,
     UnitDefinition,
 )
+from .snapshot import load_snapshot_rule_pack, locate_data_repository
 
 __all__ = [
     "Affix",
@@ -29,6 +31,9 @@ __all__ = [
     "NodeType",
     "OperationEnvironment",
     "RulePack",
+    "TraitDefinition",
     "UnitDefinition",
     "load_rule_pack",
+    "load_snapshot_rule_pack",
+    "locate_data_repository",
 ]

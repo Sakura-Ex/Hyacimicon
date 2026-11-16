@@ -4,6 +4,7 @@ import random
 import threading
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .battle_progress import FixedBattleProgressProvider
 from .catalog import RulePack, load_rule_pack
@@ -170,6 +171,7 @@ class OperationSession:
             "session_id": self.session_id,
             "seed": self.seed,
             "game_version": self.pack.rules.game_version,
+            "snapshot_id": self.pack.metadata.snapshot_id,
             "phase": self._phase(observation),
             "finished": observation.ended,
             "won": observation.won,
@@ -177,12 +179,16 @@ class OperationSession:
                 "number": node_number,
                 "total": len(self.pack.rules.node_types),
                 "index": observation.node_index,
+                "id": self.environment.current_node.node_id
+                if not observation.ended
+                else self.pack.rules.node_ids[observation.node_index],
                 "type": observation.node_type.value,
                 "plane": observation.plane,
             },
             "node_template": [
                 {
                     "index": node.index,
+                    "id": node.node_id,
                     "type": node.node_type.value,
                     "plane": node.plane,
                 }
@@ -202,6 +208,7 @@ class OperationSession:
             "shop_locked": observation.shop_locked,
             "roster": [self._unit_view(unit) for unit in observation.roster],
             "active_units": [self._unit_view(unit) for unit in observation.active_units],
+            "active_traits": self._active_trait_view(observation),
             "investments": {
                 "selected": [
                     self._investment_view(self.pack.investments[investment_id])
@@ -238,7 +245,11 @@ class OperationSession:
 
         return {
             "game_version": self.pack.rules.game_version,
+            "snapshot_id": self.pack.metadata.snapshot_id,
+            "content_sha256": self.pack.metadata.content_sha256,
             "validation": self.pack.metadata.validation_status,
+            "character_count": len(self.pack.units),
+            "trait_count": len(self.pack.traits),
             "assumptions": list(self.pack.metadata.assumptions),
             "difficulties": [
                 {
@@ -308,6 +319,11 @@ class OperationSession:
             "cost": unit.cost,
             "position": unit.position.value,
             "traits": list(unit.traits),
+            "trait_ids": list(unit.trait_ids),
+            "costs": list(unit.costs or (unit.cost,)),
+            "roles": list(unit.roles),
+            "portrait_path": unit.portrait_path,
+            "description": unit.description,
             "affordable": unit.cost <= self.environment.gold,
         }
 
@@ -320,7 +336,45 @@ class OperationSession:
             "cost": unit.cost,
             "position": unit.position.value,
             "traits": list(unit.traits),
+            "trait_ids": list(unit.trait_ids),
+            "costs": list(unit.costs or (unit.cost,)),
+            "roles": list(unit.roles),
+            "portrait_path": unit.portrait_path,
+            "description": unit.description,
         }
+
+    def _active_trait_view(self, observation: RunObservation) -> list[dict[str, object]]:
+        counts: dict[str, int] = {}
+        for unit in observation.active_units:
+            definition = self.pack.units[unit.unit_id]
+            for trait_id in definition.trait_ids:
+                counts[trait_id] = counts.get(trait_id, 0) + 1
+        traits = []
+        for trait_id, count in counts.items():
+            definition = self.pack.traits.get(trait_id)
+            if definition is None:
+                continue
+            active_tier = None
+            next_tier = None
+            for tier in definition.tiers:
+                if tier.level <= count:
+                    active_tier = tier
+                elif next_tier is None:
+                    next_tier = tier
+            traits.append(
+                {
+                    "id": definition.trait_id,
+                    "name": definition.name,
+                    "group": definition.group,
+                    "icon_path": definition.icon_path,
+                    "count": count,
+                    "active_tier": (None if active_tier is None else active_tier.level),
+                    "next_tier": None if next_tier is None else next_tier.level,
+                    "active_text": "" if active_tier is None else active_tier.text,
+                    "next_text": "" if next_tier is None else next_tier.text,
+                }
+            )
+        return sorted(traits, key=lambda trait: (-int(trait["count"]), str(trait["name"])))
 
     @staticmethod
     def _investment_view(investment: Investment) -> dict[str, object]:
@@ -397,8 +451,14 @@ class OperationSession:
 class OperationService:
     """管理多个内存中的运营对局，供 HTTP 适配层调用。"""
 
-    def __init__(self, pack: RulePack | None = None) -> None:
+    def __init__(
+        self,
+        pack: RulePack | None = None,
+        *,
+        asset_root: Path | None = None,
+    ) -> None:
         self.pack = load_rule_pack() if pack is None else pack
+        self.asset_root = asset_root
         self._sessions: dict[str, OperationSession] = {}
         self._lock = threading.RLock()
 
@@ -474,6 +534,21 @@ class OperationService:
         if session is None:
             raise SessionNotFoundError("对局不存在")
         return session
+
+    def read_asset(self, request_path: str) -> bytes | None:
+        """读取数据仓库中的图鉴资源。"""
+
+        if self.asset_root is None or not request_path.startswith("/assets/"):
+            return None
+        relative = request_path.removeprefix("/")
+        path = (self.asset_root / relative).resolve()
+        try:
+            path.relative_to(self.asset_root.resolve())
+        except ValueError:
+            return None
+        if not path.is_file():
+            return None
+        return path.read_bytes()
 
 
 def _object(value: object) -> dict[str, object]:

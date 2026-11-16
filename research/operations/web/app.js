@@ -1,7 +1,8 @@
-const state = {
+const appState = {
   meta: null,
   session: null,
   busy: false,
+  drawer: null,
 };
 
 const byId = (id) => document.getElementById(id);
@@ -14,7 +15,19 @@ const escapeHtml = (value) =>
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 
-const formatSigned = (value) => (value > 0 ? `+${value}` : String(value));
+const nodeGlyphs = {
+  battle: "⚔",
+  encounter: "?",
+  boss: "♛",
+  reward: "✦",
+};
+
+const nodeLabels = {
+  battle: "战斗",
+  encounter: "遭遇",
+  boss: "首领",
+  reward: "奖励",
+};
 
 async function request(url, options = {}) {
   const response = await fetch(url, {
@@ -35,37 +48,33 @@ function showError(error) {
   window.clearTimeout(showError.timer);
   showError.timer = window.setTimeout(() => {
     toast.hidden = true;
-  }, 4200);
+  }, 4300);
 }
 
 function setBusy(busy) {
-  state.busy = busy;
+  appState.busy = busy;
   document.body.classList.toggle("is-busy", busy);
 }
 
-async function runAction(action) {
-  if (!state.session || state.busy) {
-    return;
+function starText(star) {
+  return "★".repeat(Math.max(1, Number(star)));
+}
+
+function portraitMarkup(unit, className = "") {
+  if (unit.portrait_path) {
+    return `<img class="${className}" src="${escapeHtml(unit.portrait_path)}" alt="">`;
   }
-  setBusy(true);
-  try {
-    state.session = await request(`/api/sessions/${state.session.session_id}/actions`, {
-      method: "POST",
-      body: JSON.stringify(action),
-    });
-    render();
-  } catch (error) {
-    showError(error);
-  } finally {
-    setBusy(false);
-  }
+  return `<div class="${className} trait-fallback">${escapeHtml(unit.name.slice(0, 1))}</div>`;
 }
 
 function populateMeta(meta) {
-  byId("game-version").textContent = `规则 ${meta.game_version}`;
-  byId("validation-status").textContent = `验证状态：${meta.validation}`;
-  byId("validation-copy").textContent =
-    `当前规则包状态为“${meta.validation}”。界面中的假设值会在创建对局前明确展示。`;
+  byId("game-version").textContent = `数据 ${meta.game_version} · S2`;
+  byId("snapshot-id").textContent = meta.snapshot_id || "内置规则";
+  byId("start-snapshot").textContent = meta.snapshot_id || "内置规则";
+  byId("start-counts").textContent =
+    `${meta.character_count} 名角色 · ${meta.trait_count} 个羁绊 · 20 个节点`;
+  byId("meta-status").textContent =
+    `${meta.validation}。角色与羁绊来自私有数据仓库；投资数值仍按当前规则包运行。`;
 
   byId("difficulty").innerHTML = meta.difficulties
     .map(
@@ -73,29 +82,24 @@ function populateMeta(meta) {
         `<option value="${escapeHtml(difficulty.id)}">${escapeHtml(difficulty.name)} · ${difficulty.affix_count} 词缀</option>`,
     )
     .join("");
-
   byId("environment").innerHTML =
     '<option value="">随机环境</option>' +
     meta.environments
       .map(
         (environment) =>
-          `<option value="${escapeHtml(environment.id)}">${escapeHtml(environment.name)} · ${escapeHtml(environment.description)}</option>`,
+          `<option value="${escapeHtml(environment.id)}">${escapeHtml(environment.name)}</option>`,
       )
       .join("");
-
-  byId("assumptions").innerHTML = meta.assumptions
-    .map((assumption) => `<li>${escapeHtml(assumption)}</li>`)
-    .join("");
 }
 
 async function startRun(event) {
   event.preventDefault();
-  if (state.busy) {
+  if (appState.busy) {
     return;
   }
   setBusy(true);
   try {
-    state.session = await request("/api/sessions", {
+    appState.session = await request("/api/sessions", {
       method: "POST",
       body: JSON.stringify({
         difficulty_id: byId("difficulty").value,
@@ -104,8 +108,7 @@ async function startRun(event) {
         battle_progress: Number(byId("start-progress").value),
       }),
     });
-    byId("empty-state").hidden = true;
-    byId("run-view").hidden = false;
+    byId("start-screen").hidden = true;
     render();
   } catch (error) {
     showError(error);
@@ -114,261 +117,395 @@ async function startRun(event) {
   }
 }
 
-function renderNodeTrack(session) {
-  const resultsByIndex = new Map(
+async function runAction(action) {
+  if (!appState.session || appState.busy) {
+    return;
+  }
+  setBusy(true);
+  try {
+    appState.session = await request(
+      `/api/sessions/${appState.session.session_id}/actions`,
+      {
+        method: "POST",
+        body: JSON.stringify(action),
+      },
+    );
+    render();
+  } catch (error) {
+    showError(error);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function renderRoute(session) {
+  const results = new Map(
     session.results.map((result) => [result.node_index, result]),
   );
   byId("node-track").innerHTML = session.node_template
     .map((node) => {
-      const result = resultsByIndex.get(node.index);
-      const current = node.index === session.node.index && !session.finished;
+      const result = results.get(node.index);
       const status = result ? (result.won ? "won" : "lost") : "";
-      const currentClass = current ? "current" : "";
+      const current =
+        node.index === session.node.index && !session.finished ? "current" : "";
       return `
-        <div class="node-dot ${status} ${currentClass}" title="位面 ${node.plane} · ${node.type}">
-          ${node.index + 1}
-          <strong>${escapeHtml(node.type.slice(0, 4))}</strong>
+        <div class="route-node ${status} ${current}" title="${escapeHtml(node.id)} · ${escapeHtml(nodeLabels[node.type])}">
+          <span class="node-glyph">${nodeGlyphs[node.type] || "•"}</span>
+          <small>${escapeHtml(node.id)}</small>
         </div>
       `;
     })
     .join("");
+}
+
+function allocateUnits(activeUnits) {
+  const front = activeUnits.filter((unit) => unit.position === "front");
+  const back = activeUnits.filter((unit) => unit.position === "back");
+  const flex = activeUnits.filter((unit) => unit.position === "flex");
+  for (const unit of flex) {
+    if (front.length <= back.length) {
+      front.push(unit);
+    } else {
+      back.push(unit);
+    }
+  }
+  return { front, back };
+}
+
+function unitCard(unit) {
+  const cost = unit.costs?.[0] ?? unit.cost;
+  return `
+    <article class="unit-slot filled" title="${escapeHtml(unit.description || "")}">
+      ${portraitMarkup(unit)}
+      <span class="cost-badge">${cost}</span>
+      <span class="star-badge">${starText(unit.star)}</span>
+      <div class="unit-info">
+        <strong>${escapeHtml(unit.name)}</strong>
+        <small>${escapeHtml(unit.position === "front" ? "前台" : unit.position === "back" ? "后台" : "前后台")}</small>
+      </div>
+    </article>
+  `;
+}
+
+function renderUnits(session) {
+  const { front, back } = allocateUnits(session.active_units);
+  const expandSlots = (units, minimum) => {
+    const cards = units.map(unitCard);
+    while (cards.length < minimum) {
+      cards.push('<div class="unit-slot empty"></div>');
+    }
+    return cards.join("");
+  };
+  byId("front-units").innerHTML = expandSlots(front, 5);
+  byId("back-units").innerHTML = expandSlots(back, 6);
+  byId("active-capacity").textContent =
+    `${session.active_units.length}/${session.resources.level}`;
+}
+
+function renderTraits(session) {
+  const traits = session.active_traits;
+  byId("trait-count").textContent = traits.length;
+  byId("active-traits").innerHTML =
+    traits
+      .map((trait) => {
+        const icon = trait.icon_path
+          ? `<img src="${escapeHtml(trait.icon_path)}" alt="">`
+          : '<span class="trait-fallback">◆</span>';
+        const next =
+          trait.next_tier === null
+            ? "已满"
+            : `${trait.count}/${trait.next_tier}`;
+        return `
+          <article class="trait-entry ${trait.active_tier !== null ? "active" : ""}">
+            ${icon}
+            <div>
+              <strong>${escapeHtml(trait.name)}</strong>
+              <small>${escapeHtml(trait.group)} · ${next}</small>
+            </div>
+          </article>
+        `;
+      })
+      .join("") || '<p class="trait-empty">当前阵容尚未形成羁绊</p>';
 }
 
 function renderShop(session) {
   byId("shop").innerHTML = session.shop
     .map((offer, index) => {
       if (offer.empty) {
-        return '<article class="shop-card empty"><span>空位</span><p>不可购买</p></article>';
+        return '<article class="shop-card empty"><span>已售出</span></article>';
       }
+      const enabled =
+        session.capabilities.buy_offer && offer.affordable ? "" : "disabled";
       return `
         <article class="shop-card">
-          <div>
-            <span class="cost">${offer.cost} 金币 · ${escapeHtml(offer.position)}</span>
-            <h3>${escapeHtml(offer.name)}</h3>
-            <p>${escapeHtml(offer.traits.join(" / ") || "无标签")}</p>
+          ${portraitMarkup(offer)}
+          <div class="shop-card-body">
+            <strong>${escapeHtml(offer.name)}</strong>
+            <small>${escapeHtml(offer.roles.join(" / ") || "角色")}</small>
+            <small class="price">${offer.cost} 金币 · ${escapeHtml(offer.traits.join(" / "))}</small>
+            <button type="button" data-action="buy" data-index="${index}" ${enabled}>购买</button>
           </div>
-          <button data-action="buy" data-index="${index}" ${offer.affordable && session.capabilities.buy_offer ? "" : "disabled"}>
-            购买
-          </button>
         </article>
       `;
     })
     .join("");
+  byId("shop-gold").textContent = `${session.resources.gold} 金币`;
 
   const lock = byId("toggle-lock");
-  lock.textContent = session.shop_locked ? "解除锁定" : "锁定商店";
+  lock.textContent = session.shop_locked ? "开" : "锁";
+  lock.title = session.shop_locked ? "解除锁定" : "锁定商店";
   lock.disabled = !session.capabilities.lock_shop;
   byId("reroll-shop").disabled = !session.capabilities.reroll_shop;
   byId("buy-xp").disabled = !session.capabilities.buy_xp;
   byId("advance-node").disabled = !session.capabilities.advance_node;
+  byId("free-rerolls").textContent = session.resources.free_rerolls;
 }
 
-function renderUnits(session) {
-  const activeKeys = new Set(
-    session.active_units.map((unit) => `${unit.unit_id}:${unit.star}`),
-  );
-  byId("active-units").innerHTML =
-    session.active_units
-      .map(
-        (unit) => `
-          <article class="unit-card active">
-            <span class="cost">${unit.cost} 金币</span>
-            <h3>${escapeHtml(unit.name)} · ${unit.star}★</h3>
-            <p>${escapeHtml(unit.position)}</p>
-          </article>
-        `,
-      )
-      .join("") || '<p class="muted">暂无上阵角色</p>';
-
-  byId("roster-count").textContent = `${session.roster.length} 个角色实例`;
-  byId("roster").innerHTML =
-    session.roster
-      .map((unit) => {
-        const active = activeKeys.has(`${unit.unit_id}:${unit.star}`);
-        return `
-          <article class="unit-card ${active ? "active" : ""}">
-            <span class="cost">${unit.cost} 金币</span>
-            <h3>${escapeHtml(unit.name)} · ${unit.star}★</h3>
-            <p>${escapeHtml(unit.traits.join(" / ") || "无标签")}</p>
-            <button
-              class="danger"
-              data-action="sell"
-              data-unit-id="${escapeHtml(unit.unit_id)}"
-              data-star="${unit.star}"
-              ${session.capabilities.sell_unit ? "" : "disabled"}
-            >出售</button>
-          </article>
-        `;
-      })
-      .join("") || '<p class="muted">暂无角色</p>';
+function renderResources(session) {
+  byId("stage-number").textContent = session.node.id || session.node.number;
+  byId("health").textContent = `${session.resources.health}/${session.resources.max_health}`;
+  byId("level").textContent = session.resources.level;
+  byId("xp-line").textContent =
+    session.resources.xp_to_next_level === null
+      ? `${session.resources.xp} · 已满级`
+      : `${session.resources.xp}/${session.resources.xp_to_next_level}`;
+  byId("run-environment").textContent = session.environment.name;
+  byId("run-difficulty").textContent = session.difficulty.name;
+  byId("run-plane").textContent = `位面 ${session.node.plane}`;
+  byId("progress-value").textContent =
+    `${session.battle.progress_percent}%`;
+  byId("battle-progress").value = session.battle.progress_percent;
+  byId("apply-progress").disabled = !session.capabilities.set_battle_progress;
+  byId("advance-label").textContent =
+    session.phase === "investment" ? "请先选择投资" : "结算当前节点";
 }
 
-function renderInvestments(session) {
-  const panel = byId("investment-panel");
-  const hasOffers = session.investments.offers.length > 0;
-  panel.hidden = !hasOffers;
-  byId("investment-offers").innerHTML = session.investments.offers
+function renderInvestmentModal(session) {
+  const modal = byId("investment-modal");
+  const offers = session.investments.offers;
+  modal.hidden = offers.length === 0;
+  byId("investment-options").innerHTML = offers
     .map(
       (investment, index) => `
-        <article class="choice-card">
-          <span class="rarity">${escapeHtml(investment.rarity)}</span>
-          <h3>${escapeHtml(investment.name)}</h3>
-          <p>${escapeHtml(investment.description)}</p>
-          <button
-            data-action="investment"
-            data-index="${index}"
-            ${session.capabilities.choose_investment ? "" : "disabled"}
-          >选择</button>
+        <article class="investment-option">
+          <div>
+            <span class="rarity">${escapeHtml(investment.rarity)}</span>
+            <h3>${escapeHtml(investment.name)}</h3>
+            <p>${escapeHtml(investment.description)}</p>
+          </div>
+          <button type="button" data-action="investment" data-index="${index}">
+            选择
+          </button>
         </article>
       `,
     )
     .join("");
-
-  byId("selected-investments").innerHTML =
-    session.investments.selected
-      .map(
-        (investment) => `
-          <div class="stack-item">
-            <span class="rarity">${escapeHtml(investment.rarity)}</span>
-            <strong>${escapeHtml(investment.name)}</strong>
-            <p>${escapeHtml(investment.description)}</p>
-          </div>
-        `,
-      )
-      .join("") || '<p class="muted">尚未选择投资策略</p>';
-
-  byId("affixes").innerHTML =
-    session.affixes
-      .map(
-        (affix) => `
-          <div class="stack-item">
-            <strong>${escapeHtml(affix.name)}</strong>
-            <p>${escapeHtml(affix.description)}</p>
-          </div>
-        `,
-      )
-      .join("") || '<p class="muted">没有开局词缀</p>';
 }
 
-function renderResults(session) {
-  byId("results").innerHTML =
-    session.results
-      .map(
-        (result) => `
-          <tr>
-            <td>${result.node_index + 1}</td>
-            <td>${escapeHtml(result.node_type)}</td>
-            <td class="${result.won ? "win" : "loss"}">${result.won ? "胜利" : "失败"}</td>
-            <td>${result.battle_progress}%</td>
-            <td>${formatSigned(result.health_delta)}</td>
-            <td>${formatSigned(result.gold_delta)}</td>
-          </tr>
-        `,
-      )
-      .join("") || '<tr><td colspan="6" class="muted">尚未结算节点</td></tr>';
-}
-
-function renderEvents(session) {
-  byId("events").innerHTML = [...session.events]
-    .reverse()
-    .map(
-      (event) => `
-        <li>
-          <span>#${event.sequence}</span>
-          <div>${escapeHtml(event.message)}</div>
-        </li>
-      `,
-    )
-    .join("");
-}
-
-function renderDebug(session) {
-  const enemyRating =
-    session.debug.node_enemy_rating === null
-      ? "已结束"
-      : session.debug.node_enemy_rating.toFixed(2);
-  byId("debug-summary").innerHTML = `
-    <span>阵容强度：${session.debug.team_power.toFixed(2)}</span>
-    <span>节点强度：${enemyRating}</span>
-    <span>随机种子：${session.seed}</span>
-    <span>战斗提供器：${escapeHtml(session.battle.provider_id)}</span>
-  `;
-  byId("pool").innerHTML = session.debug.pool
-    .map(
-      (unit) => `
-        <div class="pool-item">
-          <span>${escapeHtml(unit.name)}</span>
-          <strong>${unit.remaining}</strong>
-        </div>
-      `,
-    )
-    .join("");
-}
-
-function render() {
-  const session = state.session;
-  if (!session) {
-    return;
-  }
-  byId("empty-state").hidden = true;
-  byId("run-view").hidden = false;
-  byId("session-id").textContent = `#${session.session_id.slice(0, 8)}`;
-  byId("run-title").textContent = `节点 ${session.node.number} / ${session.node.total}`;
-  byId("run-context").textContent =
-    `${session.difficulty.name} · ${session.environment.name} · ${session.node.plane} 位面 · ${session.node.type}`;
-  byId("phase-label").textContent = {
-    operations: "运营阶段",
-    investment: "等待选择投资",
-    finished: "对局结束",
-  }[session.phase];
-
-  byId("health").textContent = `${session.resources.health} / ${session.resources.max_health}`;
-  byId("gold").textContent = session.resources.gold;
-  const nextXp =
-    session.resources.xp_to_next_level === null
-      ? "MAX"
-      : `${session.resources.xp} / ${session.resources.xp_to_next_level}`;
-  byId("level").textContent = `${session.resources.level} · ${nextXp}`;
-  byId("streak").textContent = session.resources.streak;
-  byId("free-rerolls").textContent = session.resources.free_rerolls;
-  byId("progress-status").textContent = `${session.battle.progress_percent}%`;
-  byId("battle-progress").value = session.battle.progress_percent;
-  byId("progress-form").querySelector("button").disabled =
-    !session.capabilities.set_battle_progress;
-
+function renderFinish(session) {
   const banner = byId("finish-banner");
   banner.hidden = !session.finished;
   if (session.finished) {
-    banner.textContent = session.won ? "整局胜利" : "对局结束：生命归零";
+    banner.textContent = session.won
+      ? "整局胜利"
+      : `对局结束 · 抵达 ${session.node.id}`;
+  }
+}
+
+function renderDrawer(session) {
+  if (!appState.drawer) {
+    byId("drawer").hidden = true;
+    return;
+  }
+  byId("drawer").hidden = false;
+  const titles = {
+    roster: ["阵容与备战席", "全部角色"],
+    investments: ["投资与环境", "当前加成"],
+    log: ["动作与节点", "运行记录"],
+    debug: ["规则检查", "内部状态"],
+  };
+  const [kicker, title] = titles[appState.drawer];
+  byId("drawer-kicker").textContent = kicker;
+  byId("drawer-title").textContent = title;
+
+  if (appState.drawer === "roster") {
+    byId("drawer-body").innerHTML =
+      `<div class="roster-list">${session.roster
+        .map(
+          (unit) => `
+            <article class="roster-item">
+              ${portraitMarkup(unit)}
+              <div>
+                <strong>${escapeHtml(unit.name)} · ${starText(unit.star)}</strong>
+                <small>${unit.cost}费 · ${escapeHtml(unit.position)} · ${escapeHtml(unit.traits.join(" / "))}</small>
+              </div>
+              <button type="button" data-action="sell" data-unit-id="${escapeHtml(unit.unit_id)}" data-star="${unit.star}" ${session.capabilities.sell_unit ? "" : "disabled"}>
+                出售
+              </button>
+            </article>
+          `,
+        )
+        .join("")}</div>`;
+    return;
   }
 
-  renderNodeTrack(session);
-  renderShop(session);
+  if (appState.drawer === "investments") {
+    const selected = session.investments.selected
+      .map(
+        (investment) => `
+          <article class="info-card">
+            <span>◆</span>
+            <div>
+              <strong>${escapeHtml(investment.name)}</strong>
+              <small>${escapeHtml(investment.rarity)}</small>
+              <p>${escapeHtml(investment.description)}</p>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+    const affixes = session.affixes
+      .map(
+        (affix) => `
+          <article class="info-card">
+            <span>!</span>
+            <div>
+              <strong>${escapeHtml(affix.name)}</strong>
+              <p>${escapeHtml(affix.description)}</p>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+    byId("drawer-body").innerHTML =
+      `<h3>已选投资</h3><div class="selected-list">${selected || '<p class="muted">暂无</p>'}</div>
+       <h3>敌人词缀</h3><div class="selected-list">${affixes || '<p class="muted">暂无</p>'}</div>`;
+    return;
+  }
+
+  if (appState.drawer === "log") {
+    byId("drawer-body").innerHTML = `
+      <ol class="record-list">
+        ${[...session.events]
+          .reverse()
+          .map(
+            (event) => `
+              <li>
+                <span>#${event.sequence}</span>
+                <div>${escapeHtml(event.message)}</div>
+              </li>
+            `,
+          )
+          .join("")}
+      </ol>
+      <h3>节点结果</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>节点</th><th>进度</th><th>生命</th><th>金币</th></tr></thead>
+          <tbody>
+            ${session.results
+              .map(
+                (result) => `
+                  <tr>
+                    <td>${result.node_index + 1} · ${escapeHtml(result.node_type)}</td>
+                    <td class="${result.won ? "win" : "loss"}">${result.battle_progress}%</td>
+                    <td>${result.health_delta > 0 ? "+" : ""}${result.health_delta}</td>
+                    <td>${result.gold_delta > 0 ? "+" : ""}${result.gold_delta}</td>
+                  </tr>
+                `,
+              )
+              .join("") || '<tr><td colspan="4" class="muted">尚未结算节点</td></tr>'}
+          </tbody>
+        </table>
+      </div>`;
+    return;
+  }
+
+  byId("drawer-body").innerHTML = `
+    <div class="metric-grid">
+      <div><small>阵容强度</small><strong>${session.debug.team_power.toFixed(2)}</strong></div>
+      <div><small>节点强度</small><strong>${session.debug.node_enemy_rating === null ? "—" : session.debug.node_enemy_rating.toFixed(2)}</strong></div>
+      <div><small>随机种子</small><strong>${session.seed}</strong></div>
+    </div>
+    <p class="muted">数据快照：${escapeHtml(session.snapshot_id || "内置规则")}</p>
+    <h3>剩余牌池</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>角色</th><th>费用</th><th>剩余</th></tr></thead>
+        <tbody>
+          ${session.debug.pool
+            .map(
+              (unit) => `
+                <tr>
+                  <td>${escapeHtml(unit.name)}</td>
+                  <td>${unit.cost}</td>
+                  <td>${unit.remaining}</td>
+                </tr>
+              `,
+            )
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function render() {
+  const session = appState.session;
+  if (!session) {
+    byId("start-screen").hidden = false;
+    return;
+  }
+  byId("start-screen").hidden = true;
+  renderResources(session);
+  renderRoute(session);
   renderUnits(session);
-  renderInvestments(session);
-  renderResults(session);
-  renderEvents(session);
-  renderDebug(session);
+  renderTraits(session);
+  renderShop(session);
+  renderInvestmentModal(session);
+  renderFinish(session);
+  renderDrawer(session);
+}
+
+function exportRun() {
+  if (!appState.session) {
+    return;
+  }
+  const blob = new Blob([JSON.stringify(appState.session, null, 2)], {
+    type: "application/json",
+  });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `currency-war-${appState.session.session_id.slice(0, 8)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }
 
 document.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-action]");
-  if (button) {
-    const action = button.dataset.action;
+  const actionTarget = event.target.closest("[data-action]");
+  if (actionTarget) {
+    event.stopPropagation();
+    const action = actionTarget.dataset.action;
     if (action === "buy") {
-      await runAction({ type: "buy_offer", index: Number(button.dataset.index) });
+      await runAction({ type: "buy_offer", index: Number(actionTarget.dataset.index) });
     } else if (action === "sell") {
       await runAction({
         type: "sell_unit",
-        unit_id: button.dataset.unitId,
-        star: Number(button.dataset.star),
+        unit_id: actionTarget.dataset.unitId,
+        star: Number(actionTarget.dataset.star),
       });
     } else if (action === "investment") {
       await runAction({
         type: "choose_investment",
-        index: Number(button.dataset.index),
+        index: Number(actionTarget.dataset.index),
       });
     }
+    return;
+  }
+
+  const drawerTarget = event.target.closest("[data-drawer]");
+  if (drawerTarget) {
+    appState.drawer = drawerTarget.dataset.drawer;
+    renderDrawer(appState.session);
     return;
   }
 
@@ -376,62 +513,48 @@ document.addEventListener("click", async (event) => {
   if (!target) {
     return;
   }
+  if (target.id === "new-run") {
+    byId("start-screen").hidden = false;
+    return;
+  }
+  if (target.id === "close-drawer") {
+    appState.drawer = null;
+    byId("drawer").hidden = true;
+    return;
+  }
   if (target.id === "toggle-lock") {
-    await runAction({ type: "lock_shop", locked: !state.session.shop_locked });
-  } else if (target.id === "reroll-shop") {
+    await runAction({ type: "lock_shop", locked: !appState.session.shop_locked });
+    return;
+  }
+  if (target.id === "reroll-shop") {
     await runAction({ type: "reroll_shop" });
-  } else if (target.id === "buy-xp") {
+    return;
+  }
+  if (target.id === "buy-xp") {
     await runAction({ type: "buy_xp", count: 1 });
-  } else if (target.id === "advance-node") {
+    return;
+  }
+  if (target.id === "advance-node") {
     await runAction({ type: "advance_node" });
-  } else if (target.id === "refresh-run") {
-    await refreshRun();
-  } else if (target.id === "export-run") {
-    exportRun();
-  }
-});
-
-function exportRun() {
-  if (!state.session) {
     return;
   }
-  const blob = new Blob([JSON.stringify(state.session, null, 2)], {
-    type: "application/json",
-  });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `currency-war-run-${state.session.session_id.slice(0, 8)}.json`;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-async function refreshRun() {
-  if (!state.session || state.busy) {
-    return;
-  }
-  setBusy(true);
-  try {
-    state.session = await request(`/api/sessions/${state.session.session_id}`);
-    render();
-  } catch (error) {
-    showError(error);
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function init() {
-  byId("start-form").addEventListener("submit", startRun);
-  byId("progress-form").addEventListener("submit", async (event) => {
-    event.preventDefault();
+  if (target.id === "apply-progress") {
     await runAction({
       type: "set_battle_progress",
       progress: Number(byId("battle-progress").value),
     });
-  });
+    return;
+  }
+  if (target.id === "export-run") {
+    exportRun();
+  }
+});
+
+async function init() {
+  byId("start-form").addEventListener("submit", startRun);
   try {
-    state.meta = await request("/api/meta");
-    populateMeta(state.meta);
+    appState.meta = await request("/api/meta");
+    populateMeta(appState.meta);
   } catch (error) {
     showError(error);
   }
