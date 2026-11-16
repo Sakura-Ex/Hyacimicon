@@ -2,6 +2,20 @@
 
 use serde::{Deserialize, Serialize};
 
+use std::collections::BTreeMap;
+
+use crate::playable::attributes::AttributeBonus;
+
+/// 一个角色各小行迹节点激活后的属性贡献。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CharacterMinorTraces {
+    /// 常规角色 ID；能力版本在配置展开时选择。
+    pub character_id: String,
+    /// 节点 ID 后三位（201～210）到属性加成的映射。
+    pub nodes: BTreeMap<u16, AttributeBonus>,
+}
+
 /// 常规命途键，沿用已有账号资料。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GamePath {

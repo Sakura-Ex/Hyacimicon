@@ -1,6 +1,6 @@
 # Rust 账号数据与配置
 
-状态：原始账号模型、reliquary-archiver v4 导入、实际游玩配置结构、文档数值 JSON、角色来源选择和遗器等级映射判断已实现。其他部分的自动映射、模板展开、面板计算、Python 生成结果接入与绑定待实现。
+状态：原始账号模型、reliquary-archiver v4 导入、实际游玩配置结构、文档数值 JSON、角色来源选择、遗器等级判断和行迹保底运算已实现。完整模板展开、面板计算、Python 生成结果接入与绑定待实现。
 
 `core/account/` 提供 `account-core` crate，供训练、评估和玩家应用共用。[reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[实际游玩配置](playable-configuration.md)说明目标结构、JSON 文件及试用补齐和映射算法。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
@@ -22,7 +22,8 @@ core/account/
 │   ├── playable/       # 实际配置与转换计划
 │   │   ├── mod.rs      # 生效配置、面板与机制引用
 │   │   ├── planning.rs  # 角色来源与分项映射计划
-│   │   └── attributes.rs  # 静态属性键与单位
+│   │   ├── attributes.rs  # 静态属性键与单位
+│   │   └── traces.rs   # 按试用基础行迹补齐
 │   ├── reference/      # 文档数据类型及 JSON 载入
 │   └── import/reliquary/  # 来源字段、行迹与装备转换
 ├── examples/           # 统一格式读取与实际文件导入
@@ -30,6 +31,7 @@ core/account/
     ├── raw_account.rs
     ├── reliquary_import.rs
     ├── playable_data.rs
+    ├── trace_floor.rs
     └── fixtures/       # 人工构造的最小样例
 ```
 

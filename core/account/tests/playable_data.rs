@@ -37,6 +37,13 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     assert_eq!(data.mappings.len(), 60);
     assert_eq!(data.gameplay_forms.len(), 216);
     assert_eq!(data.rules.default_light_cones.len(), 9);
+    assert_eq!(data.minor_traces.len(), 60);
+    for minor in &data.minor_traces {
+        assert_eq!(
+            minor.nodes.keys().copied().collect::<Vec<_>>(),
+            (201..=210).collect::<Vec<_>>()
+        );
+    }
     assert_eq!(
         (
             data.relics.mainstats.len(),
@@ -59,6 +66,19 @@ fn loads_all_documented_records_and_preserves_cross_references() {
         assert!(cone_ids.contains(&trial.light_cone.light_cone_id));
         assert!(set_ids.contains(&trial.relics.outer_set_id));
         assert!(set_ids.contains(&trial.relics.planar_set_id));
+        if let Some(traces) = &trial.traces {
+            let minor = data
+                .minor_traces
+                .iter()
+                .find(|entry| entry.character_id == trial.character_id)
+                .unwrap();
+            assert!(
+                traces
+                    .inactive_minor_nodes
+                    .iter()
+                    .all(|node| minor.nodes.contains_key(node))
+            );
+        }
     }
     for mapping in &data.mappings {
         assert!(character_ids.contains(&mapping.character_id));
@@ -73,6 +93,48 @@ fn loads_all_documented_records_and_preserves_cross_references() {
     assert_eq!(gameplay_ids.len(), 63);
     for form in &data.gameplay_forms {
         assert!(character_ids.contains(&form.character_id));
+    }
+}
+
+#[test]
+fn binds_the_last_two_minor_nodes_and_keeps_fully_unlocked_trials() {
+    let data = PlayableData::bundled().unwrap();
+    let welt = data
+        .minor_traces
+        .iter()
+        .find(|entry| entry.character_id == "1004")
+        .unwrap();
+    assert_eq!(welt.nodes[&201].attribute, Attribute::EffectHitRate);
+    assert_eq!(welt.nodes[&201].value, 0.04);
+    assert_eq!(welt.nodes[&209].attribute, Attribute::ImaginaryDamageBoost);
+    assert_eq!(welt.nodes[&209].value, 0.064);
+    assert_eq!(welt.nodes[&210].value, 0.08);
+    let jingliu = data
+        .minor_traces
+        .iter()
+        .find(|entry| entry.character_id == "1212")
+        .unwrap();
+    assert_eq!(jingliu.nodes[&209].attribute, Attribute::Speed);
+    assert_eq!(jingliu.nodes[&209].value, 4.0);
+    for trial in &data.trials {
+        match trial.character_id.as_str() {
+            "6042" => assert!(trial.traces.is_none()),
+            "1408" | "1412" => assert!(
+                trial
+                    .traces
+                    .as_ref()
+                    .unwrap()
+                    .inactive_minor_nodes
+                    .is_empty()
+            ),
+            _ => assert_eq!(
+                trial.traces.as_ref().unwrap().inactive_minor_nodes,
+                [209, 210]
+            ),
+        }
+    }
+    for mapping in &data.mappings {
+        assert_eq!(mapping.traces.inactive_minor_nodes, [209, 210]);
     }
 }
 

@@ -5,6 +5,7 @@
 
 pub mod attributes;
 pub mod planning;
+pub mod traces;
 
 use std::collections::BTreeMap;
 

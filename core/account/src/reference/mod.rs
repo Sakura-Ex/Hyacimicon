@@ -23,6 +23,8 @@ pub struct PlayableData {
     pub rules: MappingRules,
     /// 局内星级参数，供后续组装阶段选择。
     pub gameplay_forms: Vec<GameplayFormData>,
+    /// 各角色小行迹节点及其属性贡献。
+    pub minor_traces: Vec<CharacterMinorTraces>,
     /// 遗器数值与套装索引。
     pub relics: RelicReference,
 }
@@ -41,6 +43,9 @@ impl PlayableData {
             rules: serde_json::from_str(include_str!("../../data/s2-v4.7/mapping-rules.json"))?,
             gameplay_forms: serde_json::from_str(include_str!(
                 "../../data/s2-v4.7/gameplay-forms.json"
+            ))?,
+            minor_traces: serde_json::from_str(include_str!(
+                "../../data/s2-v4.7/minor-traces.json"
             ))?,
             relics: serde_json::from_str(include_str!("../../data/s2-v4.7/relics.json"))?,
         })

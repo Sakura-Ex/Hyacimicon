@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::models::GamePath;
 use crate::{
     RelicSlot,
-    playable::attributes::{Attribute, AttributeBonus, AttributeValues},
+    playable::attributes::{Attribute, AttributeValues},
 };
 
 /// 模板中的技能类别，实际节点 ID 在配置展开时绑定。
@@ -32,14 +32,14 @@ pub enum SkillKind {
     AhaBiography,
 }
 
-/// 模板提供的行迹基础等级与未激活小行迹的属性贡献。
+/// 模板提供的行迹基础等级与未激活小行迹节点。
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TraceTemplate {
     /// 星魂加级前的技能等级。
     pub base_levels: BTreeMap<SkillKind, u8>,
-    /// 每项未激活属性节点的贡献；节点 ID 需结合行迹资料绑定。
-    pub inactive_minor_bonuses: Vec<AttributeBonus>,
+    /// 未激活小行迹的后三位节点 ID，对应角色小行迹表的 201～210。
+    pub inactive_minor_nodes: Vec<u16>,
 }
 
 /// 模板中的光锥定义，等级和突破保留文档中的未知状态。
