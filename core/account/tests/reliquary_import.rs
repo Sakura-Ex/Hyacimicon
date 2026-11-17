@@ -207,6 +207,8 @@ fn rejects_invalid_ids_ranges_and_source_labels() {
             "1～5",
         ),
         ("/relics/1/level", json!(15), "relics[1].level", "0～12"),
+        ("/relics/0/rarity", json!(86), "relics[0].rarity", "2～5"),
+        ("/relics/0/rarity", json!(255), "relics[0].rarity", "2～5"),
         (
             "/relics/0/slot",
             json!("Boots"),

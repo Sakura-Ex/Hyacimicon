@@ -1,13 +1,31 @@
 //! 统一格式的库存、单位、缺省语义和序列化约定。
 
 use account_core::{
-    InvalidRelicSlot, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicMainStat, RelicSlot,
-    RelicSubStat,
+    InvalidRelicSlot, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicInstance, RelicMainStat,
+    RelicSlot, RelicSubStat,
 };
 use serde_json::{Value, json};
 
 /// 人工构造的模型样例，覆盖空装、部分配装、闲置库存和不同强化等级。
 const EXAMPLE: &str = include_str!("fixtures/raw_account.json");
+
+#[test]
+fn relic_upgrade_caps_reject_all_unsupported_u8_rarities_without_panicking() {
+    for rarity in 0..=u8::MAX {
+        let expected = match rarity {
+            2 => Some(6),
+            3 => Some(9),
+            4 => Some(12),
+            5 => Some(15),
+            _ => None,
+        };
+        assert_eq!(
+            RelicInstance::max_level_for_rarity(rarity),
+            expected,
+            "rarity={rarity}"
+        );
+    }
+}
 
 #[test]
 fn preserves_inventory_partial_equipment_and_original_progression() {

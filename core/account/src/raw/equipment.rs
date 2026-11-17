@@ -104,6 +104,6 @@ impl RelicInstance {
 
     /// 按品质读取强化上限；当前支持二至五星遗器。
     pub fn max_level_for_rarity(rarity: u8) -> Option<u8> {
-        (2..=5).contains(&rarity).then_some(rarity * 3)
+        (2..=5).contains(&rarity).then(|| rarity * 3)
     }
 }
