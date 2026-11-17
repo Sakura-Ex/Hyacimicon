@@ -241,6 +241,8 @@ impl<'input> BattleSession<'input> {
                 // 结算触发。额度归零时，已进入的单位Turn先完成收尾。
                 if self.state.timeline.remaining == 0.0 {
                     if let Some(actor) = self.state.turn {
+                        // 完整Action后的补位先于TurnEnd，也先于新入场单位的插入检查。
+                        self.state.refill_queue();
                         let insert_first = input.scenario().mechanics.unit_before_cycle
                             && (!self.state.pending.is_empty()
                                 || !self
