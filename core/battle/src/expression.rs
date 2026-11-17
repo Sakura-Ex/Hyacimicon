@@ -1,4 +1,5 @@
 //! Runtime numeric expressions. Variable lookup is supplied by the owning state.
+use crate::dynamic_scope::DynamicScope;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -6,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum Expression {
     Constant { value: f64 },
     Variable { key: String },
+    ScopedVariable { scope: DynamicScope, key: String },
     Add { left: Box<Self>, right: Box<Self> },
     Subtract { left: Box<Self>, right: Box<Self> },
     Multiply { left: Box<Self>, right: Box<Self> },
@@ -27,7 +29,9 @@ impl Expression {
             Self::Constant { value } if !value.is_finite() => {
                 Err("nonfinite expression constant".into())
             }
-            Self::Variable { key } if key.is_empty() || key.len() > 200 => {
+            Self::Variable { key } | Self::ScopedVariable { key, .. }
+                if key.is_empty() || key.len() > 200 =>
+            {
                 Err("invalid dynamic key".into())
             }
             Self::Add { left, right }
@@ -44,24 +48,35 @@ impl Expression {
     }
     /// Missing bindings and invalid arithmetic fail; neither becomes a zero value.
     pub fn evaluate(&self, lookup: &impl Fn(&str) -> Option<f64>) -> Result<f64, String> {
+        self.evaluate_with_scopes(lookup, &|_, _| None)
+    }
+    /// Transient values require an explicit active frame; no unit fallback.
+    pub fn evaluate_with_scopes(
+        &self,
+        lookup: &impl Fn(&str) -> Option<f64>,
+        scoped: &impl Fn(DynamicScope, &str) -> Option<f64>,
+    ) -> Result<f64, String> {
+        let eval = |child: &Self| child.evaluate_with_scopes(lookup, scoped);
         let value = match self {
             Self::Constant { value } => *value,
             Self::Variable { key } => {
                 lookup(key).ok_or_else(|| format!("unresolved dynamic key {key}"))?
             }
-            Self::Add { left, right } => left.evaluate(lookup)? + right.evaluate(lookup)?,
-            Self::Subtract { left, right } => left.evaluate(lookup)? - right.evaluate(lookup)?,
-            Self::Multiply { left, right } => left.evaluate(lookup)? * right.evaluate(lookup)?,
+            Self::ScopedVariable { scope, key } => scoped(*scope, key)
+                .ok_or_else(|| format!("unresolved {scope:?} dynamic key {key}"))?,
+            Self::Add { left, right } => eval(left)? + eval(right)?,
+            Self::Subtract { left, right } => eval(left)? - eval(right)?,
+            Self::Multiply { left, right } => eval(left)? * eval(right)?,
             Self::Divide { left, right } => {
-                let denominator = right.evaluate(lookup)?;
+                let denominator = eval(right)?;
                 if denominator == 0.0 {
                     return Err("dynamic division by zero".into());
                 }
-                left.evaluate(lookup)? / denominator
+                eval(left)? / denominator
             }
-            Self::Negate { value } => -value.evaluate(lookup)?,
-            Self::Floor { value } => value.evaluate(lookup)?.floor(),
-            Self::Maximum { left, right } => left.evaluate(lookup)?.max(right.evaluate(lookup)?),
+            Self::Negate { value } => -eval(value)?,
+            Self::Floor { value } => eval(value)?.floor(),
+            Self::Maximum { left, right } => eval(left)?.max(eval(right)?),
         };
         if !value.is_finite() {
             return Err("nonfinite dynamic expression result".into());

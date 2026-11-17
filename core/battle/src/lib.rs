@@ -8,4 +8,5 @@ pub mod model;
 pub mod modifiers;
 
 pub mod decision;
+pub mod dynamic_scope;
 mod scheduler;

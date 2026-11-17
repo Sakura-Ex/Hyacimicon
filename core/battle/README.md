@@ -182,6 +182,25 @@ and invalid call arities still reject. Numeric S2 callbacks have been executed
 together with synthetic skill carriers and checked hit by hit; this does not
 complete the parent character kit, its additional skills/weaknesses or a stage.
 
+## Explicit invocation storage
+
+`with_dynamic_scope` creates a fresh ability or task-template frame for one
+explicit invocation. `scoped_variable` and `set_scoped_dynamic_value` address
+that frame by kind and owning unit, independently of persistent unit values.
+An inner frame shadows the entire prior frame of the same kind; missing keys
+never fall through to the outer invocation or a same-named persistent value.
+Leaving the invocation restores the previous frame, including error returns.
+Trace entries retain the scope kind and enter/exit boundaries.
+
+The raw runtime lowering accepts explicit `ContextAbility` and
+`ContextTaskTemplate` writes only when they match the supplied storage binding.
+It also handles sourced increment operations and definitions with explicit reset
+values. An omitted `ResetValue` remains unsupported. Callers still supply the
+invocation boundaries and per-source bindings: this is not automatic native
+scope discovery, a full Modifier-local store, or native default initialization.
+Anaxa's ability `_count` and its SkillTree02 modifier `_count` must be bound
+separately; no raw name alone is a sufficient storage location.
+
 ## Compatibility and verification
 
 The old absolute `next_av` path is gone. Three intentional baseline changes are:

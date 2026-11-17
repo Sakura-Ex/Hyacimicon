@@ -51,6 +51,16 @@ pub enum Target {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Effect {
+    /// A fresh invocation frame, removed on return even after a runtime error.
+    WithDynamicScope {
+        scope: crate::dynamic_scope::DynamicScope,
+        effects: Vec<Effect>,
+    },
+    SetScopedDynamicValue {
+        scope: crate::dynamic_scope::DynamicScope,
+        key: String,
+        value: crate::expression::Expression,
+    },
     /// One sourced hit with explicit element panels; no implicit toughness effect.
     ElementalDamage {
         scale: Scale,
@@ -219,6 +229,7 @@ fn flattened_effects(effects: &[Effect]) -> Result<Vec<&Effect>, String> {
             }
             out.push(effect);
             match effect {
+                Effect::WithDynamicScope { effects, .. } => visit(effects, depth + 1, out)?,
                 Effect::Conditional {
                     then_effects,
                     else_effects,
@@ -533,7 +544,9 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                         return Err("elemental damage requires enemy targets".into());
                     }
                 }
-                Effect::AttackFinish | Effect::RetargetAttackRandom { .. } => {}
+                Effect::AttackFinish
+                | Effect::RetargetAttackRandom { .. }
+                | Effect::WithDynamicScope { .. } => {}
                 Effect::AddModifier { id, stacks, .. } => {
                     identifier(id, "modifier id")?;
                     stacks.validate()?;
@@ -541,7 +554,8 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                 Effect::RemoveModifier { id, .. } => identifier(id, "modifier id")?,
                 Effect::Conditional { condition, .. } => condition.validate(0)?,
                 Effect::Repeat { count, .. } => count.validate()?,
-                Effect::SetDynamicValue { key, value, .. } => {
+                Effect::SetDynamicValue { key, value, .. }
+                | Effect::SetScopedDynamicValue { key, value, .. } => {
                     identifier(key, "dynamic key")?;
                     value.validate()?;
                 }

@@ -11,7 +11,7 @@ from config_expression import compile_expression, stable_hash
 class RuntimeLowering:
     """Lower supported callbacks while retaining unresolved mechanism failures."""
 
-    def __init__(self, compiler, runtime_keys: dict[str, str], templates: dict | None = None):
+    def __init__(self, compiler, runtime_keys: dict[str, str | dict], templates: dict | None = None):
         """Share immutable bindings/evidence and retain explicit storage mappings."""
         self.compiler = compiler
         self.runtime_keys = runtime_keys
@@ -42,12 +42,32 @@ class RuntimeLowering:
                 for child in node: inspect(child)
         inspect(self.templates[name])
 
-    def key(self, name: str) -> str:
-        """Resolve a named variable to explicitly selected storage scope."""
-        hashed = stable_hash(name)
+    def reference_hash(self, hashed: str) -> dict:
+        """Resolve a hash without merging transient and persistent namespaces."""
         if hashed not in self.runtime_keys:
-            raise Unsupported(f'undeclared runtime storage for {name} ({hashed})')
-        return self.runtime_keys[hashed]
+            raise Unsupported(f'undeclared runtime storage for dynamic hash {hashed}')
+        binding = self.runtime_keys[hashed]
+        if isinstance(binding, str) and binding:
+            return dict(op='variable', key=binding)
+        if (isinstance(binding, dict) and set(binding) == {'scope','key'}
+                and binding['scope'] in {'ability','task_template'}
+                and isinstance(binding['key'], str) and binding['key']):
+            return dict(op='scoped_variable', **binding)
+        raise Unsupported(f'invalid explicit runtime storage binding for {hashed}')
+
+    def reference(self, name: str) -> dict:
+        """Resolve a named runtime read; each caller supplies its source scope."""
+        return self.reference_hash(stable_hash(name))
+
+    def write(self, name: str, value: dict, raw_scope: str | None) -> dict:
+        """Require explicit source scope annotations to match the binding."""
+        reference = self.reference(name)
+        scope = reference.get('scope')
+        if raw_scope is not None and raw_scope != {'ability':'ContextAbility','task_template':'ContextTaskTemplate'}.get(scope):
+            raise Unsupported(f'ContextScope {raw_scope} does not match explicit storage binding for {name}')
+        if scope is None:
+            return dict(type='set_dynamic_value', key=reference['key'], value=value, target='self_unit')
+        return dict(type='set_scoped_dynamic_value', scope=scope, key=reference['key'], value=value)
 
     def expression(self, value: dict) -> dict:
         """Bind immutable parameters and scope every remaining dynamic load."""
@@ -60,10 +80,9 @@ class RuntimeLowering:
             """Rewrite live variable references without changing numeric constants."""
             if isinstance(node, dict):
                 if node.get('op') == 'variable':
-                    key = node['key']
-                    if key not in self.runtime_keys:
-                        raise Unsupported(f'undeclared runtime storage for dynamic hash {key}')
-                    node['key'] = self.runtime_keys[key]
+                    reference = self.reference_hash(node['key'])
+                    node.clear()
+                    node.update(reference)
                 else:
                     for child in node.values():
                         scope(child)
@@ -76,6 +95,8 @@ class RuntimeLowering:
         extra = set(node) - allowed - {'$type'}
         if extra:
             raise Unsupported(f'unhandled fields {sorted(extra)}')
+        if 'ContextScope' in node and ('ContextScope' in allowed) and node['ContextScope'] not in ('ContextAbility','ContextTaskTemplate'):
+            raise Unsupported('unsupported explicit ContextScope')
 
     @staticmethod
     def owner_target(node: dict):
@@ -102,7 +123,7 @@ class RuntimeLowering:
                            'GreaterEqual': 'greater_equal', 'Less': 'less', 'LessEqual': 'less_equal'}
             if node['CompareType'] not in comparisons:
                 raise Unsupported(f'unsupported comparison {node["CompareType"]}')
-            result = dict(type='compare', left=dict(op='variable', key=self.key(node['DynamicKey']['Value'])),
+            result = dict(type='compare', left=self.reference(node['DynamicKey']['Value']),
                           comparison=comparisons[node['CompareType']], right=self.expression(node['CompareValue']))
         else:
             raise Unsupported(f'runtime predicate {kind}')
@@ -111,10 +132,10 @@ class RuntimeLowering:
             raise Unsupported('predicate Inverse must be boolean')
         return dict(type='not', condition=result) if inverse else result
 
-    def tasks(self, tasks: list[dict], pointer: str) -> list[dict]:
-        """Lower both branches with exact source pointers and an ordered ledger."""
+    def tasks(self, tasks: list[dict], pointer: str, start_index: int = 0) -> list[dict]:
+        """Lower both branches; start_index preserves offsets of selected slices."""
         effects = []
-        for index, task in enumerate(tasks):
+        for index, task in enumerate(tasks, start_index):
             where = f'{pointer}/{index}'
             kind = task['$type'].removeprefix('RPG.GameCore.')
             row = dict(pointer=where, type=task['$type'])
@@ -127,11 +148,24 @@ class RuntimeLowering:
                         else_effects=self.tasks(task.get('FailedTaskList', []), where+'/FailedTaskList')))
                     row['handling'] = 'runtime_branch_both_paths_checked'
                 elif kind == 'SetDynamicValue':
-                    self.fields(task, {'Value', 'DynamicKey', 'TargetType'})
+                    self.fields(task, {'Value', 'DynamicKey', 'TargetType', 'ContextScope'})
                     self.owner_target(task)
-                    effects.append(dict(type='set_dynamic_value', key=self.key(task['DynamicKey']['Value']),
-                                        value=self.expression(task['Value']), target='self_unit'))
+                    effects.append(self.write(task['DynamicKey']['Value'], self.expression(task['Value']), task.get('ContextScope')))
                     row['handling'] = 'scoped_runtime_write'
+                elif kind == 'SetDynamicValueByAddValue':
+                    self.fields(task, {'Key','AddValue','TargetType','ContextScope'})
+                    self.owner_target(task)
+                    name = task['Key']['Value']
+                    value = dict(op='add', left=self.reference(name), right=self.expression(task['AddValue']))
+                    effects.append(self.write(name, value, task.get('ContextScope')))
+                    row['handling'] = 'scoped_runtime_add'
+                elif kind == 'DefineDynamicValue':
+                    self.fields(task, {'DynamicKey','ResetValue','TargetType','ContextScope'})
+                    self.owner_target(task)
+                    if 'ResetValue' not in task:
+                        raise Unsupported('DefineDynamicValue lacks explicit ResetValue; native default is unresolved')
+                    effects.append(self.write(task['DynamicKey']['Value'], self.expression(task['ResetValue']), task.get('ContextScope')))
+                    row['handling'] = 'explicit_runtime_initialization'
                 elif kind == 'LoopExecuteTaskList':
                     self.fields(task, {'MaxLoopCount', 'TaskList'})
                     effects.append(dict(type='repeat', count=self.expression(task['MaxLoopCount']),

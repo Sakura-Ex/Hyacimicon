@@ -96,6 +96,7 @@ struct State<'a> {
     damage_element: Option<Element>,
     damage_attack_type: Option<AttackType>,
     event_attack_type: Option<AttackType>,
+    dynamic_scopes: crate::dynamic_scope::ScopeFrames,
 }
 fn stream(seed: u64, domain: &[u8]) -> ChaCha8Rng {
     let mut hash = Sha256::new();
@@ -392,6 +393,7 @@ impl<'a> State<'a> {
             damage_element: None,
             damage_attack_type: None,
             event_attack_type: None,
+            dynamic_scopes: Default::default(),
         }
     }
     fn emit(
@@ -551,16 +553,21 @@ impl<'a> State<'a> {
         }
         Ok(())
     }
+    fn evaluate(&self, owner: usize, value: &crate::expression::Expression) -> Result<f64, String> {
+        value.evaluate_with_scopes(
+            &|key| self.units[owner].dynamic_values.get(key).copied(),
+            &|scope, key| self.dynamic_scopes.get(owner, scope, key),
+        )
+    }
     fn condition(&self, actor: usize, condition: &Condition) -> Result<bool, String> {
-        let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
         Ok(match condition {
             Condition::Compare {
                 left,
                 comparison,
                 right,
             } => {
-                let l = left.evaluate(&lookup)?;
-                let r = right.evaluate(&lookup)?;
+                let l = self.evaluate(actor, left)?;
+                let r = self.evaluate(actor, right)?;
                 match comparison {
                     Comparison::Equal => l == r,
                     Comparison::NotEqual => l != r,
@@ -617,6 +624,46 @@ impl<'a> State<'a> {
         effect: &Effect,
     ) -> Result<(), String> {
         match *effect {
+            Effect::WithDynamicScope { scope, ref effects } => {
+                self.dynamic_scopes.push(actor, scope);
+                self.emit(
+                    &format!("{}_scope_enter", scope.name()),
+                    actor,
+                    Some(actor),
+                    Some(action),
+                    None,
+                    None,
+                );
+                let result = effects
+                    .iter()
+                    .try_for_each(|child| self.apply_effect(actor, action, child));
+                self.dynamic_scopes.pop();
+                self.emit(
+                    &format!("{}_scope_exit", scope.name()),
+                    actor,
+                    Some(actor),
+                    Some(action),
+                    None,
+                    None,
+                );
+                result?;
+            }
+            Effect::SetScopedDynamicValue {
+                scope,
+                ref key,
+                ref value,
+            } => {
+                let amount = self.evaluate(actor, value)?;
+                self.dynamic_scopes.set(actor, scope, key, amount)?;
+                self.emit(
+                    &format!("{}_dynamic_value", scope.name()),
+                    actor,
+                    Some(actor),
+                    Some(key),
+                    Some(amount),
+                    None,
+                );
+            }
             Effect::ElementalDamage {
                 scale,
                 ref ratio,
@@ -626,9 +673,8 @@ impl<'a> State<'a> {
                 can_crit,
                 target,
             } => {
-                let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
-                let ratio = ratio.evaluate(&lookup)?;
-                let flat = flat.evaluate(&lookup)?;
+                let ratio = self.evaluate(actor, ratio)?;
+                let flat = self.evaluate(actor, flat)?;
                 if ratio < 0.0 || flat < 0.0 {
                     return Err("negative dynamic damage coefficient".into());
                 }
@@ -708,15 +754,14 @@ impl<'a> State<'a> {
                     .get(id)
                     .ok_or_else(|| format!("unknown modifier definition {id}"))?
                     .clone();
-                let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
-                let count = stacks.evaluate(&lookup)?;
+                let count = self.evaluate(actor, stacks)?;
                 if count < 1.0 || count > 10_000.0 || count.fract() != 0.0 {
                     return Err("modifier stacks must be an integer in 1..10000".into());
                 }
                 let values = definition
                     .properties
                     .iter()
-                    .map(|p| p.value.evaluate(&lookup).map(|v| (p.property, v)))
+                    .map(|p| self.evaluate(actor, &p.value).map(|v| (p.property, v)))
                     .collect::<Result<Vec<_>, _>>()?;
                 let source = self.units[actor].spec.id.clone();
                 for recipient in self.targets(actor, target)? {
@@ -778,8 +823,7 @@ impl<'a> State<'a> {
                 ref effects,
             } => {
                 // Evaluate once at loop entry; the body may mutate the source value.
-                let count =
-                    count.evaluate(&|key| self.units[actor].dynamic_values.get(key).copied())?;
+                let count = self.evaluate(actor, count)?;
                 if count < 0.0 || count > 10_000.0 || count.fract() != 0.0 {
                     return Err("repeat count must be an integer in 0..10000".into());
                 }
@@ -795,8 +839,7 @@ impl<'a> State<'a> {
                 target,
             } => {
                 for recipient in self.targets(actor, target)? {
-                    let amount = value
-                        .evaluate(&|key| self.units[recipient].dynamic_values.get(key).copied())?;
+                    let amount = self.evaluate(recipient, value)?;
                     self.units[recipient]
                         .dynamic_values
                         .insert(key.clone(), amount);
@@ -811,8 +854,7 @@ impl<'a> State<'a> {
                 }
             }
             Effect::DynamicEnergy { ref amount, target } => {
-                let value =
-                    amount.evaluate(&|key| self.units[actor].dynamic_values.get(key).copied())?;
+                let value = self.evaluate(actor, amount)?;
                 self.apply_effect(
                     actor,
                     action,

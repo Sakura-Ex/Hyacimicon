@@ -36,7 +36,7 @@ class RuntimeTests(unittest.TestCase):
             self.lowering.tasks([task], 'callback')
         task['DynamicKey']['Value'] = 'count'
         task['ContextScope'] = 'ContextAbility'
-        with self.assertRaisesRegex(Unsupported, 'unhandled fields'):
+        with self.assertRaisesRegex(Unsupported, 'ContextScope ContextAbility does not match'):
             self.lowering.tasks([task], 'callback')
 
     def test_persistent_custom_property_requires_runtime_value(self):
@@ -46,6 +46,39 @@ class RuntimeTests(unittest.TestCase):
         effect = self.lowering.tasks([task], 'callback')[0]
         self.assertEqual(effect['key'], 'grid_fight_custom:108')
         self.assertEqual(effect['value']['left'], {'op':'variable','key':'grid_fight_custom:108'})
+
+    def test_same_hash_can_bind_to_ability_or_modifier_without_aliasing(self):
+        """The raw name is not itself a storage location or lifecycle."""
+        key = stable_hash('_count')
+        ability = RuntimeLowering(self.compiler, {key: {'scope':'ability','key':'_count'}})
+        modifier = RuntimeLowering(self.compiler, {key: 'modifier:skilltree02:_count'})
+        raw = {'IsDynamic':True, 'PostfixExpr':{'OpCodes':'AQAR','FixedValues':[],'DynamicHashes':[int(key)]}}
+        self.assertEqual(ability.expression(raw), {'op':'scoped_variable','scope':'ability','key':'_count'})
+        self.assertEqual(modifier.expression(raw), {'op':'variable','key':'modifier:skilltree02:_count'})
+        task = {'$type':'RPG.GameCore.SetDynamicValueByAddValue',
+                'ContextScope':'ContextAbility', 'Key':{'Value':'_count'}, 'AddValue':{'Value':1}}
+        effect = ability.tasks([task], 'ability')[0]
+        self.assertEqual(effect['type'], 'set_scoped_dynamic_value')
+        self.assertEqual(effect['value']['left'], ability.expression(raw))
+        with self.assertRaisesRegex(Unsupported, 'ContextScope ContextAbility does not match'):
+            modifier.tasks([task], 'modifier')
+
+    def test_template_initialization_requires_value_and_matching_scope(self):
+        """An omitted native reset cannot silently initialize a scoped zero."""
+        lowering = RuntimeLowering(self.compiler, {stable_hash('count'):{'scope':'task_template','key':'count'}})
+        node = {'$type':'RPG.GameCore.DefineDynamicValue', 'DynamicKey':{'Value':'count'},
+                'ContextScope':'ContextTaskTemplate'}
+        with self.assertRaisesRegex(Unsupported, 'lacks explicit ResetValue'):
+            lowering.tasks([node], 'template')
+        node['ResetValue'] = {'Value':0}
+        self.assertEqual(lowering.tasks([node], 'template')[0],
+            {'type':'set_scoped_dynamic_value','scope':'task_template','key':'count','value':{'op':'constant','value':0.0}})
+        node['ContextScope'] = 'ContextAbility'
+        with self.assertRaisesRegex(Unsupported, 'ContextScope ContextAbility does not match'):
+            lowering.tasks([node], 'template')
+        node['ContextScope'] = None
+        with self.assertRaisesRegex(Unsupported, 'unsupported explicit ContextScope'):
+            lowering.tasks([node], 'template')
 
     def test_property_lowering_cannot_skip_lifecycle_callbacks(self):
         """Do not declare a property modifier complete when another callback exists."""
