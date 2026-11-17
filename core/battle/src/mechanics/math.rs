@@ -75,9 +75,16 @@ fn finite(name: &str, value: f64) -> Result<f64, String> {
 
 /// 按约定顺序应用已组装的直接伤害乘区，返回有限的伤害量。
 ///
-/// 参数的静态范围由组装方保证；暴击结果由调用方采样。沿用参考实现的
-/// original multiplication order. No rounding to display integers is performed.
+/// 参数的静态范围由组装方保证，运行时检查合计增伤和暴伤的下界。
+/// 暴击结果由调用方采样；沿用参考实现的相乘顺序，保留浮点精度。
 pub fn damage(input: &DamageInput, critical: bool) -> Result<f64, String> {
+    // 这两项可由运行中的 Modifier 与元素增伤合成，静态配置无法保证合计下界。
+    if input.damage_bonus < -1.0 {
+        return Err("combined damage bonus must be >= -1".into());
+    }
+    if input.crit_damage < 0.0 {
+        return Err("combined critical damage must be >= 0".into());
+    }
     let level_term = f64::from(input.attacker_level) * 10.0 + 200.0;
     let defense_penetration = finite(
         "combined defense penetration",

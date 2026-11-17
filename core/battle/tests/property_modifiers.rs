@@ -5,6 +5,56 @@ use common::*;
 fn num(value: f64) -> Expression {
     Expression::Constant { value }
 }
+
+/// 合法初始面板也可能被动态状态推到非法乘区，执行时应返回错误。
+#[test]
+fn negative_runtime_property_totals_cannot_create_shields_or_healing() {
+    for (property, expected) in [
+        (Property::DamageBonus, "combined damage bonus must be >= -1"),
+        (
+            Property::CritDamage,
+            "combined critical damage must be >= 0",
+        ),
+    ] {
+        let mut hero = unit("hero", 100.0);
+        hero.stats.crit_rate = 1.0;
+        hero.actions = vec![action(
+            "strike",
+            vec![Effect::Damage {
+                scale: Scale::Attack,
+                ratio: 0.0,
+                flat: 10.0,
+                hits: 1,
+                can_crit: true,
+                target: Target::AbilityTarget,
+            }],
+        )];
+        let mut input = scenario(vec![hero], vec![vec![unit("enemy", 1.0)]]);
+        input.mechanics.modifier_definitions.insert(
+            "negative".into(),
+            ModifierDefinition {
+                stack_mode: StackMode::ReplaceBySource,
+                max_stacks: 1,
+                lifetime: None,
+                properties: vec![PropertyChange {
+                    property,
+                    value: num(-3.0),
+                }],
+            },
+        );
+        input.mechanics.triggers.push(Trigger {
+            owner: "hero".into(),
+            event: BattleEvent::BattleStart,
+            subject: None,
+            action: None,
+            uses: 1,
+            effects: vec![add("negative", Target::SelfUnit)],
+            expires_on: None,
+            duration: 0,
+        });
+        assert_eq!(simulate(&input, 7, false).unwrap_err(), expected);
+    }
+}
 fn add(id: &str, target: Target) -> Effect {
     Effect::AddModifier {
         id: id.into(),
