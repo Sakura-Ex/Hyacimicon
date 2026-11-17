@@ -1,5 +1,8 @@
 """Counterexamples for strict raw Config lowering; fixtures are artificial."""
 import unittest
+import json
+from pathlib import Path
+import tempfile
 from config_actions import Compiler, Unsupported
 
 
@@ -32,6 +35,44 @@ class ConfigTests(unittest.TestCase):
         """Hit energy is numerical behavior, separate from split damage."""
         effects=self.compiler.tasks([{'$type':'RPG.GameCore.DamageByAttackProperty','TargetType':{'$type':'RPG.GameCore.TargetAlias','Alias':'AbilityTargetEntity'},'AttackProperty':{'$type':'RPG.GameCore.AttackData','DamageType':{'DamageType':'Quantum'},'DamagePercentage':{'Value':2.5},'SPHitRatio':{'Value':0.5}}}],'probe')
         self.assertEqual(effects[-1],{'type':'energy','amount':5.0,'target':'ability_target'})
+
+    def test_nonempty_unknown_ability_fields_reject_before_lowering(self):
+        """An unhandled callback cannot disappear behind a compiled OnStart."""
+        damage = {'$type':'RPG.GameCore.DamageByAttackProperty',
+                  'TargetType':{'$type':'RPG.GameCore.TargetAlias','Alias':'AbilityTargetEntity'},
+                  'AttackProperty':{'$type':'RPG.GameCore.AttackData','DamageType':{'DamageType':'Quantum'},
+                                    'DamagePercentage':{'Value':1}}}
+        for field, value in [('OnEnd', [{'$type':'RPG.GameCore.ModifySPNew'}]),
+                             ('OnRemove', [{'$type':'RPG.GameCore.ModifySPNew'}]),
+                             ('UnknownNumericValue', 0)]:
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / 'ability.json'
+                path.write_text(json.dumps({'AbilityList':[{'Name':'entry',
+                    'TargetInfo':{'TargetType':'SkillTargetEntityList'}, 'OnStart':[damage], field:value}]}))
+                compiler = Compiler([path], {}, [], 10.0)
+                with self.assertRaisesRegex(Unsupported, f'#/AbilityList/0/{field}: unsupported ability field'):
+                    compiler.ability('entry')
+                self.assertEqual(compiler.stack, [])
+                self.assertEqual(compiler.evidence[-1]['handling'], 'rejected')
+
+    def test_empty_unknown_callback_has_no_logic_to_execute(self):
+        """An explicitly empty unsupported callback is recorded as empty."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ability.json'
+            path.write_text(json.dumps({'AbilityList':[{'Name':'entry','OnStart':[],'OnEnd':[]}]}))
+            compiler = Compiler([path], {}, [], 10.0)
+            self.assertEqual(compiler.ability('entry'), [])
+            self.assertEqual(compiler.evidence[-1]['handling'], 'empty_unsupported_field')
+
+    def test_unhandled_target_metadata_rejects(self):
+        """Ability target metadata must match the supported skill-target contract."""
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'ability.json'
+            path.write_text(json.dumps({'AbilityList':[{'Name':'entry',
+                'TargetInfo':{'TargetType':'AllEntities'},'OnStart':[]}]}))
+            compiler = Compiler([path], {}, [], 10.0)
+            with self.assertRaisesRegex(Unsupported, '#/AbilityList/0/TargetInfo: unsupported ability target'):
+                compiler.ability('entry')
 
 
 if __name__=='__main__':

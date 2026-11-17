@@ -46,9 +46,18 @@ or cancellation stop, not a defeat. Run HP settlement is not part of this module
 - An Action executes its complete effect vector. Runtime Hit/Break/Death listeners
   can apply immediate effects or register later actions. No queued action runs
   inside another Action. Runtime dispatch is independent of replay limits.
+  Damage and toughness recheck each recipient after preceding immediate callbacks.
+  Only the hit that changes positive HP to zero dispatches Death and revival;
+  revival permits a later hit to cause a new death. A dead owner receives its own
+  Death event, while its listeners for other events remain inactive.
 - `mechanics.triggers` binds owner, event, optional subject/action filters, uses
-  (zero means unlimited), and effects. Optional event-based duration expires before
-  triggering its expiration event. Shields retain their specified normal-turn
+  (zero means unlimited), and effects. BattleStart/WaveStart/CycleEnd are global
+  events with no unit subject; a subject filter on them is rejected. Other events
+  use the acting unit, except Break/Death which use the affected unit. Optional
+  event-based durations tick for every present owner on global events and only
+  for the subject's own statuses on unit events. Future-wave owners start counting
+  after entry. All applicable expirations settle before any listener of the event
+  executes, including listeners that dispatch nested events. Shields retain their specified normal-turn
   expiry. `toughness` effects dispatch Break; elemental break damage/recovery must
   be explicitly implemented by supplied effects, not inferred from a scalar.
 - Revival restores explicit HP and consumes only the current cycle's remaining
@@ -95,6 +104,11 @@ removes only enumerated presentation tasks and preserves hit order. Postfix load
 constant and negation formats used by the exercised chain are supported; unknown
 instructions, numeric modifiers, missing abilities/bindings or fields reject.
 `Inverse` is respected. Numeric modifiers are never dropped as animations.
+Ability callbacks execute only OnAdd and OnStart. Nonempty unsupported fields or
+callbacks (including OnEnd) reject at their source pointer before lowering; empty
+unsupported fields are recorded. TargetInfo, when present, must specify only
+SkillTargetEntityList. Unused Modifier definitions are declarations; referenced
+modifiers are validated by AddModifier.
 
 This is **selected regular-skill-chain execution**, not a complete roster importer.
 Provide resistance already resolved for the emitted damage element. The local

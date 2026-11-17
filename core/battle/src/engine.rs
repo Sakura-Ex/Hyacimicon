@@ -117,29 +117,39 @@ impl<'a> State<'a> {
     fn dispatch(
         &mut self,
         event: BattleEvent,
-        subject: usize,
+        subject: Option<usize>,
         action: Option<&str>,
     ) -> Result<(), String> {
         if self.event_depth >= 64 {
             return Err("runtime event recursion exceeds 64".into());
         }
         self.event_depth += 1;
-        // Expiry belongs to its specified event, independent of trace or actions.
-        let subject_id = self.units[subject].spec.id.clone();
-        for index in 0..self.hooks.len() {
-            let t = &mut self.hooks[index];
+        let subject_id = subject.map(|i| self.units[i].spec.id.clone());
+        // Expire every applicable status before any listener can dispatch nested
+        // events. Global events have no unit subject; absent future-wave owners
+        // have not entered the battle and their lifetimes have not started.
+        for t in &mut self.hooks {
             if t.remaining == Some(0) {
                 continue;
             }
-            if t.spec.expires_on == Some(event) && t.spec.owner == subject_id {
+            let Some(owner) = self.units.iter().position(|u| u.spec.id == t.spec.owner) else {
+                continue;
+            };
+            if t.spec.expires_on == Some(event) && (event.is_global() || subject == Some(owner)) {
                 t.duration -= 1;
                 if t.duration == 0 {
                     t.remaining = Some(0);
-                    continue;
                 }
             }
-            if t.spec.event != event
-                || t.spec.subject.as_ref().is_some_and(|id| id != &subject_id)
+        }
+        for index in 0..self.hooks.len() {
+            let t = &mut self.hooks[index];
+            if t.remaining == Some(0)
+                || t.spec.event != event
+                || t.spec
+                    .subject
+                    .as_ref()
+                    .is_some_and(|id| Some(id) != subject_id.as_ref())
                 || t.spec.action.as_deref().is_some_and(|a| Some(a) != action)
             {
                 continue;
@@ -147,14 +157,18 @@ impl<'a> State<'a> {
             let Some(owner) = self.units.iter().position(|u| u.spec.id == t.spec.owner) else {
                 continue;
             };
-            if !self.units[owner].alive() {
+            // The owner's own death is the one event it receives while dead.
+            // Other dead-owner listeners remain inactive, including nested deaths.
+            if !self.units[owner].alive()
+                && !(event == BattleEvent::Death && subject == Some(owner))
+            {
                 continue;
             }
             if let Some(left) = &mut t.remaining {
                 *left -= 1;
             }
             let effects = t.spec.effects.clone();
-            self.emit("trigger", owner, Some(subject), action, None, None);
+            self.emit("trigger", owner, subject, action, None, None);
             for e in effects {
                 self.apply_effect(owner, action.unwrap_or("event"), &e)?;
             }
@@ -433,12 +447,11 @@ impl<'a> State<'a> {
             Target::SelfUnit => unreachable!("self target handled before candidate selection"),
         }
     }
-    fn kill_or_revive(&mut self, target: usize, action: &str) -> Result<(), String> {
-        if self.units[target].hp > 0.0 {
-            return Ok(());
-        }
+    // Called only by the hit that changed this unit's HP from positive to zero.
+    // Do not infer a new death from HP observed after a nested listener returns.
+    fn resolve_death(&mut self, target: usize, action: &str) -> Result<(), String> {
         self.emit("death", target, Some(target), Some(action), None, None);
-        self.dispatch(BattleEvent::Death, target, Some(action))?;
+        self.dispatch(BattleEvent::Death, Some(target), Some(action))?;
         self.units[target].shield = 0.0;
         self.units[target].shield_turns = 0;
         if self.units[target].revivals_left > 0 {
@@ -488,6 +501,11 @@ impl<'a> State<'a> {
                 let base = finite(self.units[actor].scale(scale) * ratio + flat, "base damage")?;
                 for _ in 0..hits {
                     for victim in self.targets(actor, target)? {
+                        // Earlier recipients can dispatch immediate damage. A
+                        // cached AoE target list is not proof this victim lives.
+                        if !self.units[victim].alive() {
+                            continue;
+                        }
                         let defender = &self.units[victim].spec.stats;
                         let critical =
                             can_crit && uniform(&mut self.criticals) < attacker.crit_rate;
@@ -520,6 +538,7 @@ impl<'a> State<'a> {
                         self.units[victim].shield -= absorbed;
                         let hp_loss = (amount - absorbed).min(self.units[victim].hp);
                         self.units[victim].hp -= hp_loss;
+                        let died_from_this_hit = self.units[victim].hp == 0.0;
                         self.emit(
                             "damage",
                             actor,
@@ -544,8 +563,10 @@ impl<'a> State<'a> {
                             Some(hp_loss),
                             None,
                         );
-                        self.dispatch(BattleEvent::Hit, actor, Some(action))?;
-                        self.kill_or_revive(victim, action)?;
+                        self.dispatch(BattleEvent::Hit, Some(actor), Some(action))?;
+                        if died_from_this_hit {
+                            self.resolve_death(victim, action)?;
+                        }
                     }
                 }
             }
@@ -653,12 +674,15 @@ impl<'a> State<'a> {
             }
             Effect::Toughness { amount, target } => {
                 for recipient in self.targets(actor, target)? {
+                    if !self.units[recipient].alive() {
+                        continue;
+                    }
                     let before = self.units[recipient].toughness;
                     self.units[recipient].toughness = (before - amount).max(0.0);
                     if before > 0.0 && self.units[recipient].toughness == 0.0 {
                         self.units[recipient].spec.stats.toughness_broken = true;
                         self.emit("break", actor, Some(recipient), Some(action), None, None);
-                        self.dispatch(BattleEvent::Break, recipient, Some(action))?;
+                        self.dispatch(BattleEvent::Break, Some(recipient), Some(action))?;
                     }
                 }
             }
@@ -718,7 +742,7 @@ impl<'a> State<'a> {
             self.pay(actor, &action);
         }
         self.actions += 1;
-        self.dispatch(BattleEvent::ActionStart, actor, Some(&action.id))?;
+        self.dispatch(BattleEvent::ActionStart, Some(actor), Some(&action.id))?;
         self.emit("action", actor, None, Some(&action.id), None, None);
         for effect in &action.effects {
             self.apply_effect(actor, &action.id, effect)?;
@@ -730,7 +754,7 @@ impl<'a> State<'a> {
             self.units[actor].energy = (self.units[actor].energy + action.energy_gain)
                 .min(self.units[actor].spec.max_energy);
         }
-        self.dispatch(BattleEvent::ActionEnd, actor, Some(&action.id))?;
+        self.dispatch(BattleEvent::ActionEnd, Some(actor), Some(&action.id))?;
         self.emit("action_end", actor, None, Some(&action.id), None, None);
         self.bound_target = None;
         Ok(())
@@ -812,8 +836,8 @@ pub fn simulate_with_policy(
     policy: &mut impl Policy,
 ) -> Result<BattleResult, String> {
     let mut state = State::new(input, seed, trace);
-    state.dispatch(BattleEvent::BattleStart, 0, None)?;
-    state.dispatch(BattleEvent::WaveStart, 0, None)?;
+    state.dispatch(BattleEvent::BattleStart, None, None)?;
+    state.dispatch(BattleEvent::WaveStart, None, None)?;
     loop {
         let allies = state.units.iter().any(|u| u.ally && u.alive());
         let enemies = state.units.iter().any(|u| !u.ally && u.alive());
@@ -844,7 +868,7 @@ pub fn simulate_with_policy(
                     .unwrap_or(&0.0);
                 state.units.push(unit);
             }
-            state.dispatch(BattleEvent::WaveStart, 0, None)?;
+            state.dispatch(BattleEvent::WaveStart, None, None)?;
             continue;
         }
         // Deadline is settled before safety/cancellation, after complete actions.
@@ -869,7 +893,7 @@ pub fn simulate_with_policy(
                 Some((state.timeline.cycle + 1) as f64),
                 None,
             );
-            state.dispatch(BattleEvent::CycleEnd, 0, None)?;
+            state.dispatch(BattleEvent::CycleEnd, None, None)?;
             if !state.timeline.next_cycle() {
                 state.exhausted = true;
             }
@@ -896,7 +920,7 @@ pub fn simulate_with_policy(
             }
             let selected = if request.kind == RequestKind::ExtraTurn {
                 state.emit("extra_turn_start", actor, None, None, None, None);
-                state.dispatch(BattleEvent::TurnStart, actor, None)?;
+                state.dispatch(BattleEvent::TurnStart, Some(actor), None)?;
                 if !state.units[actor].alive() {
                     continue;
                 }
@@ -922,20 +946,20 @@ pub fn simulate_with_policy(
                     Some(state.units[actor].energy),
                     None,
                 );
-                state.dispatch(BattleEvent::TurnStart, actor, None)?;
+                state.dispatch(BattleEvent::TurnStart, Some(actor), None)?;
                 if !state.units[actor].alive() {
                     continue;
                 }
             }
             state.act(actor, action, request.kind == RequestKind::Ultimate)?;
             if request.kind != RequestKind::FollowUp {
-                state.dispatch(BattleEvent::TurnEnd, actor, None)?;
+                state.dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
                 state.emit("extra_turn_end", actor, None, None, None, None);
             }
             continue;
         }
         if let Some(actor) = state.turn {
-            state.dispatch(BattleEvent::TurnEnd, actor, None)?;
+            state.dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
             state.units[actor].remaining = (DISTANCE - state.units[actor].next_shift).max(0.0);
             state.units[actor].next_shift = 0.0;
             state.turn = None;
@@ -994,7 +1018,7 @@ pub fn simulate_with_policy(
                 );
             }
         }
-        state.dispatch(BattleEvent::TurnStart, actor, None)?;
+        state.dispatch(BattleEvent::TurnStart, Some(actor), None)?;
         if !state.units[actor].alive() {
             continue;
         }

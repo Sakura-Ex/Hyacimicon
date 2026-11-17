@@ -133,18 +133,43 @@ class Compiler:
         return not result if inverse else result
 
     def ability(self, name: str) -> list[dict]:
-        """Resolve one ability and its referenced child abilities recursively."""
+        """Validate ability fields, then lower supported phases and references.
+
+        Only OnAdd and OnStart execute. Nonempty unhandled callbacks/metadata
+        reject at the field pointer; unused modifier definitions are declarations
+        and are checked when an AddModifier task actually references them.
+        """
         if name in self.stack or len(self.stack) >= 32:
             raise Unsupported(f'cyclic ability reference {name}')
         if name not in self.abilities:
             raise Unsupported(f'missing ability {name}')
         ability, pointer = self.abilities[name]
+        for field, value in ability.items():
+            where = pointer + '/' + field.replace('~', '~0').replace('/', '~1')
+            reason = None
+            if field in {'Name', 'Modifiers'}:
+                continue
+            if field in {'OnAdd', 'OnStart'}:
+                if not isinstance(value, list):
+                    reason = 'ability phase must be a task list'
+            elif field == 'TargetInfo':
+                if value != {'TargetType': 'SkillTargetEntityList'}:
+                    reason = 'unsupported ability target'
+            elif value is None or value == [] or value == {}:
+                self.evidence.append({'pointer': where, 'field': field, 'handling': 'empty_unsupported_field'})
+            else:
+                reason = 'unsupported ability field'
+            if reason:
+                self.evidence.append({'pointer': where, 'field': field, 'handling': 'rejected'})
+                raise Unsupported(f'{where}: {reason} {field}')
         self.stack.append(name)
-        effects = []
-        for phase in ['OnAdd', 'OnStart']:
-            effects += self.tasks(ability.get(phase, []), pointer + '/' + phase)
-        self.stack.pop()
-        return effects
+        try:
+            effects = []
+            for phase in ['OnAdd', 'OnStart']:
+                effects += self.tasks(ability.get(phase, []), pointer + '/' + phase)
+            return effects
+        finally:
+            self.stack.pop()
 
     def tasks(self, tasks: list[dict], pointer: str) -> list[dict]:
         """Lower ordered tasks; reject unknown logic at its exact source pointer."""

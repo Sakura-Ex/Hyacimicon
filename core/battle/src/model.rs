@@ -544,6 +544,12 @@ pub enum BattleEvent {
     Death,
     CycleEnd,
 }
+impl BattleEvent {
+    /// Global events have no unit subject and tick every present owner's lifetime.
+    pub fn is_global(self) -> bool {
+        matches!(self, Self::BattleStart | Self::WaveStart | Self::CycleEnd)
+    }
+}
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum RequestKind {
@@ -556,12 +562,14 @@ pub enum RequestKind {
 pub struct Trigger {
     pub owner: String,
     pub event: BattleEvent,
+    /// Unit-event subject filter; global events require None.
     pub subject: Option<String>,
     pub action: Option<String>,
     /// Zero means unlimited; positive counts are consumed before dispatch.
     pub uses: u32,
     pub effects: Vec<Effect>,
-    /// Optional event-based lifetime; ticks expire before triggering that event.
+    /// Expire before any listeners of this event. Global ticks apply to present
+    /// owners; unit ticks apply only when the owner is the event subject.
     pub expires_on: Option<BattleEvent>,
     pub duration: u32,
 }
@@ -612,6 +620,9 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
             .iter()
             .find(|u| u.id == t.owner)
             .ok_or("unknown trigger owner")?;
+        if t.event.is_global() && t.subject.is_some() {
+            return Err("global trigger event has no unit subject".into());
+        }
         if t.subject
             .as_ref()
             .is_some_and(|id| !units.iter().any(|u| &u.id == id))
