@@ -25,9 +25,9 @@ hsr-currency-wars-ai/
 | 目录 | 职责与依赖 |
 | --- | --- |
 | `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
-| `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为生效配置、静态属性和可用资源。 |
+| `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
-| `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后组装战斗输入，调用 `core/battle/`，并在满足条件时结算结果。 |
+| `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后通过战斗输入组装步骤准备参数，调用 `core/battle/`，并在满足条件时结算结果。 |
 | `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
 | `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
 | `research/training/`、`research/evaluation/` | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
