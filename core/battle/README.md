@@ -118,6 +118,37 @@ MonsterSkillID 801101001. Both use supplied controlled panels. Full selected kit
 imports are also attempted and rejected at unsupported passive/skill operations.
 These controlled results must not be presented as a real roster win probability.
 
+## Explicit runtime state
+
+`mechanics.dynamic_values` supplies finite initial values by unit ID and storage
+key. `set_dynamic_value`, `dynamic_energy`, `conditional`, and `repeat` execute
+in order against live state. Missing reads, zero divisors, nonfinite results,
+noninteger loop counts, and excessive recursion/work fail explicitly. Both
+conditional branches are validated, even if only one will execute.
+
+`mechanics.modifier_definitions` declares explicit stack modes, maximum stacks,
+optional owner/source event lifetimes, and property contributions. The current
+property set is critical damage and damage bonus. Applications retain the
+source, snapshot property expressions at application/stack time, and expose
+active stacks in unit results. Expiry removes contributions before event
+listeners; it does not permanently mutate the supplied base panel. Every
+stack mode and lifetime must be supplied: this is not inference of native
+Modifier defaults or an implementation of full Modifier callbacks/halos.
+
+`tools/config_runtime.py` extends selected raw lowering with declared runtime
+storage scopes, live comparisons, bounded loops, persistent CustomProperty
+updates and pure OnStack property contributions. Unknown callbacks, fields,
+targets and numeric tasks reject. The caller must still install supported
+callbacks at a separately justified event point; compiling a callback fragment
+does not install a complete passive. The S2 Anaxa counter fragment has been
+executed with synthetic initial counters; the full Anaxa kit, its native AI,
+random weakness/bounce rules and full GridFight stage remain incomplete.
+
+The two raw property-name mappings were cross-checked against HSR_Nous
+`00185ddc4d57039894caf19467f602e716329e40`'s `adapters/enemy_ability.py`.
+Its inferred modifier defaults and unconsumed active-skill callbacks are not
+imported. The existing MIT notice is retained in `HSR_NOUS_LICENSE`.
+
 ## Compatibility and verification
 
 The old absolute `next_av` path is gone. Three intentional baseline changes are:

@@ -3,6 +3,7 @@ use crate::{
     decision::*,
     math,
     model::*,
+    modifiers::{ModifierBook, Property},
     scheduler::{self, Timeline, DISTANCE},
 };
 use rand_chacha::ChaCha8Rng;
@@ -23,6 +24,8 @@ struct CombatUnit {
     remaining: f64,
     next_shift: f64,
     toughness: f64,
+    dynamic_values: std::collections::BTreeMap<String, f64>,
+    modifiers: ModifierBook,
     revivals_left: u8,
 }
 impl CombatUnit {
@@ -37,6 +40,8 @@ impl CombatUnit {
             remaining: DISTANCE,
             next_shift: 0.0,
             toughness: 0.0,
+            dynamic_values: Default::default(),
+            modifiers: ModifierBook::default(),
             revivals_left: spec.revival.as_ref().map_or(0, |r| r.charges),
         }
     }
@@ -70,6 +75,9 @@ struct State<'a> {
     turn: Option<usize>,
     hooks: Vec<Hook>,
     event_depth: u32,
+    effect_depth: u32,
+    effect_steps: u32,
+    current_action_kind: Option<ActionKind>,
     exhausted: bool,
     bound_target: Option<usize>,
     actions: u32,
@@ -125,6 +133,26 @@ impl<'a> State<'a> {
         }
         self.event_depth += 1;
         let subject_id = subject.map(|i| self.units[i].spec.id.clone());
+        // Settle all expiry before callbacks. Future-wave units are absent here.
+        let mut expired = vec![];
+        for (owner, unit) in self.units.iter_mut().enumerate() {
+            for modifier in unit
+                .modifiers
+                .tick(event, subject_id.as_deref(), &unit.spec.id)
+            {
+                expired.push((owner, modifier.id));
+            }
+        }
+        for (owner, id) in expired {
+            self.emit(
+                "modifier_expired",
+                owner,
+                Some(owner),
+                Some(&id),
+                None,
+                None,
+            );
+        }
         // Expire every applicable status before any listener can dispatch nested
         // events. Global events have no unit subject; absent future-wave owners
         // have not entered the battle and their lifetimes have not started.
@@ -290,6 +318,8 @@ impl<'a> State<'a> {
                     remaining_distance: u.remaining,
                     speed: u.spec.stats.speed,
                     toughness: u.toughness,
+                    dynamic_values: u.dynamic_values.clone(),
+                    modifiers: u.modifiers.states(),
                 })
                 .collect(),
         };
@@ -309,6 +339,9 @@ impl<'a> State<'a> {
         units.extend(s.waves[0].iter().map(|u| CombatUnit::new(u, false, 0.0)));
         for u in &mut units {
             u.toughness = *s.mechanics.toughness.get(&u.spec.id).unwrap_or(&0.0);
+            if let Some(values) = s.mechanics.dynamic_values.get(&u.spec.id) {
+                u.dynamic_values = values.clone();
+            }
         }
         Self {
             input,
@@ -331,6 +364,9 @@ impl<'a> State<'a> {
                 })
                 .collect(),
             event_depth: 0,
+            effect_depth: 0,
+            effect_steps: 0,
+            current_action_kind: None,
             exhausted: false,
             bound_target: None,
             actions: 0,
@@ -487,8 +523,196 @@ impl<'a> State<'a> {
         }
         Ok(())
     }
+    fn condition(&self, actor: usize, condition: &Condition) -> Result<bool, String> {
+        let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
+        Ok(match condition {
+            Condition::Compare {
+                left,
+                comparison,
+                right,
+            } => {
+                let l = left.evaluate(&lookup)?;
+                let r = right.evaluate(&lookup)?;
+                match comparison {
+                    Comparison::Equal => l == r,
+                    Comparison::NotEqual => l != r,
+                    Comparison::Greater => l > r,
+                    Comparison::GreaterEqual => l >= r,
+                    Comparison::Less => l < r,
+                    Comparison::LessEqual => l <= r,
+                }
+            }
+            Condition::ActionKind { kind } => self.current_action_kind == Some(*kind),
+            Condition::Not { condition } => !self.condition(actor, condition)?,
+            Condition::All { conditions } => {
+                let mut yes = true;
+                for c in conditions {
+                    if !self.condition(actor, c)? {
+                        yes = false;
+                        break;
+                    }
+                }
+                yes
+            }
+            Condition::Any { conditions } => {
+                let mut yes = false;
+                for c in conditions {
+                    if self.condition(actor, c)? {
+                        yes = true;
+                        break;
+                    }
+                }
+                yes
+            }
+        })
+    }
     fn apply_effect(&mut self, actor: usize, action: &str, effect: &Effect) -> Result<(), String> {
+        if self.effect_depth == 0 {
+            self.effect_steps = 0;
+        }
+        if self.effect_depth >= 64 || self.effect_steps >= 100_000 {
+            return Err("runtime effect budget exceeded".into());
+        }
+        self.effect_depth += 1;
+        self.effect_steps += 1;
+        let result = self.apply_effect_inner(actor, action, effect);
+        self.effect_depth -= 1;
+        result
+    }
+    fn apply_effect_inner(
+        &mut self,
+        actor: usize,
+        action: &str,
+        effect: &Effect,
+    ) -> Result<(), String> {
         match *effect {
+            Effect::AddModifier {
+                ref id,
+                ref stacks,
+                target,
+            } => {
+                let definition = self
+                    .input
+                    .scenario()
+                    .mechanics
+                    .modifier_definitions
+                    .get(id)
+                    .ok_or_else(|| format!("unknown modifier definition {id}"))?
+                    .clone();
+                let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
+                let count = stacks.evaluate(&lookup)?;
+                if count < 1.0 || count > 10_000.0 || count.fract() != 0.0 {
+                    return Err("modifier stacks must be an integer in 1..10000".into());
+                }
+                let values = definition
+                    .properties
+                    .iter()
+                    .map(|p| p.value.evaluate(&lookup).map(|v| (p.property, v)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let source = self.units[actor].spec.id.clone();
+                for recipient in self.targets(actor, target)? {
+                    let count = self.units[recipient].modifiers.apply(
+                        id,
+                        &source,
+                        count as u32,
+                        &definition,
+                        values.clone(),
+                    );
+                    self.emit(
+                        "modifier_applied",
+                        actor,
+                        Some(recipient),
+                        Some(id),
+                        Some(f64::from(count)),
+                        None,
+                    );
+                }
+            }
+            Effect::RemoveModifier {
+                ref id,
+                from_any_source,
+                target,
+            } => {
+                let source = self.units[actor].spec.id.clone();
+                for recipient in self.targets(actor, target)? {
+                    let removed = self.units[recipient]
+                        .modifiers
+                        .remove(id, if from_any_source { None } else { Some(&source) });
+                    for _ in removed {
+                        self.emit(
+                            "modifier_removed",
+                            actor,
+                            Some(recipient),
+                            Some(id),
+                            None,
+                            None,
+                        );
+                    }
+                }
+            }
+            Effect::Conditional {
+                ref condition,
+                ref then_effects,
+                ref else_effects,
+            } => {
+                let branch = if self.condition(actor, condition)? {
+                    then_effects
+                } else {
+                    else_effects
+                };
+                for child in branch {
+                    self.apply_effect(actor, action, child)?;
+                }
+            }
+            Effect::Repeat {
+                ref count,
+                ref effects,
+            } => {
+                // Evaluate once at loop entry; the body may mutate the source value.
+                let count =
+                    count.evaluate(&|key| self.units[actor].dynamic_values.get(key).copied())?;
+                if count < 0.0 || count > 10_000.0 || count.fract() != 0.0 {
+                    return Err("repeat count must be an integer in 0..10000".into());
+                }
+                for _ in 0..count as u32 {
+                    for child in effects {
+                        self.apply_effect(actor, action, child)?;
+                    }
+                }
+            }
+            Effect::SetDynamicValue {
+                ref key,
+                ref value,
+                target,
+            } => {
+                for recipient in self.targets(actor, target)? {
+                    let amount = value
+                        .evaluate(&|key| self.units[recipient].dynamic_values.get(key).copied())?;
+                    self.units[recipient]
+                        .dynamic_values
+                        .insert(key.clone(), amount);
+                    self.emit(
+                        "dynamic_value",
+                        actor,
+                        Some(recipient),
+                        Some(key),
+                        Some(amount),
+                        None,
+                    );
+                }
+            }
+            Effect::DynamicEnergy { ref amount, target } => {
+                let value =
+                    amount.evaluate(&|key| self.units[actor].dynamic_values.get(key).copied())?;
+                self.apply_effect(
+                    actor,
+                    action,
+                    &Effect::Energy {
+                        amount: value,
+                        target,
+                    },
+                )?;
+            }
             Effect::Damage {
                 scale,
                 ratio,
@@ -497,7 +721,6 @@ impl<'a> State<'a> {
                 can_crit,
                 target,
             } => {
-                let attacker = self.units[actor].spec.stats.clone();
                 let base = finite(self.units[actor].scale(scale) * ratio + flat, "base damage")?;
                 for _ in 0..hits {
                     for victim in self.targets(actor, target)? {
@@ -506,6 +729,18 @@ impl<'a> State<'a> {
                         if !self.units[victim].alive() {
                             continue;
                         }
+                        // A prior hit's callbacks may have changed active properties.
+                        let mut attacker = self.units[actor].spec.stats.clone();
+                        attacker.crit_damage = finite(
+                            attacker.crit_damage
+                                + self.units[actor].modifiers.delta(Property::CritDamage)?,
+                            "modified crit damage",
+                        )?;
+                        attacker.damage_bonus = finite(
+                            attacker.damage_bonus
+                                + self.units[actor].modifiers.delta(Property::DamageBonus)?,
+                            "modified damage bonus",
+                        )?;
                         let defender = &self.units[victim].spec.stats;
                         let critical =
                             can_crit && uniform(&mut self.criticals) < attacker.crit_rate;
@@ -718,25 +953,9 @@ impl<'a> State<'a> {
         if !prepaid && !self.affordable(actor, &action) {
             return Err("selected action is not affordable".into());
         }
-        self.bound_target = if action.effects.iter().any(|e| {
-            matches!(
-                e,
-                Effect::Damage {
-                    target: Target::AbilityTarget,
-                    ..
-                } | Effect::Toughness {
-                    target: Target::AbilityTarget,
-                    ..
-                } | Effect::Energy {
-                    target: Target::AbilityTarget,
-                    ..
-                }
-            )
-        }) {
-            self.targets(actor, Target::EnemyLowestHp)?.first().copied()
-        } else {
-            None
-        };
+        // Bind once even when a nested conditional/loop is the first target use.
+        self.bound_target = self.targets(actor, Target::EnemyLowestHp)?.first().copied();
+        self.current_action_kind = Some(action.kind);
         let side = self.side(actor);
         if !prepaid {
             self.pay(actor, &action);
@@ -757,6 +976,7 @@ impl<'a> State<'a> {
         self.dispatch(BattleEvent::ActionEnd, Some(actor), Some(&action.id))?;
         self.emit("action_end", actor, None, Some(&action.id), None, None);
         self.bound_target = None;
+        self.current_action_kind = None;
         Ok(())
     }
     fn finish(
@@ -796,6 +1016,8 @@ impl<'a> State<'a> {
                     remaining_distance: u.remaining,
                     speed: u.spec.stats.speed,
                     toughness: u.toughness,
+                    dynamic_values: u.dynamic_values,
+                    modifiers: u.modifiers.states(),
                 })
                 .collect(),
             events: self.events,
@@ -866,6 +1088,9 @@ pub fn simulate_with_policy(
                     .toughness
                     .get(&u.id)
                     .unwrap_or(&0.0);
+                if let Some(values) = input.scenario().mechanics.dynamic_values.get(&u.id) {
+                    unit.dynamic_values = values.clone();
+                }
                 state.units.push(unit);
             }
             state.dispatch(BattleEvent::WaveStart, None, None)?;

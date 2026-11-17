@@ -1,0 +1,162 @@
+"""Strict runtime lowering for sourced dynamic counter and control-flow tasks.
+
+This extends the selected-chain compiler; it is not a complete ability importer.
+Callers must provide explicit storage keys for runtime variables. Modifier-local,
+unit-local and persistent values therefore cannot silently share one namespace.
+"""
+from config_actions import Unsupported
+from config_expression import compile_expression, stable_hash
+
+
+class RuntimeLowering:
+    """Lower supported callbacks while retaining unresolved mechanism failures."""
+
+    def __init__(self, compiler, runtime_keys: dict[str, str]):
+        """Share immutable bindings/evidence and retain explicit storage mappings."""
+        self.compiler = compiler
+        self.runtime_keys = runtime_keys
+
+    def key(self, name: str) -> str:
+        """Resolve a named variable to explicitly selected storage scope."""
+        hashed = stable_hash(name)
+        if hashed not in self.runtime_keys:
+            raise Unsupported(f'undeclared runtime storage for {name} ({hashed})')
+        return self.runtime_keys[hashed]
+
+    def expression(self, value: dict) -> dict:
+        """Bind immutable parameters and scope every remaining dynamic load."""
+        try:
+            result = compile_expression(value, self.compiler.bindings)
+        except (ValueError, KeyError, TypeError) as error:
+            raise Unsupported(str(error)) from error
+
+        def scope(node: object) -> None:
+            """Rewrite live variable references without changing numeric constants."""
+            if isinstance(node, dict):
+                if node.get('op') == 'variable':
+                    key = node['key']
+                    if key not in self.runtime_keys:
+                        raise Unsupported(f'undeclared runtime storage for dynamic hash {key}')
+                    node['key'] = self.runtime_keys[key]
+                else:
+                    for child in node.values():
+                        scope(child)
+        scope(result)
+        return result
+
+    @staticmethod
+    def fields(node: dict, allowed: set[str]):
+        """Reject unhandled fields, even on otherwise supported numeric tasks."""
+        extra = set(node) - allowed - {'$type'}
+        if extra:
+            raise Unsupported(f'unhandled fields {sorted(extra)}')
+
+    @staticmethod
+    def owner_target(node: dict):
+        """Only explicitly owner-scoped callbacks are accepted by this lowering."""
+        if 'TargetType' in node and node['TargetType'] not in [
+            {'$type': 'RPG.GameCore.TargetAlias', 'Alias': 'Caster'},
+            {'$type': 'RPG.GameCore.TargetAlias', 'Alias': 'ModifierOwnerEntity'},
+        ]:
+            raise Unsupported('runtime callback target is not its declared owner')
+
+    def condition(self, node: dict) -> dict:
+        """Compile live comparisons; never fold an unknown runtime branch away."""
+        kind = node['$type'].removeprefix('RPG.GameCore.')
+        if kind == 'ByCurrentSkillType':
+            self.fields(node, {'SkillType', 'Inverse'})
+            kinds = {'Normal': 'basic', 'Skill': 'skill', 'Ultra': 'ultimate'}
+            if node['SkillType'] not in kinds:
+                raise Unsupported(f'unsupported SkillType {node["SkillType"]}')
+            result = dict(type='action_kind', kind=kinds[node['SkillType']])
+        elif kind == 'ByCompareDynamicValue':
+            self.fields(node, {'TargetType', 'DynamicKey', 'CompareType', 'CompareValue', 'Inverse'})
+            self.owner_target(node)
+            comparisons = {'Equal': 'equal', 'NotEqual': 'not_equal', 'Greater': 'greater',
+                           'GreaterEqual': 'greater_equal', 'Less': 'less', 'LessEqual': 'less_equal'}
+            if node['CompareType'] not in comparisons:
+                raise Unsupported(f'unsupported comparison {node["CompareType"]}')
+            result = dict(type='compare', left=dict(op='variable', key=self.key(node['DynamicKey']['Value'])),
+                          comparison=comparisons[node['CompareType']], right=self.expression(node['CompareValue']))
+        else:
+            raise Unsupported(f'runtime predicate {kind}')
+        inverse = node.get('Inverse', False)
+        if not isinstance(inverse, bool):
+            raise Unsupported('predicate Inverse must be boolean')
+        return dict(type='not', condition=result) if inverse else result
+
+    def tasks(self, tasks: list[dict], pointer: str) -> list[dict]:
+        """Lower both branches with exact source pointers and an ordered ledger."""
+        effects = []
+        for index, task in enumerate(tasks):
+            where = f'{pointer}/{index}'
+            kind = task['$type'].removeprefix('RPG.GameCore.')
+            row = dict(pointer=where, type=task['$type'])
+            self.compiler.evidence.append(row)
+            try:
+                if kind == 'PredicateTaskList':
+                    self.fields(task, {'Predicate', 'SuccessTaskList', 'FailedTaskList'})
+                    effects.append(dict(type='conditional', condition=self.condition(task['Predicate']),
+                        then_effects=self.tasks(task.get('SuccessTaskList', []), where+'/SuccessTaskList'),
+                        else_effects=self.tasks(task.get('FailedTaskList', []), where+'/FailedTaskList')))
+                    row['handling'] = 'runtime_branch_both_paths_checked'
+                elif kind == 'SetDynamicValue':
+                    self.fields(task, {'Value', 'DynamicKey', 'TargetType'})
+                    self.owner_target(task)
+                    effects.append(dict(type='set_dynamic_value', key=self.key(task['DynamicKey']['Value']),
+                                        value=self.expression(task['Value']), target='self_unit'))
+                    row['handling'] = 'scoped_runtime_write'
+                elif kind == 'LoopExecuteTaskList':
+                    self.fields(task, {'MaxLoopCount', 'TaskList'})
+                    effects.append(dict(type='repeat', count=self.expression(task['MaxLoopCount']),
+                                        effects=self.tasks(task['TaskList'], where+'/TaskList')))
+                    row['handling'] = 'bounded_runtime_loop'
+                elif kind == 'ModifyGridFightCustomProperty':
+                    self.fields(task, {'CustomType', 'ModifyValue'})
+                    custom = task['CustomType']
+                    if custom.get('EnumIndex') != 2 or set(custom) != {'EnumIndex', 'Value'}:
+                        raise Unsupported('unsupported custom property domain')
+                    key = f'grid_fight_custom:{custom["Value"]}'
+                    effects.append(dict(type='set_dynamic_value', key=key, target='self_unit',
+                        value=dict(op='add', left=dict(op='variable', key=key), right=self.expression(task['ModifyValue']))))
+                    row['handling'] = 'persistent_value_output_no_account_write'
+                elif kind == 'SetEnergyBarState':
+                    self.fields(task, {'Active', 'BarType', 'CurrentState', 'IconPath', 'CurrentCount'})
+                    # HUD state is presentation. Validate the numeric expression anyway.
+                    self.expression(task['CurrentCount'])
+                    row['handling'] = 'presentation_only_energy_bar'
+                else:
+                    raise Unsupported(f'runtime task {kind}')
+            except (Unsupported, KeyError, TypeError) as error:
+                row['handling'] = 'rejected'
+                raise Unsupported(f'{where}: {error}') from error
+        return effects
+
+    def property_changes(self, definition: dict, pointer: str) -> list[dict]:
+        """Lower pure OnStack properties, leaving lifecycle/stack policy explicit.
+
+        Property names cross-checked with HSR_Nous 00185ddc's MIT-licensed
+        enemy_ability._compile_property_modifier. Its inferred defaults and
+        unconsumed callback behavior are deliberately not imported here.
+        """
+        self.fields(definition, {'_CallbackList'})
+        changes, seen = [], set()
+        properties = {'CriticalDamageBase': 'crit_damage', 'AllDamageTypeAddedRatio': 'damage_bonus'}
+        for i, callback in enumerate(definition.get('_CallbackList', [])):
+            where = f'{pointer}/_CallbackList/{i}'
+            self.fields(callback, {'Event', 'CallbackConfig'})
+            if callback.get('Event') != 'OnStack':
+                raise Unsupported(f'{where}: unsupported property modifier callback {callback.get("Event")}')
+            for j, task in enumerate(callback['CallbackConfig']):
+                location = f'{where}/CallbackConfig/{j}'
+                self.fields(task, {'TargetType', 'Property', 'PropertyValue'})
+                self.owner_target(task)
+                if task.get('$type') != 'RPG.GameCore.StackProperty' or task.get('Property') not in properties:
+                    raise Unsupported(f'{location}: unsupported modifier property task')
+                prop = properties[task['Property']]
+                if prop in seen:
+                    raise Unsupported(f'{location}: repeated property composition is unresolved')
+                seen.add(prop)
+                changes.append(dict(property=prop, value=self.expression(task['PropertyValue'])))
+                self.compiler.evidence.append(dict(pointer=location, type=task['$type'], handling='property_contribution_requires_explicit_modifier_policy'))
+        return changes

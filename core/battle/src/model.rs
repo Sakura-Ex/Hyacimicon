@@ -49,6 +49,34 @@ pub enum Target {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Effect {
+    AddModifier {
+        id: String,
+        stacks: crate::expression::Expression,
+        target: Target,
+    },
+    RemoveModifier {
+        id: String,
+        from_any_source: bool,
+        target: Target,
+    },
+    Conditional {
+        condition: Condition,
+        then_effects: Vec<Effect>,
+        else_effects: Vec<Effect>,
+    },
+    Repeat {
+        count: crate::expression::Expression,
+        effects: Vec<Effect>,
+    },
+    SetDynamicValue {
+        key: String,
+        value: crate::expression::Expression,
+        target: Target,
+    },
+    DynamicEnergy {
+        amount: crate::expression::Expression,
+        target: Target,
+    },
     Damage {
         scale: Scale,
         ratio: f64,
@@ -96,6 +124,96 @@ pub enum Effect {
         fraction: f64,
         target: Target,
     },
+}
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Comparison {
+    Equal,
+    NotEqual,
+    Greater,
+    GreaterEqual,
+    Less,
+    LessEqual,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub enum Condition {
+    Compare {
+        left: crate::expression::Expression,
+        comparison: Comparison,
+        right: crate::expression::Expression,
+    },
+    ActionKind {
+        kind: ActionKind,
+    },
+    Not {
+        condition: Box<Condition>,
+    },
+    All {
+        conditions: Vec<Condition>,
+    },
+    Any {
+        conditions: Vec<Condition>,
+    },
+}
+impl Condition {
+    fn validate(&self, depth: usize) -> Result<(), String> {
+        if depth > 32 {
+            return Err("condition nesting exceeds 32".into());
+        }
+        match self {
+            Self::Compare { left, right, .. } => {
+                left.validate()?;
+                right.validate()?;
+            }
+            Self::ActionKind { .. } => {}
+            Self::Not { condition } => condition.validate(depth + 1)?,
+            Self::All { conditions } | Self::Any { conditions } => {
+                if conditions.is_empty() || conditions.len() > 32 {
+                    return Err("condition list must contain 1..32 entries".into());
+                }
+                for c in conditions {
+                    c.validate(depth + 1)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+/// All nested branches are validated, including currently unreachable branches.
+fn flattened_effects(effects: &[Effect]) -> Result<Vec<&Effect>, String> {
+    fn visit<'a>(
+        effects: &'a [Effect],
+        depth: usize,
+        out: &mut Vec<&'a Effect>,
+    ) -> Result<(), String> {
+        if depth > 32 {
+            return Err("effect nesting exceeds 32".into());
+        }
+        for effect in effects {
+            if out.len() >= 4096 {
+                return Err("effect tree exceeds 4096 nodes".into());
+            }
+            out.push(effect);
+            match effect {
+                Effect::Conditional {
+                    then_effects,
+                    else_effects,
+                    ..
+                } => {
+                    visit(then_effects, depth + 1, out)?;
+                    visit(else_effects, depth + 1, out)?;
+                }
+                Effect::Repeat { effects, .. } => visit(effects, depth + 1, out)?,
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+    let mut out = vec![];
+    visit(effects, 0, &mut out)?;
+    Ok(out)
 }
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -218,6 +336,8 @@ pub struct UnitResult {
     pub remaining_distance: f64,
     pub speed: f64,
     pub toughness: f64,
+    pub dynamic_values: std::collections::BTreeMap<String, f64>,
+    pub modifiers: Vec<crate::modifiers::ModifierState>,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Event {
@@ -355,8 +475,20 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
         if a.effects.is_empty() || a.effects.len() > 32 {
             return Err("effects must contain 1..32 entries".into());
         }
-        for e in &a.effects {
+        for e in flattened_effects(&a.effects)? {
             match e {
+                Effect::AddModifier { id, stacks, .. } => {
+                    identifier(id, "modifier id")?;
+                    stacks.validate()?;
+                }
+                Effect::RemoveModifier { id, .. } => identifier(id, "modifier id")?,
+                Effect::Conditional { condition, .. } => condition.validate(0)?,
+                Effect::Repeat { count, .. } => count.validate()?,
+                Effect::SetDynamicValue { key, value, .. } => {
+                    identifier(key, "dynamic key")?;
+                    value.validate()?;
+                }
+                Effect::DynamicEnergy { amount, .. } => amount.validate()?,
                 Effect::Damage {
                     ratio,
                     flat,
@@ -437,7 +569,7 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
 fn validate_healing_targets(team: &[Unit]) -> Result<(), String> {
     for actor in team {
         for action in &actor.actions {
-            for effect in &action.effects {
+            for effect in flattened_effects(&action.effects)? {
                 if let Effect::Heal { target, .. } = effect {
                     let recipients = match target {
                         Target::SelfUnit => std::slice::from_ref(actor),
@@ -576,6 +708,12 @@ pub struct Trigger {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mechanics {
+    #[serde(default)]
+    pub modifier_definitions:
+        std::collections::BTreeMap<String, crate::modifiers::ModifierDefinition>,
+    /// Explicit initial actor variables; missing runtime reads are errors.
+    #[serde(default)]
+    pub dynamic_values: std::collections::BTreeMap<String, std::collections::BTreeMap<String, f64>>,
     /// Empty uses one cycle of max_av. Otherwise their sum must equal max_av.
     #[serde(default)]
     pub cycles: Vec<f64>,
@@ -609,6 +747,34 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
         return Err("cycle AV sum must equal max_av".into());
     }
     let units: Vec<_> = s.allies.iter().chain(s.waves.iter().flatten()).collect();
+    for (id, definition) in &m.modifier_definitions {
+        identifier(id, "modifier id")?;
+        definition.validate()?;
+    }
+    for effects in units
+        .iter()
+        .flat_map(|u| u.actions.iter().map(|a| &a.effects))
+        .chain(m.triggers.iter().map(|t| &t.effects))
+    {
+        for e in flattened_effects(effects)? {
+            if let Effect::AddModifier { id, .. } | Effect::RemoveModifier { id, .. } = e {
+                if !m.modifier_definitions.contains_key(id) {
+                    return Err(format!("unknown modifier definition {id}"));
+                }
+            }
+        }
+    }
+    for (id, values) in &m.dynamic_values {
+        if !units.iter().any(|u| &u.id == id) {
+            return Err("unknown dynamic-values unit".into());
+        }
+        for (key, value) in values {
+            identifier(key, "dynamic key")?;
+            if !value.is_finite() {
+                return Err("nonfinite initial dynamic value".into());
+            }
+        }
+    }
     for (id, t) in &m.toughness {
         if !units.iter().any(|u| &u.id == id) {
             return Err("unknown toughness unit".into());
@@ -656,6 +822,8 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
 impl Default for Mechanics {
     fn default() -> Self {
         Self {
+            modifier_definitions: Default::default(),
+            dynamic_values: Default::default(),
             cycles: vec![],
             ally_damage_factor: 1.0,
             triggers: vec![],
