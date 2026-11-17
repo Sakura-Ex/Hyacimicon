@@ -30,7 +30,7 @@ fn execute() -> Result<Value, String> {
         "validate" if args.len() == 3 => {
             Ok(json!({"status":"valid","ruleset":input.scenario().ruleset,
             "scenario_sha256":input.fingerprint(),"provenance":input.scenario().provenance,
-            "rng":RNG_ALGORITHM,"scope":"explicit_basic_profile_not_full_game_or_run_settlement"}))
+            "rng":RNG_ALGORITHM,"scope":"explicit_battle_v2_operations"}))
         }
         "simulate" if args.len() == 4 => serde_json::to_value(simulate(
             &input,

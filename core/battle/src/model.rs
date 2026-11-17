@@ -37,6 +37,8 @@ pub enum Scale {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Target {
+    /// Select lowest-HP enemy once at Action entry and retain it for every hit.
+    AbilityTarget,
     EnemyLowestHp,
     EnemyRandomTaunt,
     AllEnemies,
@@ -73,6 +75,23 @@ pub enum Effect {
         amount: f64,
         target: Target,
     },
+    Speed {
+        value: f64,
+        target: Target,
+    },
+    AdvanceNext {
+        fraction: f64,
+        target: Target,
+    },
+    Toughness {
+        amount: f64,
+        target: Target,
+    },
+    Request {
+        kind: RequestKind,
+        action: Option<String>,
+        target: Target,
+    },
     Advance {
         fraction: f64,
         target: Target,
@@ -84,6 +103,7 @@ pub enum ActionKind {
     Basic,
     Skill,
     Ultimate,
+    FollowUp,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -131,16 +151,19 @@ pub struct Provenance {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-/// Explicit effective units, actions, resources and limits for a `basic_v1` battle.
+/// Explicit effective units, actions, resources and limits for a `battle_v2` battle.
 pub struct Scenario {
+    #[serde(default)]
+    pub mechanics: Mechanics,
     pub schema_version: u32,
-    /// The only implemented profile is basic_v1; it is not a full character catalog.
+    /// The only implemented profile is battle_v2; it is not a full character catalog.
     pub ruleset: String,
     pub provenance: Provenance,
     pub unsupported_mechanics: Vec<String>,
-    /// AV budget including revival penalties; exhaustion yields
+    /// Sum of cycle allowances; current-cycle-capped revival charges consume it.
+    /// Exhaustion yields
     /// [`Outcome::Defeat`] / [`Termination::AvBudgetExhausted`], unless terminal
-    /// elimination has already settled. Actions at the deadline do not execute.
+    /// elimination has already settled. Equal-time order is an explicit mechanics policy.
     pub max_av: f64,
     /// Maximum executed actions, including ultimates, shared across waves.
     /// Reaching this safety limit yields [`Outcome::Incomplete`] /
@@ -192,6 +215,9 @@ pub struct UnitResult {
     pub energy: f64,
     pub alive: bool,
     pub revivals_left: u8,
+    pub remaining_distance: f64,
+    pub speed: f64,
+    pub toughness: f64,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct Event {
@@ -206,6 +232,7 @@ pub struct Event {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct BattleResult {
+    pub provenance: Provenance,
     pub scenario_sha256: String,
     #[serde(serialize_with = "seed_decimal::serialize")]
     pub seed: u64,
@@ -213,6 +240,9 @@ pub struct BattleResult {
     pub outcome: Outcome,
     pub termination: Termination,
     pub elapsed_av: f64,
+    pub cycle: usize,
+    pub cycle_remaining_av: f64,
+    pub remaining_av: f64,
     pub penalty_av: f64,
     pub actions: u32,
     pub waves_cleared: usize,
@@ -316,7 +346,10 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
         if a.kind == ActionKind::Ultimate && a.energy_cost <= 0.0 {
             return Err("ultimate must cost positive energy".into());
         }
-        if a.kind != ActionKind::Ultimate && a.sp_cost == 0 && a.energy_cost == 0.0 {
+        if matches!(a.kind, ActionKind::Basic | ActionKind::Skill)
+            && a.sp_cost == 0
+            && a.energy_cost == 0.0
+        {
             fallback = true;
         }
         if a.effects.is_empty() || a.effects.len() > 32 {
@@ -338,7 +371,10 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                     }
                     if !matches!(
                         target,
-                        Target::EnemyLowestHp | Target::EnemyRandomTaunt | Target::AllEnemies
+                        Target::AbilityTarget
+                            | Target::EnemyLowestHp
+                            | Target::EnemyRandomTaunt
+                            | Target::AllEnemies
                     ) {
                         return Err("damage requires enemy targets".into());
                     }
@@ -376,7 +412,16 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                     }
                 }
                 Effect::Energy { amount, .. } => bounded(*amount, -1e9, 1e9, "energy amount")?,
-                Effect::Advance { fraction, .. } => {
+                Effect::Speed { value, .. } => bounded(*value, 0.000001, 1e12, "speed")?,
+                Effect::Toughness { amount, .. } => bounded(*amount, 0.0, 1e12, "toughness")?,
+                Effect::Request { kind, action, .. } => {
+                    if (*kind == RequestKind::ExtraTurn) != action.is_none() {
+                        return Err(
+                            "extra turn selects at entry; other requests require action".into()
+                        );
+                    }
+                }
+                Effect::AdvanceNext { fraction, .. } | Effect::Advance { fraction, .. } => {
                     bounded(*fraction, -1.0, 1.0, "advance fraction")?
                 }
             }
@@ -422,7 +467,7 @@ fn validate_healing_targets(team: &[Unit]) -> Result<(), String> {
 /// Validate once before running any trials; unsupported mechanisms fail closed.
 pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
     use sha2::{Digest, Sha256};
-    if scenario.schema_version != 1 || scenario.ruleset != "basic_v1" {
+    if scenario.schema_version != 1 || scenario.ruleset != "battle_v2" {
         return Err("unsupported schema_version or ruleset".into());
     }
     for (value, name) in [
@@ -472,6 +517,7 @@ pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
             }
         }
     }
+    validate_mechanics(&scenario)?;
     validate_healing_targets(&scenario.allies)?;
     for wave in &scenario.waves {
         validate_healing_targets(wave)?;
@@ -481,4 +527,131 @@ pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
         scenario,
         fingerprint: format!("{:x}", Sha256::digest(encoded)),
     })
+}
+
+/// Runtime events are dispatched even when replay recording is disabled.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BattleEvent {
+    BattleStart,
+    WaveStart,
+    TurnStart,
+    TurnEnd,
+    ActionStart,
+    ActionEnd,
+    Hit,
+    Break,
+    Death,
+    CycleEnd,
+}
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum RequestKind {
+    Ultimate,
+    ExtraTurn,
+    FollowUp,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Trigger {
+    pub owner: String,
+    pub event: BattleEvent,
+    pub subject: Option<String>,
+    pub action: Option<String>,
+    /// Zero means unlimited; positive counts are consumed before dispatch.
+    pub uses: u32,
+    pub effects: Vec<Effect>,
+    /// Optional event-based lifetime; ticks expire before triggering that event.
+    pub expires_on: Option<BattleEvent>,
+    pub duration: u32,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Mechanics {
+    /// Empty uses one cycle of max_av. Otherwise their sum must equal max_av.
+    #[serde(default)]
+    pub cycles: Vec<f64>,
+    #[serde(default = "one")]
+    pub ally_damage_factor: f64,
+    #[serde(default)]
+    pub triggers: Vec<Trigger>,
+    #[serde(default)]
+    pub toughness: std::collections::BTreeMap<String, f64>,
+    #[serde(default)]
+    pub ultimate_priority: std::collections::BTreeMap<String, i32>,
+    /// Explicit tie policy pending game observation; never inferred from numeric values.
+    #[serde(default)]
+    pub larger_priority_first: bool,
+    #[serde(default)]
+    pub unit_before_cycle: bool,
+}
+fn one() -> f64 {
+    1.0
+}
+fn validate_mechanics(s: &Scenario) -> Result<(), String> {
+    let m = &s.mechanics;
+    bounded(m.ally_damage_factor, 0.0, 1e6, "ally_damage_factor")?;
+    if m.cycles.len() > 10000 {
+        return Err("too many cycles".into());
+    }
+    for c in &m.cycles {
+        bounded(*c, 0.000001, 1e9, "cycle AV")?;
+    }
+    if !m.cycles.is_empty() && (m.cycles.iter().sum::<f64>() - s.max_av).abs() > 1e-8 {
+        return Err("cycle AV sum must equal max_av".into());
+    }
+    let units: Vec<_> = s.allies.iter().chain(s.waves.iter().flatten()).collect();
+    for (id, t) in &m.toughness {
+        if !units.iter().any(|u| &u.id == id) {
+            return Err("unknown toughness unit".into());
+        }
+        bounded(*t, 0.0, 1e12, "toughness")?;
+    }
+    for t in &m.triggers {
+        let owner = units
+            .iter()
+            .find(|u| u.id == t.owner)
+            .ok_or("unknown trigger owner")?;
+        if t.subject
+            .as_ref()
+            .is_some_and(|id| !units.iter().any(|u| &u.id == id))
+        {
+            return Err("unknown trigger subject".into());
+        }
+        if t.expires_on.is_some() && t.duration == 0 {
+            return Err("status duration must be positive".into());
+        }
+        let mut probe = (*owner).clone();
+        probe.actions = vec![Action {
+            id: "trigger_validation".into(),
+            kind: ActionKind::Basic,
+            sp_cost: 0,
+            sp_gain: 0,
+            energy_cost: 0.0,
+            energy_gain: 0.0,
+            effects: t.effects.clone(),
+        }];
+        validate_unit(
+            &probe,
+            &SkillPoints {
+                initial: 0,
+                maximum: 20,
+            },
+        )?;
+    }
+    Ok(())
+}
+
+impl Default for Mechanics {
+    fn default() -> Self {
+        Self {
+            cycles: vec![],
+            ally_damage_factor: 1.0,
+            triggers: vec![],
+            toughness: Default::default(),
+            ultimate_priority: Default::default(),
+            larger_priority_first: false,
+            unit_before_cycle: false,
+        }
+    }
 }

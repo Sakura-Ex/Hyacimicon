@@ -88,7 +88,7 @@ fn exhausted_budget_precedes_action_limit_and_counts_as_loss() {
         assert_eq!(result.termination, Termination::AvBudgetExhausted);
         assert_eq!(result.outcome, Outcome::Defeat);
         assert_eq!(result.elapsed_av, 50.0);
-        assert_eq!(result.penalty_av, penalty);
+        assert_eq!(result.penalty_av, penalty.min(50.0));
         assert_eq!(result.actions, 1);
         let batch = run_batch(
             &input,

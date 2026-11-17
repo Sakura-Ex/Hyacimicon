@@ -148,9 +148,9 @@ pub fn run_batch(
         win_rate_ci95: None,
         loss_rate_ci95: None,
         run_hp_loss_unknown_count: 0,
-        run_hp_loss_status: "unknown: run settlement is outside basic_v1".into(),
+        run_hp_loss_status: "unknown: run settlement is outside battle_v2".into(),
         ledger: Vec::new(),
-        validation_scope: "Explicit-input basic_v1 Monte Carlo; conditional on completed trials; not full 4.7 roster, live-game win-rate validation, or run HP settlement".into(),
+        validation_scope: "Explicit-input battle_v2 Monte Carlo; conditional on completed trials; not full 4.7 roster, live-game win-rate validation, or run HP settlement".into(),
     };
     for index in 0..request.trials {
         if cancel() {
@@ -186,7 +186,7 @@ pub fn run_batch(
         }
         if result.run_hp_loss.is_some() {
             return Err(format!(
-                "trial {index}: basic_v1 does not implement run HP settlement"
+                "trial {index}: battle_v2 does not implement run HP settlement"
             ));
         }
         match result.outcome {

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "ruleset": "basic_v1",
+  "ruleset": "battle_v2",
   "provenance": {
     "game_version": "synthetic",
     "data_snapshot": "public-example-v1",

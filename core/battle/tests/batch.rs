@@ -56,8 +56,9 @@ fn unit(id: &str, attack: f64, speed: f64) -> Unit {
 
 fn scenario(ally_attack: f64, enemy_attack: f64) -> Scenario {
     Scenario {
+        mechanics: Mechanics::default(),
         schema_version: 1,
-        ruleset: "basic_v1".into(),
+        ruleset: "battle_v2".into(),
         provenance: Provenance {
             game_version: "synthetic".into(),
             data_snapshot: "batch-test-v1".into(),

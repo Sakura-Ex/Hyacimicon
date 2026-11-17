@@ -1,121 +1,118 @@
-# Rust basic battle core
+# Battle v2
 
-This library executes explicit, already resolved battle scenarios. The `basic_v1`
-profile supports speed/action-value scheduling, teams and enemy waves, skill
-points and energy, automatic action priorities, direct damage and critical hits,
-weighted random targets, healing, shields, action advance/delay, and optional
-explicit revival. It returns an event trace or a reproducible Monte Carlo ledger.
+This module executes explicit battle operations with remaining-distance scheduling,
+Turn/Action boundaries, event listeners, insertion requests and per-cycle budgets.
+It continues PR8's damage/heal/shield math, target/critical random streams, CLI and
+batch implementation. It replaces the old `basic_v1` scheduler; old inputs must
+select `battle_v2` and account for the changed rules described below.
 
-The profile is a bounded simulation contract, not a claim of complete Currency
-Wars 4.7 character coverage. It does not convert accounts or infer missing kits,
-break mechanics, buffs, DoTs, summons, follow-up triggers, background units, or
-shared run-HP settlement. A caller must declare known unsupported mechanisms;
-validation rejects them. Unknown input fields and effects are also rejected.
-Existing private-data adapters are not bundled in this public core.
+## Run
 
-## Architecture and execution contract
-
-`model::validate` checks the complete input once and produces an immutable
-`ValidatedScenario` with a SHA-256 identity. `engine` owns single-battle state;
-`math` owns pure damage/heal/shield formulae; `batch` owns independent trial seeds,
-outcome ledgers and frequency estimates. CLI and future Tauri commands use the
-same Rust functions. There is no second set of frontend combat formulae.
-
-The private `scheduler` module owns natural elapsed AV and revival penalties,
-normal-action selection, clock advancement and action-time shifts. `engine` keeps
-combat eligibility, immediate ultimate priority and terminal checks in their
-existing order. Units retain absolute `next_av` values, and `basic_v1` arithmetic,
-tie order, traces and RNG streams are unchanged. This internal split introduces
-no Cycle rules or public scheduler API.
-
-The following semantics define `basic_v1` and are exposed rather than inferred:
-
-- Initial normal actions occur at `10000 / speed`. Ties follow stable input order
-  (allies, then the active enemy wave). Time never moves backwards.
-- Ultimate actions with sufficient resources are checked at settled action
-  boundaries, in the same stable unit order. They do not consume a normal turn.
-  Other actions use each unit's declared priority, choosing the first affordable
-  non-ultimate action. A free fallback is required. Strategy never sees the RNG.
-- Costs are validated and paid before effects. Effects execute in declared order.
-  After effects, the actor receives its declared energy/SP gain if still alive.
-  Energy and skill points are capped. Enemy skill points are separate and persist
-  across waves. All enemies in a new wave use their declared initial energy.
-- Random-target damage retargets each hit from living opponents using positive
-  taunt weights. Each critical-capable hit samples its own critical outcome.
-  Target and critical RNG streams are separated using SHA-256 and ChaCha8.
-- Shields absorb damage before HP. Shield grants add up to their declared cap and
-  refresh their duration. Duration decreases at the start of the recipient's next
-  scheduled turn; a duration of one protects until that turn starts. Ultimates do
-  not tick shield duration. This is an explicit primitive, not a universal kit rule.
-- Action advance shifts the remaining scheduled action by `fraction * 10000/speed`
-  and clamps to the present. Negative fractions delay. A normal actor's next action
-  is scheduled before its effects, so self-advance affects the next action.
-- Death is permanent unless an explicit revival specification has charges left.
-  Such revival occurs immediately at the declared HP fraction, clears shields,
-  preserves energy, schedules a new full interval, and adds the declared AV penalty
-  to a separate budget ledger. No client `0.25` field is interpreted as AV.
-- Waves share natural elapsed AV, accumulated revival penalties, actions and ally
-  state. New enemies are scheduled relative to the current time. No wave gets a
-  fresh budget. An event exactly at the AV deadline is not executed.
-- After an action's effects settle, terminal elimination is checked before the
-  elapsed-budget check, followed by cancellation and the safety action limit.
-  A completed final-wave elimination is victory. Already exhausted AV is defeat
-  even if that action also reached the action limit or cancellation is requested.
-  Otherwise a safety limit or cancellation is incomplete and excluded from
-  outcome frequencies. A future action beyond the deadline does not turn an
-  earlier safety stop into a loss.
-
-All quantities are finite; malformed values, unsupported effects, illegal costs,
-ambiguous identities and arithmetic failure are errors. The core never substitutes
-zero for an unknown game value. `run_hp_loss` is unknown because node combat and
-shared run settlement have different owners.
-
-Effective `healing_bonus`, `incoming_healing_bonus` and `shield_bonus` accept
-finite values in `[-1, 1e12]`. Healing uses the additive multiplier
-`1 + outgoing + incoming`; it must be nonnegative for every possible recipient
-of a declared healing action. Validation uses the same formula as execution,
-checks self-only heals only against the actor, and checks enemy teams per wave.
-Shield grants use the actor's shield bonus. Negative modifiers represent resolved
-panels; this does not add dynamic debuff mechanics.
-
-JSON parsing enables `serde_json/float_roundtrip` so serializing a valid Rust
-scenario and reading it back preserves its floating-point values, fingerprint,
-and AV boundary behavior. This preserves the input precision; it does not define
-a cross-language decimal canonicalization or tolerance around the deadline.
-
-## Running
-
-Run Cargo from `core/battle/` with the checked-in lockfile. From the repository root:
+From this directory, with the pinned Rust toolchain:
 
 ```text
-cd core/battle
 cargo test --locked
-cargo run --locked --bin hcwa-battle -- validate examples/duel.json
-cargo run --locked --bin hcwa-battle -- simulate examples/team-waves.json 17
-cargo run --release --locked --bin hcwa-battle -- batch examples/duel.json 10000 20261114
+cargo build --release --locked
+cargo run --release --locked -- simulate examples/team-waves.json 7
 ```
 
-The CLI writes JSON to stdout and errors to stderr with exit code 2. Redirect
-results to a local output path; do not commit generated ledgers or player inputs.
-Scenario and output paths are relative to the current directory.
-Examples use artificial units and are marked as synthetic. Their frequencies
-test the engine, not a named character's real-game win probability.
+These public
+examples are artificial operation tests. Game data is supplied separately, never
+bundled in this module. `validate FILE`, `simulate FILE SEED`, and
+`batch FILE TRIALS SEED` retain their CLI argument structure. Seeds remain decimal
+strings in results. The library entry points are `validate`, `simulate`,
+`simulate_cancellable`, and `simulate_with_policy`.
 
-Seeds remain `u64` in Rust and are decimal strings in JSON. TypeScript callers
-must preserve the string rather than round it through a JavaScript Number.
-The library's cancellable entry points check between actions, including zero-AV
-ultimate chains. Trace output is capped at 100,000 events; `trace_truncated`
-reports that cap without changing the simulated state or batch counts.
+Results include `provenance`, outcome/termination, elapsed AV, charged penalty AV,
+current cycle and remaining cycle/total AV, final unit HP/shield/energy/distance/
+speed/toughness, and optional ordered replay events. `Incomplete` denotes a safety
+or cancellation stop, not a defeat. Run HP settlement is not part of this module.
 
-## Reuse and validation
+## Scheduling and operations
 
-Formula sources and attribution are listed in the repository's
-[acknowledgements](../../README.md#references-and-acknowledgements).
-Serde, SHA-2 and rand_chacha provide parsing, fingerprints and reproducible random
-streams; versions are fixed by Cargo.lock.
+- `mechanics.cycles` supplies successive AV allowances; its sum must equal
+  `max_av`. An omitted list means one cycle of `max_av`.
+- Each living unit holds one remaining distance. Waiting AV is distance/current
+  speed; time advancement subtracts `delta * speed` from every living unit.
+- The normal actor stays at distance zero until its TurnEnd, including inserted
+  actions. `advance` changes the current distance (and has no effect on the normal
+  actor at the top); `advance_next` records a distance change applied at TurnEnd.
+  `speed` replaces current speed without changing remaining distance.
+- `request` with `ultimate` carries an action ID. Queueing costs nothing. Entry
+  revalidates the request and pays once before TurnStart listeners. `extra_turn`
+  carries no action and chooses after TurnStart. `follow_up` executes an Action
+  directly and emits no TurnStart/TurnEnd. The latter requires a `follow_up` action.
+  Requests are FIFO; duplicate pending ultimates for one unit are coalesced.
+- An Action executes its complete effect vector. Runtime Hit/Break/Death listeners
+  can apply immediate effects or register later actions. No queued action runs
+  inside another Action. Runtime dispatch is independent of replay limits.
+- `mechanics.triggers` binds owner, event, optional subject/action filters, uses
+  (zero means unlimited), and effects. Optional event-based duration expires before
+  triggering its expiration event. Shields retain their specified normal-turn
+  expiry. `toughness` effects dispatch Break; elemental break damage/recovery must
+  be explicitly implemented by supplied effects, not inferred from a scalar.
+- Revival restores explicit HP and consumes only the current cycle's remaining
+  allowance, clamped to zero. It preserves the clock and all unit distances.
+- Terminal elimination is checked at the common boundary after complete actions
+  and state-changing cycle events. Cycle exhaustion precedes safety cancellation.
+- `ability_target` chooses the lowest-HP enemy once at Action entry. Every hit
+  retains that identity; later hits stop if it dies. Existing `enemy_lowest_hp` and
+  `enemy_random_taunt` explicitly reselect per hit. A full game policy's target
+  selection/Retarget instructions need their own adapter.
 
-Validation separates hand-computed arithmetic and state-transition tests,
-upstream formula parity, deterministic seed replay, statistical smoke checks, and
-actual game validation. Only the first four are available for this initial core.
-Private current-version records may be used locally to audit adapter coverage;
-they are not embedded in source or represented as complete playable kits.
+`Policy` receives an immutable observation and the legal `Operation` list.
+`Automatic` selects its first entry; closures use exactly the same interface.
+Normal/extra-turn choices use declared action order. Automatic ultimate requests
+use `ultimate_priority` keyed by unit ID, then stable unit/action order, and are
+rechecked after each completed action.
+
+Priority comparison direction, same-priority order, and cycle/action ties are not
+claimed as measured game rules. The caller explicitly controls
+`larger_priority_first` (default false) and `unit_before_cycle` (default false).
+Unit-first ties drain zero-time due units/requests before the cycle event.
+
+## Damage factor
+
+`mechanics.ally_damage_factor` is applied once at the common damage settlement
+point, after the reused formula and before shield absorption. Its neutral default
+is 1.0. The owner-reported 2026-11-17 Currency Wars value is 0.3; set it explicitly.
+Its exact underlying game property/multiplier group remains unresolved. Do not
+also multiply skill ratios or enemy reduction by it. Source:
+https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8#issuecomment-6922807938
+
+## Raw Config skill-chain compiler
+
+```text
+python tools/config_actions.py REQUEST.json COMPILED.json
+python -m unittest discover -s tools -p test_config_actions.py
+```
+
+The request provides `ability_files`, `entry`, explicit numeric `bindings`,
+`active_points`, and resolved received `hit_energy`. The compiler traverses actual
+Ability references and regular-skill predicates, lowers ordered damage, toughness,
+hit energy and next-action shifts, and records every visited source pointer. It
+removes only enumerated presentation tasks and preserves hit order. Postfix load,
+constant and negation formats used by the exercised chain are supported; unknown
+instructions, numeric modifiers, missing abilities/bindings or fields reject.
+`Inverse` is respected. Numeric modifiers are never dropped as animations.
+
+This is **selected regular-skill-chain execution**, not a complete roster importer.
+Provide resistance already resolved for the emitted damage element. The local
+acceptance run resolves GridFight Seele Skill01 through its Advanced parent,
+reads SkillID 1110201 level 1 and PointID 11102103, and executes it against
+MonsterSkillID 801101001. Both use supplied controlled panels. Full selected kit
+imports are also attempted and rejected at unsupported passive/skill operations.
+These controlled results must not be presented as a real roster win probability.
+
+## Compatibility and verification
+
+The old absolute `next_av` path is gone. Three intentional baseline changes are:
+self-advance must name the next action explicitly, revival preserves distance,
+and charged penalty AV cannot exceed the current cycle remainder. Formula/RNG,
+resource, CLI, serialization, replay and batch tests remain in place. Lifecycle
+tests cover turn-entry payment, insertion boundaries, target retention, trace
+truncation, dynamic speed, event expiry, cycle ties and terminal precedence.
+
+Source repository license: GPL-3.0-only. HSR_Nous formula attribution remains in
+`src/math.rs`; distance semantics reference f8935ddb407b297732fbd3c624d55897e3e648b9,
+with the MIT notice in `HSR_NOUS_LICENSE`. Raw game data is not redistributed here.

@@ -70,8 +70,9 @@ pub fn unit(id: &str, speed: f64) -> Unit {
 
 pub fn scenario(allies: Vec<Unit>, waves: Vec<Vec<Unit>>) -> Scenario {
     Scenario {
+        mechanics: Mechanics::default(),
         schema_version: 1,
-        ruleset: "basic_v1".into(),
+        ruleset: "battle_v2".into(),
         provenance: Provenance {
             game_version: "synthetic".into(),
             data_snapshot: "hand-computed-tests-v1".into(),

@@ -238,7 +238,7 @@ fn shield_absorbs_before_hp_and_expires_at_recipient_turn_start() {
 }
 
 #[test]
-fn self_advance_and_delay_modify_the_already_scheduled_next_turn() {
+fn explicit_next_advance_applies_only_when_turn_finishes() {
     for (fraction, expected_times) in [
         (0.5, vec![100.0, 150.0, 200.0, 250.0]),
         (-0.5, vec![100.0, 250.0]),
@@ -246,7 +246,7 @@ fn self_advance_and_delay_modify_the_already_scheduled_next_turn() {
         let mut ally = unit("ally", 100.0);
         ally.actions = vec![action(
             "shift",
-            vec![Effect::Advance {
+            vec![Effect::AdvanceNext {
                 fraction,
                 target: Target::SelfUnit,
             }],
@@ -387,6 +387,7 @@ fn revival_charges_and_penalties_use_a_separate_clock() {
         actions(&result),
         vec![
             ("enemy", "lethal", 50.0),
+            ("ally", "wait", 100.0),
             ("enemy", "lethal", 100.0),
             ("enemy", "lethal", 150.0)
         ]
@@ -599,7 +600,7 @@ fn final_elimination_within_one_action_wins_before_its_penalty_budget_check() {
     assert_eq!(result.outcome, Outcome::Victory);
     assert_eq!(result.actions, 1);
     close(result.elapsed_av, 100.0);
-    close(result.penalty_av, 1000.0);
+    close(result.penalty_av, 1.0); // Current cycle had only one AV left.
     close(state(&result, "enemy").hp, 0.0);
 }
 
