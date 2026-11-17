@@ -20,6 +20,27 @@ JSON 保留五档叠影参数。准备步骤按本场叠影取值，也可以为
 
 模板中的变量必须引用显式参数、效果局部变量或可见战斗状态。算术使用表达式节点表示，字符串保留给 ID 和枚举值。
 
+## 静态效果与战斗效果
+
+按[账号静态面板约定](../account/playable-configuration.md)区分计算归属。`account` 已在转换中汇总已激活小行迹、遗器主副词条、达到件数门槛的套装无条件常驻属性，以及命途匹配光锥对应叠影的无条件常驻属性。
+
+JSON 将两部分显式分组：
+
+- `static_effects`：引用 `account` 已有的装备静态属性资料。引用根据根节点的装备种类、ID、资料版本与本场绑定解析；静态数值继续在现有资料中维护，按件数或叠影由 `account` 计算。
+- `battle_effects`：保存本场战斗使用的参数、状态定义与规则，包括事件触发、当前目标条件、实时属性门槛和团队光环。
+
+静态与战斗的划分按计算规则决定；持续时间使用另一组字段表达。永久战斗 buff、仅开战时判断一次的条件效果都归战斗侧。例如「齐颂」开战后给予我方全体攻击加成，即使没有回合倒计时，也由战斗处理。
+
+| 装备 | 静态效果，由 account 计入面板 | 战斗效果，由 battle 处理 |
+| --- | --- | --- |
+| 快枪手 `102` | 二件攻击提高 12%；四件速度提高 6% | 四件普攻伤害提高 10% |
+| 无可取代的东西 `23002`，叠影 1 | 攻击提高 24% | 击杀或受击后的治疗、增伤、次数与持续时间 |
+| 秘密誓心 `21012`，叠影 1 | 无条件伤害提高 20% | 按当前敌我生命比例判断的额外增伤 20% |
+
+`static_effects` 在装备文件中作为关联与核对信息，战斗执行器安装 `battle_effects`。准备步骤核对传入静态配置的资料版本及装备绑定；换装后由调用方重新请求 `account` 计算面板。静态面板与战斗效果使用一致的装备、套装件数和叠影。
+
+当前实现依据：[`conversion.rs`](../../../core/account/src/playable/conversion.rs)按套装件数汇总 `set_properties`，按命途和叠影选择 `light_cones.properties`；[`panel.rs`](../../../core/account/src/playable/panel.rs)统一合成属性。新增战斗 JSON 沿用这些数据，避免另存一份静态倍率。
+
 ## 文件结构
 
 | 字段 | 内容 |
@@ -27,22 +48,22 @@ JSON 保留五档叠影参数。准备步骤按本场叠影取值，也可以为
 | `schema_version` | 装备效果文件格式版本，与战斗场景格式分别管理 |
 | `equipment` | `kind`、装备 ID；光锥的适用命途，套装的件数门槛按资料表达 |
 | `provenance` | 游戏版本、资料版本、条目引用和核对状态 |
-| `parameters` | 固定值或叠影五档值，百分比使用比例值 |
-| `modifiers` | 可复用状态：属性、共存组、层数、持续规则及清理规则 |
-| `rules` | 静态属性、按上下文计算的属性、光环或事件触发规则 |
+| `static_effects` | `account_reference`，关联 account 已有静态装备属性资料 |
+| `battle_effects.parameters` | 战斗效果的固定值或叠影五档值，百分比使用比例值 |
+| `battle_effects.modifiers` | 战斗状态：属性、共存组、层数、持续规则及清理规则 |
+| `battle_effects.rules` | 按上下文计算的属性、光环或事件触发规则 |
 
-规则分成四类，作用如下：
+战斗规则分成三类，静态效果沿用 account 现有实现：
 
 | `type` | 用途 | 表中实例 |
 | --- | --- | --- |
-| `static_modifier` | 已由账号静态面板计算的贡献，战斗保留来源并检查计算归属 | 快枪手二件、光锥无条件攻击提高 |
 | `damage_modifier` | 在当前伤害上下文中判断条件并读取属性贡献 | 天倾、量子套四件、秘密誓心 |
 | `aura` | 跟随条件、来源和受益对象变化而启停的持续贡献 | 龙骨、仙舟、隐士、游戏尘寰 |
 | `trigger` | 事件发生时检查条件、次数与冷却，再执行有序效果 | 嘉果、猎人四件、轮契、舞！舞！舞！ |
 
 入场初始化使用明确的入场事件触发。属性计算与事件执行分别处理，避免为了实时门槛判断反复添加、移除同一属性状态。
 
-静态贡献继续沿用账号模块已有口径。模板为每条贡献分配稳定 ID，并记录由账号静态计算还是战斗计算；战斗安装后者。账号与战斗的联合样例核对同条贡献只计算一次。
+账号与战斗的联合样例核对每条贡献的计算归属，保证静态贡献只计入一次。
 
 ## 示例一：光锥五档参数与伤害范围
 
@@ -62,25 +83,30 @@ JSON 保留五档叠影参数。准备步骤按本场叠影取值，也可以为
     "reference": { "category": "light_cone", "id": "20002" },
     "verification": "config_checked_game_pending"
   },
-  "parameters": {
-    "damage_bonus": {
-      "type": "by_superimposition",
-      "values": [0.20, 0.25, 0.30, 0.35, 0.40]
-    }
+  "static_effects": {
+    "type": "account_reference"
   },
-  "modifiers": {},
-  "rules": [
-    {
-      "id": "basic_skill_bonus",
-      "type": "damage_modifier",
-      "applies_to": {
-        "actor": "wearer",
-        "damage_tags_any": ["basic", "skill"]
-      },
-      "property": "damage_bonus",
-      "value": { "op": "parameter", "key": "damage_bonus" }
-    }
-  ]
+  "battle_effects": {
+    "parameters": {
+      "damage_bonus": {
+        "type": "by_superimposition",
+        "values": [0.20, 0.25, 0.30, 0.35, 0.40]
+      }
+    },
+    "modifiers": {},
+    "rules": [
+      {
+        "id": "basic_skill_bonus",
+        "type": "damage_modifier",
+        "applies_to": {
+          "actor": "wearer",
+          "damage_tags_any": ["basic", "skill"]
+        },
+        "property": "damage_bonus",
+        "value": { "op": "parameter", "key": "damage_bonus" }
+      }
+    ]
+  }
 }
 ```
 
@@ -105,58 +131,75 @@ JSON 保留五档叠影参数。准备步骤按本场叠影取值，也可以为
 
 ```json
 {
-  "equipment": { "kind": "relic_set", "id": "104" },
-  "modifiers": {
-    "ultimate_crit_damage": {
-      "stack_group": "relic.104.4pc.crit_damage",
-      "stacking": {
-        "scope": "source",
-        "update": "replace",
-        "max_stacks": 1,
-        "duration_refresh": "reset"
-      },
-      "duration": {
-        "type": "turn_count",
-        "count": 2,
-        "clock": "holder",
-        "tick_event": "unresolved",
-        "turn_kinds": "unresolved",
-        "first_tick": "unresolved"
-      },
-      "on_holder_death": "unresolved",
-      "properties": [
-        {
-          "property": "crit_damage",
-          "value": { "op": "constant", "value": 0.25 }
-        }
-      ]
-    }
+  "equipment": {
+    "kind": "relic_set",
+    "id": "104"
   },
-  "rules": [
-    {
-      "id": "4pc_ultimate_bonus",
-      "type": "trigger",
-      "requires": { "pieces": 4 },
-      "event": {
-        "type": "action_used",
-        "actor": "wearer",
-        "action_kind": "ultimate",
-        "phase": "unresolved"
-      },
-      "effects": [
-        {
-          "type": "add_modifier",
-          "id": "ultimate_crit_damage",
-          "stacks": { "op": "constant", "value": 1 },
-          "target": "self_unit"
-        }
-      ]
-    }
-  ]
+  "static_effects": {
+    "type": "account_reference"
+  },
+  "battle_effects": {
+    "parameters": {},
+    "modifiers": {
+      "ultimate_crit_damage": {
+        "stack_group": "relic.104.4pc.crit_damage",
+        "stacking": {
+          "scope": "source",
+          "update": "replace",
+          "max_stacks": 1,
+          "duration_refresh": "reset"
+        },
+        "duration": {
+          "type": "turn_count",
+          "count": 2,
+          "clock": "holder",
+          "tick_event": "unresolved",
+          "turn_kinds": "unresolved",
+          "first_tick": "unresolved"
+        },
+        "on_holder_death": "unresolved",
+        "properties": [
+          {
+            "property": "crit_damage",
+            "value": {
+              "op": "constant",
+              "value": 0.25
+            }
+          }
+        ]
+      }
+    },
+    "rules": [
+      {
+        "id": "4pc_ultimate_bonus",
+        "type": "trigger",
+        "requires": {
+          "pieces": 4
+        },
+        "event": {
+          "type": "action_used",
+          "actor": "wearer",
+          "action_kind": "ultimate",
+          "phase": "unresolved"
+        },
+        "effects": [
+          {
+            "type": "add_modifier",
+            "id": "ultimate_crit_damage",
+            "stacks": {
+              "op": "constant",
+              "value": 1
+            },
+            "target": "self_unit"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 
-这里 `modifiers` 使用模板内局部 ID，准备步骤扩展为含装备及参数版本的定义 ID；`stack_group` 保留原身份。穿戴者、装备绑定和规则 ID 合成完整来源。示例省略文件头与来源字段，完整文件按统一根结构保存。覆盖、叠层及死亡清理仍需与相应游戏规则一起核对。
+这里 `battle_effects.modifiers` 使用模板内局部 ID，准备步骤扩展为含装备及参数版本的定义 ID；`stack_group` 保留原身份。猎人二件的冰伤属性由静态引用关联 account 数据，四件规则在战斗中安装。穿戴者、装备绑定和规则 ID 合成完整来源。示例省略文件头与来源字段，完整文件按统一根结构保存。覆盖、叠层及死亡清理仍需与相应游戏规则一起核对。
 
 ## 条件、目标与触发次数
 
@@ -199,9 +242,9 @@ JSON 保留五档叠影参数。准备步骤按本场叠影取值，也可以为
 
 ## 准备步骤与验收边界
 
-1. 读取有版本的资料快照和装备绑定，检查装备 ID、适用条件、套装门槛及参数范围。
+1. 读取有版本的资料快照和装备绑定，核对 account 静态面板与本场装备的一致性，检查装备 ID、适用条件、套装门槛及参数范围；静态属性保留已有计算结果。
 2. 对选中叠影取值，替换所有参数引用，保留参数来源；`by_superimposition` 必须有五项且等级在 1～5。
-3. 展开本场规则，生成定义 ID、共存组与完整来源，检查引用、属性依赖、事件上下文和机制支持情况。
+3. 展开 `battle_effects`，生成定义 ID、共存组与完整来源，检查引用、属性依赖、事件上下文和机制支持情况。
 4. 生成固定参数的不可变输入、资料摘要与支持情况报告。未解决的计时或关键机制阻止该条目进入完整战斗模拟。
 5. 每局独立创建状态。统一执行器响应事件、计算当前属性并更新状态；外部决策暂停时装备同样暂停。
 
