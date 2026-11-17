@@ -1,35 +1,6 @@
-//! 直接伤害、治疗和护盾的确定性公式，参考 HSR_Nous 实现。
+//! 伤害、治疗与护盾的确定性数值计算。
 //!
-//! Upstream commit: f8935ddb407b297732fbd3c624d55897e3e648b9.
-//! Source: src/hsr_nous/sim_schema/rulebook.yaml, lines 234-238, 262-266,
-//! 279-375. SHA-256: d37c1b0a9dbe3819cd210e02bef96db9598486ab9b8554bad90602ca136277fe.
-//! The direct-damage subset takes an already assembled base and bonus pool.
-//! Upstream final-damage and weaken zones are neutral (1) in this interface.
-//! Critical outcome is provided by the caller; this module consumes no RNG.
-//! Healing/shielding return raw amounts; application, caps, duration, stacking,
-//! target selection, costs, and resource gains belong to the simulation layer.
-//!
-//! MIT License
-//!
-//! Copyright (c) 2026 The HSR_Nous Authors
-//!
-//! Permission is hereby granted, free of charge, to any person obtaining a copy
-//! of this software and associated documentation files (the "Software"), to deal
-//! in the Software without restriction, including without limitation the rights
-//! to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//! copies of the Software, and to permit persons to whom the Software is
-//! furnished to do so, subject to the following conditions:
-//!
-//! The above copyright notice and this permission notice shall be included in all
-//! copies or substantial portions of the Software.
-//!
-//! THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//! IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//! FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//! AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//! LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//! OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//! SOFTWARE.
+//! 调用方组装基础值、加成和暴击结果；本模块返回伤害、治疗和护盾数值。
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
@@ -111,7 +82,7 @@ pub fn damage(input: &DamageInput, critical: bool) -> Result<f64, String> {
     };
     let damage_reduction_multiplier = 1.0 - input.damage_reduction;
 
-    // final_dmg_multi and weaken_multi are deliberately neutral in this subset.
+    // 当前接口中的最终伤害与虚弱乘区取 1。
     let mut amount = input.base_damage;
     for factor in [
         damage_bonus_multiplier,
@@ -130,9 +101,8 @@ pub fn damage(input: &DamageInput, critical: bool) -> Result<f64, String> {
     Ok(amount)
 }
 
-/// Upstream heal formula after the caller assembles its ATK/HP/flat base.
-/// Negative incoming boost is supported down to -1 (e.g. healing received down).
-/// The combined multiplier must remain nonnegative; no silent lower clamp.
+/// 对已组装的治疗基础值应用治疗加成与受治疗加成。
+/// 两项加成的静态范围由组装方保证，运行时检查合计治疗乘数非负。
 pub fn heal(base_amount: f64, outgoing_boost: f64, incoming_boost: f64) -> Result<f64, String> {
     let multiplier = finite("healing multiplier", 1.0 + outgoing_boost + incoming_boost)?;
     if multiplier < 0.0 {
@@ -141,7 +111,7 @@ pub fn heal(base_amount: f64, outgoing_boost: f64, incoming_boost: f64) -> Resul
     finite("healing amount", base_amount * multiplier)
 }
 
-/// Upstream shield formula after the caller assembles its DEF/HP/ATK/flat base.
+/// 对已组装的护盾基础值应用护盾加成。
 pub fn shield(base_amount: f64, outgoing_boost: f64) -> Result<f64, String> {
     let multiplier = finite("shield multiplier", 1.0 + outgoing_boost)?;
     finite("shield amount", base_amount * multiplier)

@@ -1,5 +1,5 @@
-//! Remaining-distance semantics adapted from HSR_Nous f8935ddb; MIT notice
-//! in HSR_NOUS_LICENSE. TurnEnd owns requeue, never actor selection.
+//! 按剩余行动距离与速度选择下一行动者，维护轮次 AV 预算。
+//! 单位在 TurnEnd 时重排行动距离。
 /// 普通行动的标准距离，等待 AV 由剩余距离除以速度计算。
 pub const DISTANCE: f64 = 10000.0;
 /// 实际 AV 时钟及各倒计时轮次的剩余额度。

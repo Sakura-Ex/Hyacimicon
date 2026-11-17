@@ -31,7 +31,7 @@
 | --- | --- |
 | [StarRailRes](https://github.com/Mar-7th/StarRailRes) | 游戏基础数据参考 |
 | [TurnBasedGameData](https://github.com/DimbreathBot/TurnBasedGameData) | 游戏基础数据参考 |
-| [HSR_Nous](https://github.com/pzc2004/HSR_Nous) | 战斗公式与合成验证向量（[MIT](core/battle/src/mechanics/math.rs)） |
+| [HSR_Nous](https://github.com/pzc2004/HSR_Nous) | 战斗公式核对与合成验证向量 |
 
 ## 许可证
 

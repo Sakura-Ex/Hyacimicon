@@ -1,45 +1,104 @@
-# 目录整理与行为验证
+# 战斗模拟验证与测试指南
 
-日期：2026-11-17。参照 `origin/main` 的 `ecc0968`（账号模块）整理战斗模块。本次目录和复用调整沿用 `battle_v2` 输入及现有规则。
+本文档阐述 `core/battle` 战斗模拟核心的自动化验证体系、测试分层、确定性保障原则以及本地回归执行方式。
 
-本页记录目录整理提交`6f87219`的验证。后续分步接口与负责人确认的结算时点见[外部选招与分步执行](stepping.md)，该页对应新增的`session.rs`回归。历史字节对照记录保留为目录整理的证据。
+---
 
-## 验收条件
+## 1. 验证体系架构
 
-- 输入定义、统一校验、状态推进、公式、Python配置编译和合成场景可以按目录找到。
-- 现有Rust公开路径、JSON字段、输入指纹和随机种子的含义保持一致。
-- 入场初始化、单位快照、效果序列执行、效果校验各有统一实现。
-- 说明现有流程、各结构体与枚举的用途，以及保留相近代码的具体理由。
+战斗模块的正确性由多层次测试套件共同保障：
 
-## 已执行的检查
+```mermaid
+flowchart TD
+    subgraph RustUnit["Rust 核心测试 (core/battle/tests/)"]
+        Formula["手算与参考公式验证 (math, reference_math)"]
+        StateTests["时序与生命周期测试 (session, runtime_control)"]
+        QueueTests["队列与结算边界测试 (queue_deadline, full_battle)"]
+        BatchTests["批次蒙特卡洛与种子测试 (batch)"]
+    end
 
-根目录运行：
+    subgraph ToolTests["工具与配置测试 (core/battle/tools/tests/)"]
+        RawConfig["Raw Config 技能编译器解析测试"]
+        RuntimeLowering["运行时效果与弱点生成测试"]
+    end
 
-```powershell
-cargo test --workspace --locked --offline
-cargo clippy -p battle-core --all-targets --locked --offline -- -D warnings
-cargo fmt --all -- --check
-git diff --check
+    subgraph Determinism["确定性与精度保障"]
+        FloatRoundtrip["浮点序列化往返精度 (float_roundtrip)"]
+        SeedIsolation["三流随机数隔离 (Target / Crit / Element)"]
+        ReplayBit["固定种子全事件比特级对齐"]
+    end
+
+    Formula --> Determinism
+    StateTests --> Determinism
+    QueueTests --> Determinism
+    BatchTests --> Determinism
 ```
 
-`core/battle` 目录运行：
+### 测试用例分布
+
+| 测试目录 / 文件 | 覆盖范围与验证要点 |
+| --- | --- |
+| `tests/reference_math.rs` | 采用预设的标准参考数值，手算核对七元素、基础增伤、防御抗性、易伤等 18 个不同乘区组合的单次命中伤害计算。 |
+| `tests/session.rs` | 覆盖 `BattleSession` 外部决策状态机：决策暂停点、非法 ID 提交、重复提交幂等性、终结技排队与入场扣能、取消与恢复边界。 |
+| `tests/queue_deadline.rs` | 覆盖有限敌人队列与轮次耗尽边界：动作彻底完成后补位、超时快照保全、同刻 Cycle 结算次序。 |
+| `tests/runtime_control.rs` | 覆盖有序效果树（`Effect`）：条件分支（`Conditional`）的短路求值、循环展开（`Repeat`）的迭代次数控制、调用帧栈（`DynamicScope`）的变量隔离与遮蔽。 |
+| `tests/property_modifiers.rs` | 覆盖状态（Modifier）生命周期：叠层上限、按来源独立叠加、回合到期扣减、即时监听修改后续同 Action 命中数值。 |
+| `tests/batch.rs` | 覆盖批次评估：多局试验的种子派生唯一性、胜负统计、未完成场次隔离及 95% Wilson 置信区间数学正确性。 |
+| `tools/tests/` | 覆盖 Python 预处理工具链：包含配置提取、技能链降解（Lowering）、表达式 AST 转换与示例场景构建器。 |
+
+---
+
+## 2. 确定性与回归原则
+
+为保证战斗模拟在离线训练、蒙特卡洛搜索与玩家应用重放之间的一致性，核心库遵循以下原则：
+
+1. **三流随机数隔离 (Three Independent RNG Streams)**：
+   - 每场战斗基于单一输入种子，通过 `rand_chacha` 派生三条完全独立的伪随机数流：**目标选择流**、**暴击判定流**、**元素选择流**。
+   - 目标选择的随机扰动绝不影响暴击概率，反之亦然。这保证了在控制某一机制变量时其余随机行为保持稳定。
+2. **64 位种子无损传输**：
+   - 随机种子在 Rust 内部为 `u64`。
+   - 在 JSON 格式中序列化为十进制字符串（如 `"18446744073709551615"`），防止外部语言或前端运行时解析为 JavaScript Number 时发生精度截断。
+3. **浮点往返序列化一致性**：
+   - 启用 `serde_json` 的 `float_roundtrip` 特性，保证任意已校验场景在序列化后重新反序列化读入时，其浮点数值、生成的 SHA-256 场景指纹及时间步边界保持严格一致。
+4. **单局与批次对齐**：
+   - 批次评估（`batch`）中第 $N$ 局的表现，必须与将该局派生种子单独传入单局模拟（`simulate`）得到的结果与事件流完全一致。
+
+---
+
+## 3. 本地验证执行方式
+
+### 3.1 核心 Rust 测试与代码质量检查
+
+在仓库根目录下运行：
+
+```powershell
+# 1. 运行工作区全部测试
+cargo test -p battle-core --locked
+
+# 2. 执行严格静态代码检查（禁止任何 Warning）
+cargo clippy -p battle-core --all-targets --locked -- -D warnings
+
+# 3. 检查代码格式
+cargo fmt --all -- --check
+```
+
+### 3.2 Python 配置与工具测试
+
+在 `core/battle/` 目录下运行：
 
 ```powershell
 python -m unittest discover -s tools/tests -t . -p "test_*.py"
 ```
 
-Rust workspace回归、战斗crate严格静态检查和格式检查均通过；Python工具39项测试通过。覆盖公式、资源、波次、监听、嵌套效果、作用域、状态到期、有限队列、结算、取消、批次分母和命令行等现有用例。
+### 3.3 示例场景对照与冒烟测试
 
-另用同步 `main` 后、目录整理前构建的CLI保存四个公开场景的完整输出摘要，再与整理后的CLI比较：
+使用内建的四个基础场景运行单局与批次模拟，确认无 Panic 与非正常退出：
 
-| 场景 | 检查方式 |
-| --- | --- |
-| `duel.json`、`team-waves.json`、`revival-budget.json`、`anaxa-s2-full-battle.json` | 各使用种子 `0`、`42`、`18446744073709551615` 单局模拟；另以主种子 `42` 运行8场批次。 |
+```powershell
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/duel.json 42
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/team-waves.json 42
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/revival-budget.json 42
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
 
-16组命令的完整JSON字节均一致，包括回放记录、单位结果、场景指纹、结算和批次统计。对照脚本与摘要保存在本地忽略的 `runs/`，用于本次重构核验。自动回归继续维护在crate的 `tests/` 和 `tools/tests/`。
-
-## 游戏规则的验证状态
-
-这些检查确认程序在目录调整前后的行为一致。真实规则的证据、人工设定和近似范围沿用[Anaxa S2场景记录](../../../core/battle/ANAXA_SCENARIO.md)。当前存在待核验的优先级方向、同刻Cycle顺序、随机元素分布和近似角色机制；游戏版本、快照与假设由场景输入及结果记录。
-
-账号模块已合入workspace；账号生效配置到战斗输入的自动组装、完整角色导入、持续整局状态仍按各模块的计划推进。职责与数据流见[设计说明](design.md)。
+cargo run -p battle-core --release --locked -- batch core/battle/examples/duel.json 100 42
+```
