@@ -7,20 +7,20 @@
 在仓库根目录执行：
 
 ```powershell
-cargo run --manifest-path rust/operations/Cargo.toml
+cargo run -p hsr-operations-backend
 ```
 
 默认监听 `127.0.0.1:8765` 并打开浏览器。关闭自动打开：
 
 ```powershell
-cargo run --manifest-path rust/operations/Cargo.toml -- --no-open
+cargo run -p hsr-operations-backend -- --no-open
 ```
 
 指定数据仓库：
 
 ```powershell
 $env:HSR_CURRENCY_WARS_DATA = "E:\hsr-ai\hsr-currency-wars-data"
-cargo run --manifest-path rust/operations/Cargo.toml
+cargo run -p hsr-operations-backend
 ```
 
 ## 开局规则
@@ -35,6 +35,6 @@ cargo run --manifest-path rust/operations/Cargo.toml
 ## 验证
 
 ```powershell
-cargo test --manifest-path rust/operations/Cargo.toml
-cargo fmt --manifest-path rust/operations/Cargo.toml --check
+cargo test -p hsr-operations-backend
+cargo fmt --check
 ```

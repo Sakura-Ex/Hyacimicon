@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 Push-Location $PSScriptRoot
 try {
-    cargo run -- @args
+    cargo run -p hsr-operations-backend -- @args
 }
 finally {
     Pop-Location

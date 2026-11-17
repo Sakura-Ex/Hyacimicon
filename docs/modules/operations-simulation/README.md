@@ -27,7 +27,7 @@
 网页手动操作（Rust 后端）：
 
 ```powershell
-cargo run --manifest-path rust/operations/Cargo.toml
+cargo run -p hsr-operations-backend
 ```
 
 启动后浏览器会打开 `http://127.0.0.1:8765/`。服务自动查找 `hsr-currency-wars-data`；也可通过环境变量 `HSR_CURRENCY_WARS_DATA` 指定仓库路径。网页使用本地内存保存对局，关闭服务后不会保留会话。操作和检查说明见[网页操作与检查](web-interface.md)。
