@@ -3,6 +3,9 @@
 目录、执行逻辑和类型用途见[设计说明](../../docs/modules/battle-simulation/design.md)，
 本次重构的测试与种子对照见[验证说明](../../docs/modules/battle-simulation/validation.md)。
 
+外部模型推理和训练通过[`BattleSession`分步接口](../../docs/modules/battle-simulation/stepping.md)
+读取决策并单独提交操作。同步入口、CLI和批次评估共用这套状态推进。
+
 This module executes explicit battle operations with remaining-distance scheduling,
 Turn/Action boundaries, event listeners, insertion requests and per-cycle budgets.
 It continues PR8's damage/heal/shield math, target/critical random streams, CLI and

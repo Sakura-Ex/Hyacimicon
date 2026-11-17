@@ -48,12 +48,8 @@ impl State<'_> {
         Ok(())
     }
 
-    pub(super) fn decide(
-        &self,
-        point: DecisionPoint,
-        actor: Option<usize>,
-        policy: &mut impl Policy,
-    ) -> Result<Option<Operation>, String> {
+    /// 生成决策数据；该步骤只读当前状态，选招由调用方单独完成。
+    pub(super) fn decision(&self, point: DecisionPoint, actor: Option<usize>, id: u64) -> Decision {
         let mut legal = Vec::new();
         for (i, u) in self.units.iter().enumerate() {
             if !u.alive() || actor.is_some_and(|a| a != i) {
@@ -116,6 +112,9 @@ impl State<'_> {
             now: self.timeline.now,
             cycle: self.timeline.cycle + 1,
             cycle_remaining_av: self.timeline.remaining,
+            remaining_av: self.timeline.remaining_total(),
+            ally_skill_points: self.sp[0],
+            enemy_skill_points: self.sp[1],
             axis,
             units: self
                 .units
@@ -124,11 +123,12 @@ impl State<'_> {
                 .map(|(owner, u)| u.snapshot(self.weakness_state(owner)))
                 .collect(),
         };
-        let chosen = policy.decide(point, &observation, &legal);
-        if chosen.as_ref().is_some_and(|op| !legal.contains(op)) {
-            return Err("policy returned an illegal operation".into());
+        Decision {
+            id,
+            point,
+            observation,
+            legal,
         }
-        Ok(chosen)
     }
 
     pub(super) fn act(

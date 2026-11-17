@@ -3,7 +3,7 @@ use super::*;
 
 impl State<'_> {
     pub(super) fn finish(
-        self,
+        &mut self,
         seed: u64,
         outcome: Outcome,
         termination: Termination,
@@ -68,13 +68,12 @@ impl State<'_> {
             waves_cleared,
             ally_skill_points: self.sp[0],
             enemy_skill_points: self.sp[1],
-            units: self
-                .units
+            units: std::mem::take(&mut self.units)
                 .into_iter()
                 .zip(weaknesses)
                 .map(|(u, weaknesses)| u.snapshot(weaknesses))
                 .collect(),
-            events: self.events,
+            events: std::mem::take(&mut self.events),
             trace_truncated: self.trace_truncated,
             run_hp_loss,
             validation_scope:
