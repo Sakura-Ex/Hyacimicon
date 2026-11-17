@@ -14,6 +14,7 @@
 | [分步会话与外部决策](stepping.md) | 推理与训练共用的 `BattleSession` 接口、推进阶段、合法动作掩码与时序边界 |
 | [测试与回归验证](validation.md) | 测试架构、确定性随机与浮点往返保障、用例分布与自动化回归执行方式 |
 | [装备效果与 Buff 周期（草案）](equipment-effects.md) | 装备效果绑定、Buff 唯一定义、叠层刷新与事件计时的后续设计 |
+| [装备 JSON 与机制覆盖（草案）](equipment-json-design.md) | 根据 64 套遗器与 172 件光锥设计模板、五档叠影转换及机制补充顺序 |
 | [Crate 与 CLI 使用手册](../../../core/battle/README.md) | `battle-core` 库依赖、`hcwa-battle` 命令行子命令、输入 JSON Schema 规范与样例 |
 
 ---
