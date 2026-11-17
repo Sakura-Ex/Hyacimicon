@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from config_actions import Compiler, Unsupported, PRESENTATION, WAITS, MARKERS
-from config_expression import compile_expression
+from tools.raw_config.actions import Compiler, Unsupported, PRESENTATION, WAITS, MARKERS
+from tools.raw_config.expression import compile_expression
 
 
 def target(alias: str) -> dict:

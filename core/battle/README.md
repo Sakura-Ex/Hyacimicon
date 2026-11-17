@@ -1,5 +1,8 @@
 # Battle v2
 
+目录、执行逻辑和类型用途见[设计说明](../../docs/modules/battle-simulation/design.md)，
+本次重构的测试与种子对照见[验证说明](../../docs/modules/battle-simulation/validation.md)。
+
 This module executes explicit battle operations with remaining-distance scheduling,
 Turn/Action boundaries, event listeners, insertion requests and per-cycle budgets.
 It continues PR8's damage/heal/shield math, target/critical random streams, CLI and
@@ -30,7 +33,7 @@ list evidence needed for future game alignment; no private tables are bundled.
 The repository root defines the Cargo workspace, shared package metadata and
 dependency versions. Its `Cargo.lock` and `rust-toolchain.toml` pin dependencies
 and the Rust toolchain for both root and module commands. The workspace currently
-contains only `core/battle`.
+contains `core/account` and `core/battle`.
 
 From the repository root:
 
@@ -131,8 +134,8 @@ https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8#issuecomment-6922807938
 ## Raw Config skill-chain compiler
 
 ```text
-python tools/config_actions.py REQUEST.json COMPILED.json
-python -m unittest discover -s tools -p "test_*.py"
+python -m tools.raw_config REQUEST.json COMPILED.json
+python -m unittest discover -s tools/tests -t . -p "test_*.py"
 ```
 
 The request provides `ability_files`, `entry`, explicit numeric `bindings`,
@@ -203,7 +206,7 @@ listeners; it does not permanently mutate the supplied base panel. Every
 stack mode and lifetime must be supplied: this is not inference of native
 Modifier defaults or an implementation of full Modifier callbacks/halos.
 
-`tools/config_runtime.py` extends selected raw lowering with declared runtime
+`tools/raw_config/runtime.py` extends selected raw lowering with declared runtime
 storage scopes, live comparisons, bounded loops, persistent CustomProperty
 updates and pure OnStack property contributions. Unknown callbacks, fields,
 targets and numeric tasks reject. The caller must still install supported
@@ -281,7 +284,7 @@ callbacks. Attachments do not implicitly change resistance, gate toughness
 damage, install reveal marks, or infer cleanup on caster death. Those operations
 require their own sourced rules and explicit modifier lifetime policies.
 
-`tools/config_weakness.py` accepts only selected explicit owner-bound
+`tools/raw_config/weakness.py` accepts only selected explicit owner-bound
 `StackWeakness(OPType=Attach)` leaves. It rejects missing fields, other numeric
 tasks and duplicate elements. Anaxa's seven UltraDebuff OnStack leaves have been
 executed under artificial installation/cleanup policies. This is not a full
@@ -301,7 +304,7 @@ tests cover turn-entry payment, insertion boundaries, target retention, trace
 truncation, dynamic speed, event expiry, cycle ties and terminal precedence.
 
 Source repository license: GPL-3.0-only. HSR_Nous formula attribution remains in
-`src/math.rs`; distance semantics reference f8935ddb407b297732fbd3c624d55897e3e648b9,
+`src/mechanics/math.rs`; distance semantics reference f8935ddb407b297732fbd3c624d55897e3e648b9,
 with the MIT notice in `HSR_NOUS_LICENSE`. Raw game data is not redistributed here.
 
 

@@ -11,7 +11,9 @@ No actual player battle has been used for end-to-end numerical validation.
 From the repository root:
 
 ```text
-python core/battle/tools/build_anaxa_full_battle.py core/battle/examples/anaxa-s2-full-battle.json
+cd core/battle
+python -m tools.scenarios.anaxa examples/anaxa-s2-full-battle.json
+cd ../..
 cargo run -p battle-core --release --locked -- validate core/battle/examples/anaxa-s2-full-battle.json
 cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
 cargo run -p battle-core --release --locked -- batch core/battle/examples/anaxa-s2-full-battle.json 8 42

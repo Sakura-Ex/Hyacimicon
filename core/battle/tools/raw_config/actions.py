@@ -6,15 +6,14 @@ attempted and unsupported tasks raise with their exact source JSON pointer.
 """
 from __future__ import annotations
 
-import argparse
 import base64
 import collections
-import hashlib
 import json
 import math
 from pathlib import Path
-import config_schema as schema
-from config_expression import stable_hash
+from . import schema
+from .errors import Unsupported
+from .expression import stable_hash
 
 # These tasks only control camera/model/animation. Their ordering is recorded;
 # numeric tasks are never accepted by a name prefix or silently discarded.
@@ -24,10 +23,6 @@ PRESENTATION = {
 }
 WAITS = {'WaitAnimState', 'WaitSecond', 'WaitTimelineFinish'}
 MARKERS = {'DamagePerformFinish', 'SkillPerformFinish', 'SkillExecutionStart'}
-
-
-class Unsupported(ValueError):
-    """An encountered numeric operation has no validated lowering."""
 
 
 class Compiler:
@@ -370,30 +365,3 @@ def bindings_from_config(config: dict, skills: dict[str, dict], points: dict[str
         if read.get('TriggerKey') in table:
             result[key] = table[read['TriggerKey']]['ParamList'][read['Index']]['Value']
     return result
-
-
-def main() -> None:
-    """Compile a request and write effects plus source/operation coverage evidence."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('request', type=Path)
-    parser.add_argument('output', type=Path)
-    args = parser.parse_args()
-    request = json.loads(args.request.read_text(encoding='utf-8-sig'))
-    files = [Path(p) for p in request['ability_files']]
-    compiler = Compiler(files, request['bindings'], request['active_points'], request['hit_energy'])
-    result = {'scope': 'selected_regular_skill_chain_only', 'entry': request['entry'],
-              'inputs': [{'path': str(p), 'sha256': hashlib.sha256(p.read_bytes()).hexdigest()} for p in files]}
-    try:
-        result['effects'] = compiler.ability(request['entry'])
-        result['status'] = 'compiled'
-    except Unsupported as error:
-        result.update(status='unsupported', error=str(error))
-    result.update(operations=compiler.evidence, all_scanned_types=dict(compiler.types))
-    args.output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-    print(json.dumps({'status': result['status'], 'output': str(args.output), 'effects': len(result.get('effects', []))}))
-    if result['status'] != 'compiled':
-        raise SystemExit(2)
-
-
-if __name__ == '__main__':
-    main()

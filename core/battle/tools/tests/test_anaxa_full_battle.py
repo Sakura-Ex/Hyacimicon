@@ -3,7 +3,7 @@ import json
 import unittest
 from pathlib import Path
 
-from build_anaxa_full_battle import build
+from tools.scenarios.anaxa import build
 
 
 class PublicScenarioTests(unittest.TestCase):
@@ -11,7 +11,7 @@ class PublicScenarioTests(unittest.TestCase):
 
     def test_checked_in_scene_matches_builder(self) -> None:
         """Reconstruction must match the complete checked-in scene exactly."""
-        scene = Path(__file__).resolve().parents[1] / "examples" / "anaxa-s2-full-battle.json"
+        scene = Path(__file__).resolve().parents[2] / "examples" / "anaxa-s2-full-battle.json"
         self.assertEqual(json.loads(scene.read_text(encoding="utf-8")), build())
 
     def test_initial_state_has_no_precharged_passive_or_energy(self) -> None:

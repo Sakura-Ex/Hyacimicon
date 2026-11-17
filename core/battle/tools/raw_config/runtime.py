@@ -4,8 +4,8 @@ This extends the selected-chain compiler; it is not a complete ability importer.
 Callers must provide explicit storage keys for runtime variables. Modifier-local,
 unit-local and persistent values therefore cannot silently share one namespace.
 """
-from config_actions import Unsupported
-from config_expression import compile_expression, stable_hash
+from .errors import Unsupported
+from .expression import compile_expression, stable_hash
 
 
 class RuntimeLowering:

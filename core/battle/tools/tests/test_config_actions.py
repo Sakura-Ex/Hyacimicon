@@ -3,7 +3,7 @@ import unittest
 import json
 from pathlib import Path
 import tempfile
-from config_actions import Compiler, Unsupported
+from tools.raw_config.actions import Compiler, Unsupported
 
 
 class ConfigTests(unittest.TestCase):

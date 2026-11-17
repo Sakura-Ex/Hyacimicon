@@ -6,7 +6,7 @@ support does not imply every raw opcode has been identified.
 """
 import base64
 import math
-from config_schema import number as validate_number
+from .schema import number as validate_number
 
 
 def stable_hash(name: str) -> str:

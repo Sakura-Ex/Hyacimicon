@@ -1,6 +1,6 @@
 """Check raw Config dynamic identities and observed state-update expressions."""
 import unittest
-from config_expression import compile_expression, stable_hash
+from tools.raw_config.expression import compile_expression, stable_hash
 
 
 class ExpressionTests(unittest.TestCase):

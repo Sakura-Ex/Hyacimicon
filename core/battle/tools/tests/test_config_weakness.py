@@ -1,8 +1,8 @@
 """Rejection checks prevent partial leaves from implying a full modifier import."""
 import copy
 import unittest
-from config_actions import Unsupported
-from config_weakness import weakness_attachments
+from tools.raw_config.actions import Unsupported
+from tools.raw_config.weakness import weakness_attachments
 
 
 class WeaknessTests(unittest.TestCase):

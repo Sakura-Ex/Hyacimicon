@@ -1,8 +1,8 @@
 """Artificial control-flow counterexamples; no raw game data is bundled."""
 import unittest
-from config_actions import Compiler, Unsupported
-from config_expression import stable_hash
-from config_runtime import RuntimeLowering
+from tools.raw_config.actions import Compiler, Unsupported
+from tools.raw_config.expression import stable_hash
+from tools.raw_config.runtime import RuntimeLowering
 
 
 class RuntimeTests(unittest.TestCase):

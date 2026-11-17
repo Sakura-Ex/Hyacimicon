@@ -3,7 +3,7 @@
 The caller supplies its modifier instance policy and records excluded callbacks.
 Missing defaults, resistance tasks, random choices and control are not inferred.
 """
-from config_actions import Unsupported
+from .errors import Unsupported
 
 ELEMENTS = {'Physical':'physical','Fire':'fire','Ice':'ice','Thunder':'thunder',
             'Wind':'wind','Quantum':'quantum','Imaginary':'imaginary'}
