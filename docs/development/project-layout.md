@@ -36,6 +36,7 @@ hsr-currency-wars-ai/
 ├── tests/
 │   ├── account_generation/             # 生成与规则测试
 │   └── operations/                     # 运营规则与回放测试
+├── rust/operations/                    # Rust 运营引擎、HTTP 后端与测试
 ├── pyproject.toml                       # Python 包与检查工具配置
 ├── uv.lock                              # 依赖锁文件
 ├── docs/
@@ -70,6 +71,8 @@ hsr-currency-wars-ai/
 ```
 
 当前账号生成模块按遗器、角色、账号三个职责组织。账号使用角色与遗器实现，角色使用遗器实现，对外接口集中由 `research.account_generation` 导出。
+
+运营模拟的运行时后端位于 `rust/operations/`。`research/operations/` 保留前期 Python 原型和规则资料，网页默认连接 Rust 服务。
 
 ## 模块放置
 

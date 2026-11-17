@@ -9,22 +9,23 @@
 ## 启动
 
 ```powershell
-uv run python -m examples.operations.web
+cargo run --manifest-path rust/operations/Cargo.toml
 ```
 
 服务默认监听 `127.0.0.1:8765` 并打开浏览器。仅在本机使用，不需要额外安装网页依赖。需要指定端口时：
 
 ```powershell
-uv run python -m examples.operations.web --port 8877 --no-open
+cargo run --manifest-path rust/operations/Cargo.toml -- --port 8877 --no-open
 ```
 
 指定私有数据仓库位置：
 
 ```powershell
-uv run python -m examples.operations.web --data-root E:\hsr-ai\hsr-currency-wars-data
+$env:HSR_CURRENCY_WARS_DATA = "E:\hsr-ai\hsr-currency-wars-data"
+cargo run --manifest-path rust/operations/Cargo.toml
 ```
 
-省略 `--data-root` 时，会从当前工作目录和父目录查找 `hsr-currency-wars-data`。
+未设置 `HSR_CURRENCY_WARS_DATA` 时，会从当前工作目录和父目录查找 `hsr-currency-wars-data`。
 
 ## 可执行操作
 
