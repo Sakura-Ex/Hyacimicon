@@ -131,6 +131,41 @@ impl<'a> State<'a> {
         );
     }
 
+    fn weakness_state(&self, owner: usize) -> Option<crate::weakness::WeaknessState> {
+        let mechanics = &self.input.scenario().mechanics;
+        let unit = &self.units[owner];
+        let natural = mechanics.natural_weaknesses.get(&unit.spec.id)?;
+        let attached = unit.modifiers.instances.iter().flat_map(|instance| {
+            mechanics
+                .modifier_weaknesses
+                .get(&instance.state.id)
+                .into_iter()
+                .flatten()
+                .copied()
+        });
+        Some(crate::weakness::WeaknessState::compose(natural, attached))
+    }
+    fn record_weakness_change(
+        &mut self,
+        owner: usize,
+        before: Option<crate::weakness::WeaknessState>,
+        action: Option<&str>,
+    ) {
+        let after = self.weakness_state(owner);
+        if before != after {
+            if let Some(after) = after {
+                // Observation only; this is not a native OnBeingStackWeakness callback.
+                self.emit(
+                    "weakness_count",
+                    owner,
+                    Some(owner),
+                    action,
+                    Some(after.all.len() as f64),
+                    None,
+                );
+            }
+        }
+    }
     fn dispatch(
         &mut self,
         event: BattleEvent,
@@ -142,6 +177,19 @@ impl<'a> State<'a> {
         }
         self.event_depth += 1;
         let subject_id = subject.map(|i| self.units[i].spec.id.clone());
+        let weakness_before: Vec<_> = if self
+            .input
+            .scenario()
+            .mechanics
+            .modifier_weaknesses
+            .is_empty()
+        {
+            Vec::new()
+        } else {
+            (0..self.units.len())
+                .map(|i| self.weakness_state(i))
+                .collect()
+        };
         // Settle all expiry before callbacks. Future-wave units are absent here.
         let mut expired = vec![];
         for (owner, unit) in self.units.iter_mut().enumerate() {
@@ -161,6 +209,9 @@ impl<'a> State<'a> {
                 None,
                 None,
             );
+        }
+        for (owner, before) in weakness_before.into_iter().enumerate() {
+            self.record_weakness_change(owner, before, action);
         }
         // Expire every applicable status before any listener can dispatch nested
         // events. Global events have no unit subject; absent future-wave owners
@@ -316,7 +367,9 @@ impl<'a> State<'a> {
             units: self
                 .units
                 .iter()
-                .map(|u| UnitResult {
+                .enumerate()
+                .map(|(owner, u)| UnitResult {
+                    weaknesses: self.weakness_state(owner),
                     id: u.spec.id.clone(),
                     ally: u.ally,
                     hp: u.hp,
@@ -765,6 +818,7 @@ impl<'a> State<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 let source = self.units[actor].spec.id.clone();
                 for recipient in self.targets(actor, target)? {
+                    let weakness_before = self.weakness_state(recipient);
                     let count = self.units[recipient].modifiers.apply(
                         id,
                         &source,
@@ -780,6 +834,7 @@ impl<'a> State<'a> {
                         Some(f64::from(count)),
                         None,
                     );
+                    self.record_weakness_change(recipient, weakness_before, Some(id));
                 }
             }
             Effect::RemoveModifier {
@@ -789,6 +844,7 @@ impl<'a> State<'a> {
             } => {
                 let source = self.units[actor].spec.id.clone();
                 for recipient in self.targets(actor, target)? {
+                    let weakness_before = self.weakness_state(recipient);
                     let removed = self.units[recipient]
                         .modifiers
                         .remove(id, if from_any_source { None } else { Some(&source) });
@@ -802,6 +858,7 @@ impl<'a> State<'a> {
                             None,
                         );
                     }
+                    self.record_weakness_change(recipient, weakness_before, Some(id));
                 }
             }
             Effect::Conditional {
@@ -1184,6 +1241,9 @@ impl<'a> State<'a> {
         termination: Termination,
         waves_cleared: usize,
     ) -> BattleResult {
+        let weaknesses: Vec<_> = (0..self.units.len())
+            .map(|i| self.weakness_state(i))
+            .collect();
         BattleResult {
             provenance: self.input.scenario().provenance.clone(),
             scenario_sha256: self.input.fingerprint().into(),
@@ -1203,7 +1263,9 @@ impl<'a> State<'a> {
             units: self
                 .units
                 .into_iter()
-                .map(|u| UnitResult {
+                .zip(weaknesses)
+                .map(|(u, weaknesses)| UnitResult {
+                    weaknesses,
                     id: u.spec.id,
                     ally: u.ally,
                     hp: u.hp,

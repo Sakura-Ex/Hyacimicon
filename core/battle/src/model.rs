@@ -373,6 +373,9 @@ pub enum Termination {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct UnitResult {
+    /// None means no natural-weakness input, not an empty natural weakness set.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub weaknesses: Option<crate::weakness::WeaknessState>,
     pub id: String,
     pub ally: bool,
     pub hp: f64,
@@ -782,6 +785,12 @@ pub struct Trigger {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mechanics {
+    /// Explicit immutable natural weaknesses. Missing units remain unknown.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub natural_weaknesses: std::collections::BTreeMap<String, Vec<crate::elements::Element>>,
+    /// Weakness contributions owned by the corresponding active modifier instance.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub modifier_weaknesses: std::collections::BTreeMap<String, Vec<crate::elements::Element>>,
     #[serde(default)]
     pub element_profiles: std::collections::BTreeMap<String, crate::elements::ElementProfile>,
     #[serde(default)]
@@ -823,6 +832,25 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
         return Err("cycle AV sum must equal max_av".into());
     }
     let units: Vec<_> = s.allies.iter().chain(s.waves.iter().flatten()).collect();
+    for (id, natural) in &m.natural_weaknesses {
+        if !units.iter().any(|u| &u.id == id) {
+            return Err("unknown natural-weakness unit".into());
+        }
+        crate::weakness::validate_set(natural, "natural weakness", true)?;
+    }
+    for (id, attached) in &m.modifier_weaknesses {
+        if !m.modifier_definitions.contains_key(id) {
+            return Err(format!("unknown weakness modifier definition {id}"));
+        }
+        crate::weakness::validate_set(attached, "attached weakness", false)?;
+    }
+    if !m.modifier_weaknesses.is_empty()
+        && units
+            .iter()
+            .any(|u| !m.natural_weaknesses.contains_key(&u.id))
+    {
+        return Err("weakness modifiers require explicit natural sets for every unit".into());
+    }
     for (id, profile) in &m.element_profiles {
         if !units.iter().any(|u| &u.id == id) {
             return Err("unknown element-profile unit".into());
@@ -913,6 +941,8 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
 impl Default for Mechanics {
     fn default() -> Self {
         Self {
+            natural_weaknesses: Default::default(),
+            modifier_weaknesses: Default::default(),
             element_profiles: Default::default(),
             modifier_definitions: Default::default(),
             dynamic_values: Default::default(),

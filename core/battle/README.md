@@ -201,6 +201,33 @@ scope discovery, a full Modifier-local store, or native default initialization.
 Anaxa's ability `_count` and its SkillTree02 modifier `_count` must be bound
 separately; no raw name alone is a sufficient storage location.
 
+## Modifier-owned weakness contributions
+
+`mechanics.natural_weaknesses` provides explicit natural sets by unit ID; an
+omitted unit is unknown, while `[]` means a known empty set. When using
+`mechanics.modifier_weaknesses`, supply natural sets for every present or future
+unit and map each contribution to an existing modifier definition. Active
+instances contribute a union of element types. Refreshing or stacking the same
+type does not increase the distinct count. Removing or expiring one source's
+instance preserves natural weaknesses and other active sources' contributions.
+
+Policy observations and unit results expose `natural`, `attached`, and `all`
+sets when the natural input is known. `weakness_count` trace rows observe state
+changes; they do not dispatch native OnBeingStackWeakness/OnModifierRemove
+callbacks. Attachments do not implicitly change resistance, gate toughness
+damage, install reveal marks, or infer cleanup on caster death. Those operations
+require their own sourced rules and explicit modifier lifetime policies.
+
+`tools/config_weakness.py` accepts only selected explicit owner-bound
+`StackWeakness(OPType=Attach)` leaves. It rejects missing fields, other numeric
+tasks and duplicate elements. Anaxa's seven UltraDebuff OnStack leaves have been
+executed under artificial installation/cleanup policies. This is not a full
+UltraDebuff import: its status-resistance/control tasks, OnPhase1/OnDestroy
+callbacks and native lifetime remain outside that leaf selection. The passive
+random-weakness template still encounters omitted ResetValue defaults, and the
+common weakness modifier reads an unsupplied MDF_PropertyValue; neither becomes
+zero. Full per-hit weakness/reveal execution therefore remains incomplete.
+
 ## Compatibility and verification
 
 The old absolute `next_av` path is gone. Three intentional baseline changes are:

@@ -6,6 +6,7 @@ pub mod expression;
 pub mod math;
 pub mod model;
 pub mod modifiers;
+pub mod weakness;
 
 pub mod decision;
 pub mod dynamic_scope;
