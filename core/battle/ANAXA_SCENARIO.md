@@ -1,138 +1,99 @@
-# Runnable Anaxa S2 scenario
+# 那刻夏 S2 综合测试场景 (Anaxa S2 Scenario)
 
-`examples/anaxa-s2-full-battle.json` runs one battle from initial state to combat
-termination and configured whole-run HP settlement. It uses the same engine for
-single runs and batches. This is a complete execution path under the declared
-approximation policies, not a complete or client-accurate reproduction of Anaxa.
-No actual player battle has been used for end-to-end numerical validation.
+`examples/anaxa-s2-full-battle.json` 是 `core/battle` 模块中用于端到端验证战斗模拟完整能力的综合场景。
 
-## Run and change inputs
+该场景覆盖了从初始对局、多类型技能链释放、后备敌人有限队列自动填补，到对局终止与战后整局生命值（Run HP）结算的全流程，用于检验复杂角色机制与通用引擎规则的协同执行情况。
 
-From the repository root:
+---
 
-```text
-cd core/battle
-python -m tools.scenarios.anaxa examples/anaxa-s2-full-battle.json
-cd ../..
+## 1. 运行与场景生成
+
+### 1.1 使用现有场景直接运行
+
+从仓库根目录执行以下命令：
+
+```powershell
+# 1. 校验场景格式与数据有效性
 cargo run -p battle-core --release --locked -- validate core/battle/examples/anaxa-s2-full-battle.json
+
+# 2. 单局模拟（使用固定参考种子 42）
 cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
+
+# 3. 蒙特卡洛批次模拟（8 场，主种子 42）
 cargo run -p battle-core --release --locked -- batch core/battle/examples/anaxa-s2-full-battle.json 8 42
 ```
 
-The builder needs only Python's standard library and has no private-data inputs.
-The checked-in JSON is runnable without Python. To replay a batch trial, pass its
-ledger `seed` to `simulate` with the unchanged JSON (the master seed is different).
-The fingerprint includes the panels, queue, policy parameters and assumptions.
+### 1.2 重新构建场景配置
 
-The scene selects one Anaxa S2 role `140502`, basic level 6 and skill/ultimate
-level 10, without equipment, active trait bonuses, eidolons or technique. All
-effective panels are **developer-selected inputs**, not catalog-derived player
-builds. HP 6000, ATK 600, SPD 120 and zero initial energy are explicit. Initial
-S2 magic layers and counters are zero. Basic/skill selection follows legal
-resource constraints rather than a scripted action list. This does not model
-account-to-effective-build conversion or arbitrary equipment/roster composition.
+场景可通过 Python 构建器脚本基于参数化配置生成：
 
-Six distinct enemy instances each have developer HP 2500, ATK 30 and SPD 80.
-They use the selected public `Monster_AML_Minion01_00` Skill01 chain: one
-2.5 ATK Quantum hit, then an explicitly configured 10 energy to the living
-ability target. Other enemy skills/passives are excluded. This is not a claim
-that this exact queue, panel or energy parameter occurs at a native node.
+```powershell
+cd core/battle
+python -m tools.scenarios.anaxa examples/anaxa-s2-full-battle.json
+```
 
-## Implemented path and approximation ledger
+构建器仅依赖 Python 标准库，生成确定性的 JSON 场景文件。
 
-| Part | Behavior in this scenario | Accuracy boundary |
+---
+
+## 2. 场景机制实现规范
+
+本场景配置了角色 `140502`（那刻夏 S2）与 6 名敌方单位的战斗环境，机制定义如下：
+
+| 机制部分 | 场景内的实现规则 | 边界与设计约定 |
 | --- | --- | --- |
-| Fixed strategy | Legal ultimate inserts; normal skill when affordable, otherwise basic; primary target lowest HP fraction, stable entry-index tie | Declared action ordering, not native ComplexAI |
-| Basic | 1.0 ATK Wind hit, one SP, 30 energy | Includes the selected trace-1 energy allowance |
-| Skill | One selected and four uniform random living-enemy Wind hits, each 0.7 ATK; one SP; 30 total energy | No native prefer-unhit targeting or opcode 11/13 interpretation; total energy explicitly chosen |
-| Ultimate | Costs 140 before inserted TurnStart; attaches seven weaknesses/disclosure, then 1.6 ATK Wind AoE; gains 5 | No hard control or control resistance |
-| Disclosure | Expires at the affected enemy's next TurnStart; basic/skill on disclosed entry target queues one free 0.7 ATK segment | HSR_Nous conservative single-segment approximation; no complete free five-hit skill or its energy/toughness |
-| Free segment | Runs through existing FollowUp insertion, cannot recurse; reselects primary at its entry | Native Skill classification/target retention not reproduced; explicit S2 hooks count it as skill |
-| Damage bonus | Disclosed entry target gives +0.3 damage to this whole action, including bounces/pursuit; ultimate applies before AoE | Native per-target attribution is approximated |
-| S2 | Every two paid/free skills adds a magic layer; after skill attacks, floor(layers/5) pursuits choose living previously hit targets, 0.7 ATK random element; +0.6 critical damage and +0.3 common damage | Existing source-derived callbacks; seven-element uniform RNG remains a simulator policy |
-| Turn energy | +30 at TurnStart when no living enemy has disclosure | Includes inserted ultimate TurnStart under current loop semantics; needs native alignment |
-| Damage/toughness | Existing formula and explicit 0.3 ally factor, seven-element panels and unbroken toughness factor | No inferred extra difficulty factor; no toughness damage or break recovery |
+| **行动策略** | 终结技就绪即插入；常规回合优先消耗战技点释放战技，点数不足时释放普攻；优先索敌生命比例最低的敌人。 | 采用确定性固定决策规则，供基准回归测试使用。 |
+| **普攻** | 单体风属性伤害，造成 1.0 倍攻击力伤害，回复 1 点战技点与 30 点能量。 | 包含基础行迹回能效果。 |
+| **战技** | 主目标与 4 次随机存活敌人的风属性弹射，每段造成 0.7 倍攻击力伤害，消耗 1 点战技点，合计回复 30 点能量。 | 弹射目标在存活敌人中均匀随机抽取。 |
+| **终结技** | 消耗 140 能量切入 Turn，附加弱点与“揭秘”（Disclosure）状态，随后造成 1.6 倍攻击力全体风属性伤害，命中回复 5 点能量。 | 释放前校验能量，切入时扣费。 |
+| **揭秘状态** | 目标下一次行动开始时到期；被揭秘的目标受击时，角色追加一次免战技点的单段判定。 | 作为追加行动（Follow-up）插入执行，不产生独立 TurnStart/TurnEnd。 |
+| **S2 追击** | 累计施放两次战技（含追加战技）后获得一层标记；攻击判定结束后，按标记层数触发额外弹射追击。 | 独立判定受击目标，支持七元素随机采样。 |
+| **伤害乘区** | 应用通用多乘区公式，显式指定我方伤害系数 `ally_damage_factor = 0.3`。 | 各乘区独立展开计算，优先消耗护盾再扣除生命值。 |
 
-Omitted mechanics include per-hit random weakness implantation, weakness-count
-reveal outside ultimate, per-weakness defense ignore, enemy-count skill bonus,
-static trace-2 bonuses, other hit-taken energy, native AI and full modifier/control
-semantics. These omissions can materially change damage, order, victory and run
-HP. They are also emitted in `assumptions`; an omission is not represented as a
-successfully imported raw task. Raw compilers keep rejecting unknown operations.
+---
 
-## Finite queue and business result
+## 3. 有限敌人队列机制 (`finite_queue_after_action_v1`)
 
-`mechanics.queue_capacity` opts into `finite_queue_after_action_v1`: exactly one
-`waves[0]` is the complete ordered input queue (1..3200 distinct instances), with
-capacity 1..32. Without this field, existing static-wave behavior is unchanged.
-No enemy generation, escape, summoning or phase transition is implied.
+场景通过 `mechanics.queue_capacity` 启用了局内有限敌人队列：
 
-Initial entries fill ascending slots. At complete-action boundaries, dead slots
-are filled in ascending order, before subsequent inserts, with full action
-distance and explicit initial values. No replacement occurs inside a multi-hit
-action. Immediate revival retains its slot and is not defeated progress. A
-pending queue prevents empty-board victory. New entries do not dispatch global
-BattleStart or WaveStart; their existing unit-event hooks become eligible.
-`queue` reports policy, active slots and unspawned IDs; `units` contains all units
-that have entered, including defeated ones. Queue inspection is result metadata,
-not extra hidden strategy observation.
+1. **队列容量与槽位**：
+   - 场景将 `waves[0]` 中的所有敌人实例视为有序候选序列（支持 1..3200 名独立敌人），场上最多同时存在 `queue_capacity` 个活跃槽位（本场景容量为 6）。
+2. **入场与补位时机**：
+   - 开局按升序填满场上槽位。
+   - **仅在一次完整 Action（包括所有连带的追击、连击及即时监听回调）彻底收尾后**，阵亡敌人的空槽位才按序号依次补入后备敌人。在多段命中攻击的过程当中，绝不中途补位，确保单次攻击索敌的稳定性。
+3. **胜负判定保护**：
+   - 当场上敌人全灭但后备队列中仍有待入场敌人时，战斗**不会**误判为胜利，引擎将继续执行补位并推进时间轴。
+   - 仅当场上敌人与后备队列中的所有敌人都被彻底击败时，才判定为完全清场胜利。
 
-`outcome` remains the combat result: complete enemy elimination wins; living
-enemies/queued instances at AV exhaustion lose. Elimination at a completed-action
-boundary takes priority over expiry; same-time action/cycle ordering uses the
-existing explicit `unit_before_cycle` flag (false here). Threshold progress never
-ends the battle early. `minimum_progress_met` and `run_alive` are separate fields:
-a combat defeat can meet minimum progress and the run can continue.
+---
 
-`mechanics.settlement` explicitly selects `weighted_kills_flat_penalty_v1`:
+## 4. 战后整局生命值结算策略 (`weighted_kills_flat_penalty_v1`)
 
-1. Sum the positive input weights of final-dead enemy instances once. Divide by
-   the fixed sum of all queue/wave instance weights; initial revival deaths do not
-   contribute. Minimum progress uses `>=` the input threshold.
-2. If the threshold is unmet, request `failure_loss`; otherwise request zero.
-   Apply `min(requested_loss, hp_before)`.
-3. Apply `min(recovery, hp_cap - hp_after_loss)`; no rounding or cap changes.
-   This named provisional order permits recovery after loss reaches zero.
-4. Emit requested/actual loss and recovery, clipping, before/cap parameters,
-   `hp_after` and `run_alive = hp_after > 0`.
+场景通过 `mechanics.settlement` 显式配置了单场战斗对整局生命值（Run HP）的临时结算规则：
 
-The example uses six equal weights, threshold 0.5, HP before 60, cap 100, failure
-loss 20 and recovery 3, all developer inputs. `run_hp_loss` is actual loss before
-recovery, not net HP change. Legacy inputs without a settlement policy retain
-unknown run HP. Cancellation and ActionLimit have Incomplete outcome and
-`not_applied_incomplete` settlement with null after/loss/recovery; runtime errors
-remain errors. Batches exclude Incomplete trials from victory probabilities and
-aggregate HP only for `settled_count` trials. Trial ledgers include remaining AV
-and full settlement parameters/results.
+1. **击败进度权重计算**：
+   - 统计最终确认阵亡的敌人实例的输入权重总和，除以本场所有敌人（场上及后备队列）的固定总权重，得到击杀完成度进度比率 $P \in [0.0, 1.0]$。
+2. **门槛判定与扣血**：
+   - 若 $P \ge \text{threshold}$（本场景门槛为 0.5），则满足通关基本门槛，整局扣血量请求为 0；
+   - 若 $P < \text{threshold}$，整局扣血量请求为配置的失败罚血 `failure_loss`（本场景为 20 点）。
+   - 实际扣血量为 $\min(\text{requested\_loss}, \text{hp\_before})$。
+3. **战后生命恢复**：
+   - 结算扣血后，执行整局生命值恢复：$\min(\text{recovery}, \text{hp\_cap} - \text{hp\_after\_loss})$。
+4. **存活判定**：
+   - 若结算后的整局生命值 $\text{hp\_after} > 0$，则判定整局依然存活（`run_alive = true`）。
+   - **注意**：战斗内的胜负（`Outcome::Win / Loss`）与整局血量结算状态是独立的；即使单场战斗超时，若满足最低击杀门槛或扣血后生命值仍大于 0，整局游戏仍可继续推进。
 
-## Sources and validation scope
+---
 
-- HSR_Nous, MIT, commit `f8935ddb407b297732fbd3c624d55897e3e648b9`:
-  `data/library/characters/1405_那刻夏.yaml` and
-  `tests/test_anaxa_template_e2e.py`. The action/bonus/energy/disclosure structure
-  is adapted; the Python engine and generic YAML interpreter are not copied.
-  Its own unresolved behavior remains unresolved here. The retained
-  [MIT notice](HSR_NOUS_LICENSE) applies to this adapted reference work.
-- Public DimbreathBot/TurnBasedGameData commit
-  `dad9155eb00fdeda31fb8456507c53590d49071f`: existing selected Anaxa parent/S2
-  ability and common modifier evidence; `Monster_AML_Minion01_00_Ability.json`
-  Skill01 chain and `MonsterSkillConfig.json` bindings. Source-derived values
-  are described above; raw dumps and private catalog tables are not bundled.
-- The newer partial HSR_Nous adapter snapshot is not substituted for the pinned
-  character template. The private companion catalog is not a public input.
+## 5. 确定性参考基准
 
-Tests cover a natural scene with all declared action types and S2 pursuit,
-hand-calculated queue replacement/progress/HP, revival, deadline ties,
-cancellation, trace independence and same-seed single/batch replay. These are
-software/declared-policy checks, not evidence of matching native game outcomes.
-See [data requirements](DATA_REQUIREMENTS.md) for materials needed to align the
-model when recordings or configuration evidence become available.
+在当前规则实现与输入配置下，固定种子 42 的单局模拟表现如下，供回归核验：
 
-For the checked-in scene, seed 42 clears all six enemies at 1250 elapsed AV,
-with approximately 1150 remaining AV and run HP 60 -> 63 (loss 0, recovery 3).
-Its 40 actions include 6 basics, 9 paid skills, 7 ultimates, 4 bonus segments and
-14 enemy attacks; S2 adds 3 pursued hits inside those actions. No initial energy
-or magic layers were injected. With only the AV budget/cycle changed to 700,
-seed 42 instead defeats two of six enemies before timing out, misses the 0.5
-threshold and settles HP 60 - 20 + 3 = 43 while the run remains alive.
-These are declared-model outputs, not measured game performance.
+- **种子 42 完整通关**：
+  - 总流逝 AV 约 1250，剩余 AV 约 1150；
+  - 成功消灭全部 6 名敌人；
+  - 触发约 40 次动作（包含普攻、付费战技、终结技、追加判定及敌方攻击）；
+  - 整局血量结算变化为 $60 \rightarrow 63$（扣血 0，恢复 3）。
+- **预算受限测试（将 AV 预算限制为 700）**：
+  - 种子 42 在击败 2 名敌人后发生轮次耗尽超时；
+  - 未达到 0.5 的最低击杀门槛，结算整局血量为 $60 - 20 + 3 = 43$，整局依然存活。

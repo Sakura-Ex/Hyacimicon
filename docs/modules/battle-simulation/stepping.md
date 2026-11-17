@@ -1,98 +1,112 @@
-# 外部选招与分步执行
+# 外部选招与分步执行 (Stepping & Decision API)
 
-`BattleSession`把战斗推进、策略选招和操作执行分开。自动策略、模型推理和训练程序可以共用同一套规则：引擎推进到决策点并返回数据，调用方决定操作，再交给引擎执行。
+`BattleSession` 是战斗引擎提供给外部决策系统（如强化学习训练、蒙特卡洛树搜索 MCTS、启发式策略及前端交互界面）的核心分步推进接口。
 
-## 调用流程
+通过将会话状态推进与动作选择解耦，调用方可以在确定性战斗的关键决策点暂停执行、读取当前完整战况观测，并输入决策动作。
+
+---
+
+## 1. 会话生命周期与调用流程
 
 ```mermaid
-flowchart LR
-    A[创建BattleSession] --> B[advance推进到决策点]
-    B --> C[Decision: 观测与合法操作]
-    C --> D[外部自动策略或模型选招]
-    D --> E[submit提交决策ID和操作]
-    E --> B
-    B --> F[Finished与BattleResult]
+flowchart TD
+    Init["BattleSession::new(input, seed, trace)"] --> Advance["session.advance() / advance_cancellable()"]
+    Advance --> Check{"返回结果判定"}
+    Check -- "BattleStep::Decision(decision)" --> Policy["外部策略/模型读取 Observation 并计算合法操作"]
+    Policy --> Submit["session.submit(decision.id, chosen_operation)"]
+    Submit --> Advance
+    Check -- "BattleStep::Finished(result)" --> Done["获取最终对局 BattleResult"]
 ```
 
-| 接口或类型 | 用途 |
+### 核心方法与契约
+
+| 方法签名 | 说明与前置条件 |
 | --- | --- |
-| `BattleSession::new` | 为已校验输入创建独立状态与随机流，执行开战和首波事件。输入在会话期间保持存活。 |
-| `advance` | 推进到下一个决策或结束结果。已有待回答决策时，重复返回相同数据。 |
-| `Decision` | 保存本场递增的`id`、决策点`point`、当前`observation`和合法操作`legal`。 |
-| `submit(id, choice)` | 验证决策ID和合法性后执行选择。旧ID、重复提交、非法操作和普通回合的空选择在修改状态前报错，当前决策仍可重试。 |
-| `BattleStep` | 通过`Decision`或`Finished`两种结果表示当前停在哪里。 |
-| `advance_cancellable` | 在推进边界、模型等待期间及插入提交后恢复推进前检查取消，得到`Incomplete/Cancelled`快照。 |
-| `into_result` | 消费已完成会话并取得最终结果。 |
+| [`BattleSession::new(input, seed, trace)`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 根据已校验的场景配置和随机种子构建独立战斗会话。完成战前初始化并分派 `BattleStart` 与首波事件。 |
+| [`advance(&mut self) -> Result<BattleStep, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 驱动状态机推进至下一个需要外部决策的点，或直到战斗结束。若当前已存在待答复决策，多次调用将安全返回相同决策。 |
+| [`advance_cancellable(&mut self, cancel) -> Result<BattleStep, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 支持外部取消标记的分步推进。在行动边界与外部等待恢复时主动检查取消，若取消触发则输出 `Incomplete/Cancelled` 状态快照。 |
+| [`submit(&mut self, id, choice) -> Result<(), String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 提交决策操作。核对 `id` 是否与当前决策匹配并校验 `choice` 是否合法。非法操作或过期 ID 不会污染当前状态，允许调用方更正重试。 |
+| [`into_result(self) -> Result<BattleResult, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 消费已完成的会话并获取最终的战斗结果。 |
 
-等待外部推理期间，时间推进、技能付费、事件分派和随机采样均停在当前决策点。重复读取保持同一决策ID和相同观测。
+---
 
-普通Turn和额外Turn的`submit`执行一个完整Action。插入窗口的`submit`登记预选终结技请求；后续`advance`在该请求实际入Turn时检查资源并支付能量。`None`表示放弃本次插入机会。`legal`为空的插入窗口也可以直接提交`None`。
+## 2. 决策类型与观测结构
 
-公开分步接口在插入提交后恢复时先处理取消，防止等待期间的取消信号被漏过。同步`Policy`适配器连续调用同一调度实现，保留原有动作边界的取消轮询时点。
+### 2.1 决策点类型 ([`DecisionPoint`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs))
 
-`unit_before_cycle=true`时，已登记的即时插入先于同刻Cycle执行，普通单位在这些插入后结束Turn；其他同刻策略下，已进入的普通Turn也完成收尾，再处理到期Cycle。
+引擎在以下三个时机产出决策点：
 
-额度归零后，若只剩单位Turn与Cycle收尾，这些步骤先于新的取消或行动保护完成。仍有可选择或已登记的插入动作时，按显式同刻策略继续调度，安全停止保留未完成状态。
+1. **`DecisionPoint::NormalTurn`**：单位常规行动回合。必须从 `legal` 动作列表中选取一个合法的操作（如普攻或战技），不可提交 `None`。
+2. **`DecisionPoint::ExtraTurn`**：由机制赋予的额外行动回合。同样必须选取一个合法动作，执行后不消耗自然 AV 时间。
+3. **`DecisionPoint::Insert`**：行动间隙的终结技插入窗口。调用方可从就绪的终结技列表中提交预插队请求，或提交 `None` 放弃本次插入机会。
 
-有限队列在完整Action后先补空位，再判断是否还有可用插入或只需TurnEnd收尾。AV归零时也保持这个顺序；新入场单位的初始资源参与合法操作检查。
+### 2.2 局面观测 ([`Observation`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs))
 
-## 推理与训练读取什么
+决策发生时，调用方可通过不可变借用获取当前环境的完整观测数据，构造神经网络特征或策略树节点：
 
-`Observation`包含当前AV、Cycle和本轮/总剩余AV、双方战技点、排序后的行动轴，以及已经入场单位的HP、护盾、能量、距离、韧性、动态值、状态和弱点。`legal`提供当前允许的单位索引和动作索引，模型据此构造合法动作掩码。
+- **时钟与轮次**：当前已流逝 AV (`now`)、当前 Cycle 索引、本轮剩余 AV 及对局总剩余 AV 预算。
+- **战技点**：我方与敌方当前持有的共享战技点（Skill Points）。
+- **行动轴排序**：所有存活单位按行动顺序排列的 [`AxisPosition`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs) 列表（包含单位 ID、剩余行动距离、实时速度与等待 AV）。
+- **单位快照**：当前所有已入场单位的实时数值快照（生命、护盾、能量、韧性、动态变量、持有的 Modifier 状态及自然/附加弱点）。
 
-`Decision`、`Observation`和`Operation`可序列化；`Operation`也可反序列化，便于本地适配层传递操作。观测保留当前引擎已维护的信息。随机种子、随机流和未来队列未通过该观测传给策略；各机制信息是否符合玩家可见范围，仍由后续来源接入逐项核验。
+---
 
-训练程序可以依次记录“当前观测、合法操作、所选操作、下一观测或结果”，在研究模块计算奖励和更新模型。推理程序读取同样的观测并提交操作。双方单位的策略路由由调用方决定，已有`Automatic`和`Policy`可以继续使用。
+## 3. 边界处理与时序保障
 
-Python绑定`sim_native`仍处于规划阶段。当前交付Rust分步接口和可运行示例，后续绑定复用该接口。输入所有权、Python对象生命周期和具体张量编码随绑定一起实现。
+### 3.1 终结技排队与能量扣减时机
 
-## 可运行示例
+- 在 `Insert` 决策点提交终结技仅表示将该操作登记入待执行队列。
+- 当该终结技真正切入 Turn 获得执行权时，引擎会**二次核对单位存活性与能量资源**，并在触发 `TurnStart` 监听器前扣除能量。
+- 若在排队后、切入前单位受击导致能量损失或陷入无法行动状态，该请求将被安全放弃，不产生异常扣费。
 
-从仓库根目录运行：
+### 3.2 轮次耗尽与回合收尾次序
 
-```powershell
-cargo run -p battle-core --example step_battle --locked -- core/battle/examples/duel.json 7
-```
+当战斗的总 AV 预算耗尽或轮次到期时：
 
-示例位于[`step_battle.rs`](../../../core/battle/examples/step_battle.rs)，核心调用如下：
+1. **已进入回合的收尾**：如果单位已经开始执行当前回合（Turn），该回合内的完整动作、效果及 `TurnEnd` 监听必须完整结算完毕，不会在动作中间被硬截断。
+2. **Cycle 结算**：单位回合完全结束后，再处理到期 Cycle 的结算事件。
+3. **终局判定**：若上述收尾完成后依然存在存活敌人，判定为战斗超时失败；若动作造成的伤害恰好完成清场，依然判定为战斗胜利。
+
+### 3.3 有限敌人队列补充时机
+
+对于启用有限敌人队列（`finite_queue_after_action_v1`）的场景：
+
+- 敌人阵亡后，其空缺槽位**不会在多段命中的攻击中间立即被顶替**，以保证单次 Action 内目标判定的稳定性。
+- 只有在一次完整的 Action（包含所有连带追击与即时监听）彻底结束、且即将进入下一调度步骤时，后备敌人队列才会按槽位序号依序填补入场。
+
+---
+
+## 4. 调用示例
+
+以下展示通过 Rust 驱动外部选招的基础模板：
 
 ```rust
-let mut battle = BattleSession::new(&input, seed, true)?;
-while let BattleStep::Decision(decision) = battle.advance()? {
-    let (id, operation) = (decision.id, choose(decision));
-    battle.submit(id, operation)?;
+use battle_core::engine::session::{BattleSession, BattleStep};
+use battle_core::model::ValidatedScenario;
+use battle_core::decision::{Decision, Operation};
+
+fn run_session_with_custom_policy(
+    scenario: &ValidatedScenario,
+    seed: u64,
+) -> Result<battle_core::model::BattleResult, String> {
+    // 1. 初始化会话
+    let mut battle = BattleSession::new(scenario, seed, true)?;
+
+    // 2. 分步循环推进
+    while let BattleStep::Decision(decision) = battle.advance()? {
+        let (id, choice) = (decision.id, evaluate_policy(&decision));
+        // 3. 提交决策选择
+        battle.submit(id, choice)?;
+    }
+
+    // 4. 获取对局结果
+    battle.into_result()
 }
-let result = battle.into_result()?;
+
+fn evaluate_policy(decision: &Decision) -> Option<Operation> {
+    // 示例简单选择第一个合法操作；对于 Insert 点可返回 None 放弃
+    decision.legal.first().copied()
+}
 ```
 
-`choose`由调用方实现。示例选择第一个合法操作；模型接入时替换该函数。同步入口`simulate_with_policy`也通过这套会话调用`Policy::decide`，`simulate`、CLI和批次评估继续复用它。
-
-## 两种独立的结算触发
-
-来源：负责人于2026-11-17在本次协作中确认，适用客户端的精确版本号待补。
-
-1. **清场或全灭。** 当前完整Action或调度步骤结算后，满足终局淘汰条件即可返回结果。有限队列中尚未入场的敌人及后续波次按各自流程处理。
-2. **最终倒计时回合结束。** Cycle表示轮次倒计时节点的回合；单位Turn在其中按行动轴推进。复活罚时可以让本轮额度归零，已经进入的单位Action和相应Turn收尾仍然完成，再处理到期的Cycle。最终Cycle结束后按AV额度耗尽结算；存在下一Cycle时装载下一轮额度。
-
-满足其中任一结束条件即可结算。取消和行动保护仍返回未完成状态。
-
-技能伤害与HP变化依显式效果逐项执行。软件回归可以构造命中监听伤害来检查复活和额度边界，这类输入验证引擎的执行顺序。真实角色技能、触发时机与数值需要来源资料确认。本次没有据合成的“回合开始清场”输入新增游戏规则。
-
-## 已验证的场景
-
-- 同一暂停点重复读取保持观测、资源和随机过程一致。
-- 非法、过期、重复提交及执行失败的处理。
-- 外部策略选择不同技能可改变战斗结果。
-- 两场会话交错推进，结果分别与相同种子的同步调用一致。
-- 四个公开示例逐决策驱动与同步运行的完整结果一致。
-- 终结技登记请求与实际入Turn付费的顺序。
-- 模型等待期间取消，返回未完成快照。
-- 插入提交后恢复时取消，保持AV和终结技能量，完成结果重复读取保持稳定。
-- 额度归零时先完成已进入的单位Turn，再发生CycleEnd；清场可独立提前结束。
-- 插入优先策略下，追击在普通TurnEnd前保有增益；Cycle优先策略下，单位回合先收尾，再处理倒计时。
-- 无新Action待执行时，TurnEnd/CycleEnd收尾先于取消和行动上限；放弃最后一次插入后的恢复也保持该顺序。
-- AV归零时队列先于TurnEnd补位，超时快照包含已补位单位；其已就绪终结技参与插入判断。
-
-测试位于`core/battle/tests/session.rs`；其余现有回归继续检查波次、资源、监听、种子、CLI和批次统计。
-
-2026-11-18验证：workspace共173项Rust测试通过，其中分步会话12项、队列截止边界3项；战斗crate严格Clippy、workspace格式检查和四个场景的可执行分步示例通过。独立评审发现的取消恢复、同刻插入、纯回合收尾与队列补位边界已分别补回归，按原输入复验。
+更多可运行的完整示例参见仓库中的 [`step_battle.rs`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/examples/step_battle.rs)。
