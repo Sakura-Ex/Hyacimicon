@@ -4,6 +4,7 @@
 
 | 模块 | 当前内容 |
 | --- | --- |
+| [Python 模拟绑定](sim-native/README.md) | 规划中的战斗与局面模拟绑定，登记构建、安装和验证步骤 |
 | [账号与遗器数据](account-generation/README.md) | 账号金数与统一配装、推荐关联和资源分配，角色及遗器生成接口与共用数据流 |
 | [基础战斗模拟](battle-simulation/README.md) | Rust `battle_v2` 显式面板与动作执行、事件记录、批次频率及种子重放；不包含完整角色机制或整局扣血 |
 
