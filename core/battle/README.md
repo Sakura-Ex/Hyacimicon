@@ -8,7 +8,20 @@ select `battle_v2` and account for the changed rules described below.
 
 ## Run
 
-From this directory, with the pinned Rust toolchain:
+The repository root defines the Cargo workspace, shared package metadata and
+dependency versions. Its `Cargo.lock` and `rust-toolchain.toml` pin dependencies
+and the Rust toolchain for both root and module commands. The workspace currently
+contains only `core/battle`.
+
+From the repository root:
+
+```text
+cargo test -p battle-core --locked
+cargo build -p battle-core --release --locked
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/team-waves.json 7
+```
+
+Commands from this module directory remain valid and use the same workspace:
 
 ```text
 cargo test --locked
@@ -26,7 +39,10 @@ strings in results. The library entry points are `validate`, `simulate`,
 Results include `provenance`, outcome/termination, elapsed AV, charged penalty AV,
 current cycle and remaining cycle/total AV, final unit HP/shield/energy/distance/
 speed/toughness, and optional ordered replay events. `Incomplete` denotes a safety
-or cancellation stop, not a defeat. Run HP settlement is not part of this module.
+or cancellation stop, not a defeat. Full-scene execution and post-battle run HP
+settlement remain required work and are not yet implemented. `run_hp_loss` stays
+unknown; unit HP is not run HP. The planned `core/run` owns formal run-state
+updates under the project layout; this workspace change does not create it.
 
 ## Scheduling and operations
 
