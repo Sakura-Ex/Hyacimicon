@@ -86,6 +86,8 @@ struct State<'a> {
     attack_targets: Vec<usize>,
     actions: u32,
     wave: usize,
+    queue_next: usize,
+    queue_slots: Vec<Option<usize>>,
     sp: [u8; 2],
     trace: bool,
     events: Vec<Event>,
@@ -398,7 +400,17 @@ impl<'a> State<'a> {
             .iter()
             .map(|u| CombatUnit::new(u, true, 0.0))
             .collect();
-        units.extend(s.waves[0].iter().map(|u| CombatUnit::new(u, false, 0.0)));
+        let initial_count = s
+            .mechanics
+            .queue_capacity
+            .unwrap_or(s.waves[0].len())
+            .min(s.waves[0].len());
+        units.extend(
+            s.waves[0]
+                .iter()
+                .take(initial_count)
+                .map(|u| CombatUnit::new(u, false, 0.0)),
+        );
         for u in &mut units {
             u.toughness = *s.mechanics.toughness.get(&u.spec.id).unwrap_or(&0.0);
             if let Some(values) = s.mechanics.dynamic_values.get(&u.spec.id) {
@@ -436,6 +448,10 @@ impl<'a> State<'a> {
             attack_targets: vec![],
             actions: 0,
             wave: 0,
+            queue_next: initial_count,
+            queue_slots: (0..s.mechanics.queue_capacity.unwrap_or(0))
+                .map(|i| (i < initial_count).then_some(s.allies.len() + i))
+                .collect(),
             sp: [s.ally_skill_points.initial, s.enemy_skill_points.initial],
             trace,
             events: Vec::new(),
@@ -447,6 +463,39 @@ impl<'a> State<'a> {
             damage_attack_type: None,
             event_attack_type: None,
             dynamic_scopes: Default::default(),
+        }
+    }
+    /// Reuse slots only after the previous complete Action. Revival has already resolved.
+    fn refill_queue(&mut self) {
+        if self.input.scenario().mechanics.queue_capacity.is_none() {
+            return;
+        }
+        let queue = &self.input.scenario().waves[0];
+        for slot in 0..self.queue_slots.len() {
+            if self.queue_slots[slot].is_some_and(|i| self.units[i].alive()) {
+                continue;
+            }
+            self.queue_slots[slot] = None;
+            if self.queue_next == queue.len() {
+                continue;
+            }
+            let spec = &queue[self.queue_next];
+            let mut unit = CombatUnit::new(spec, false, self.timeline.now());
+            unit.toughness = *self
+                .input
+                .scenario()
+                .mechanics
+                .toughness
+                .get(&spec.id)
+                .unwrap_or(&0.0);
+            if let Some(values) = self.input.scenario().mechanics.dynamic_values.get(&spec.id) {
+                unit.dynamic_values = values.clone();
+            }
+            let index = self.units.len();
+            self.units.push(unit);
+            self.queue_slots[slot] = Some(index);
+            self.queue_next += 1;
+            self.emit("queue_spawn", index, None, None, Some(slot as f64), None);
         }
     }
     fn emit(
@@ -542,6 +591,9 @@ impl<'a> State<'a> {
                     .ok_or("target selection unexpectedly empty")?;
                 Ok(vec![selected])
             }
+            Target::EnemyRandomUniform => Ok(vec![
+                candidates[(uniform(&mut self.targets) * candidates.len() as f64) as usize],
+            ]),
             Target::EnemyRandomTaunt => {
                 let total: f64 = candidates
                     .iter()
@@ -614,6 +666,17 @@ impl<'a> State<'a> {
     }
     fn condition(&self, actor: usize, condition: &Condition) -> Result<bool, String> {
         Ok(match condition {
+            Condition::HasModifier { id, target } => {
+                self.units.iter().enumerate().any(|(i, u)| {
+                    let selected = match target {
+                        Target::SelfUnit => i == actor,
+                        Target::AbilityTarget => Some(i) == self.bound_target,
+                        Target::AllEnemies => u.ally != self.units[actor].ally,
+                        _ => false, // rejected by input validation
+                    };
+                    selected && u.alive() && u.modifiers.instances.iter().any(|m| m.state.id == *id)
+                })
+            }
             Condition::Compare {
                 left,
                 comparison,
@@ -1244,7 +1307,47 @@ impl<'a> State<'a> {
         let weaknesses: Vec<_> = (0..self.units.len())
             .map(|i| self.weakness_state(i))
             .collect();
+        let settlement = self
+            .input
+            .scenario()
+            .mechanics
+            .settlement
+            .as_ref()
+            .map(|p| {
+                let defeated = self
+                    .units
+                    .iter()
+                    .filter(|u| !u.ally && !u.alive())
+                    .map(|u| u.spec.id.clone())
+                    .collect();
+                crate::settlement::settle(p, defeated, outcome)
+            });
+        let run_hp_loss = settlement.as_ref().and_then(|s| s.actual_loss);
+        let queue = self
+            .input
+            .scenario()
+            .mechanics
+            .queue_capacity
+            .map(|capacity| QueueResult {
+                policy: "finite_queue_after_action_v1".into(),
+                capacity,
+                active_slots: self
+                    .queue_slots
+                    .iter()
+                    .map(|i| {
+                        i.filter(|&i| self.units[i].alive())
+                            .map(|i| self.units[i].spec.id.clone())
+                    })
+                    .collect(),
+                remaining_ids: self.input.scenario().waves[0][self.queue_next..]
+                    .iter()
+                    .map(|u| u.id.clone())
+                    .collect(),
+            });
         BattleResult {
+            queue,
+            settlement,
+            assumptions: self.input.scenario().mechanics.assumptions.clone(),
             provenance: self.input.scenario().provenance.clone(),
             scenario_sha256: self.input.fingerprint().into(),
             seed,
@@ -1282,7 +1385,7 @@ impl<'a> State<'a> {
                 .collect(),
             events: self.events,
             trace_truncated: self.trace_truncated,
-            run_hp_loss: None,
+            run_hp_loss,
             validation_scope:
                 "explicit_battle_v2_operations; imported_config_coverage_is_recorded_separately"
                     .into(),
@@ -1322,7 +1425,10 @@ pub fn simulate_with_policy(
     state.dispatch(BattleEvent::WaveStart, None, None)?;
     loop {
         let allies = state.units.iter().any(|u| u.ally && u.alive());
-        let enemies = state.units.iter().any(|u| !u.ally && u.alive());
+        // A queued instance counts as an enemy even during an empty-board boundary.
+        let queue_waiting = input.scenario().mechanics.queue_capacity.is_some()
+            && state.queue_next < input.scenario().waves[0].len();
+        let enemies = queue_waiting || state.units.iter().any(|u| !u.ally && u.alive());
         let cleared = state.wave + usize::from(!enemies);
         if !allies && !enemies {
             return Ok(state.finish(seed, Outcome::Draw, Termination::BothDefeated, cleared));
@@ -1390,6 +1496,7 @@ pub fn simulate_with_policy(
         if state.actions >= input.scenario().max_actions {
             return Ok(state.finish(seed, Outcome::Incomplete, Termination::ActionLimit, cleared));
         }
+        state.refill_queue();
         if let Some(op) = state.decide(DecisionPoint::Insert, None, policy)? {
             state.enqueue(Pending {
                 actor: op.actor,

@@ -39,10 +39,11 @@ pub enum Scale {
 pub enum Target {
     /// One target explicitly bound by a Retarget effect; nested scopes restore it.
     ContextTarget,
-    /// Select lowest-HP enemy once at Action entry and retain it for every hit.
+    /// Select lowest HP fraction once at Action entry and retain it for every hit.
     AbilityTarget,
     EnemyLowestHp,
     EnemyRandomTaunt,
+    EnemyRandomUniform,
     AllEnemies,
     AllyLowestHp,
     AllAllies,
@@ -166,6 +167,11 @@ pub enum Comparison {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Condition {
+    /// Only self, bound ability target or any living enemy; never consumes RNG.
+    HasModifier {
+        id: String,
+        target: Target,
+    },
     HitAttackType {
         attack_type: AttackType,
     },
@@ -188,6 +194,24 @@ pub enum Condition {
     },
 }
 impl Condition {
+    fn validate_modifier_references(
+        &self,
+        definitions: &std::collections::BTreeMap<String, crate::modifiers::ModifierDefinition>,
+    ) -> Result<(), String> {
+        match self {
+            Self::HasModifier { id, .. } if !definitions.contains_key(id) => {
+                Err(format!("unknown condition modifier {id}"))
+            }
+            Self::Not { condition } => condition.validate_modifier_references(definitions),
+            Self::All { conditions } | Self::Any { conditions } => {
+                for condition in conditions {
+                    condition.validate_modifier_references(definitions)?;
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
     fn validate(&self, depth: usize) -> Result<(), String> {
         if depth > 32 {
             return Err("condition nesting exceeds 32".into());
@@ -196,6 +220,17 @@ impl Condition {
             Self::Compare { left, right, .. } => {
                 left.validate()?;
                 right.validate()?;
+            }
+            Self::HasModifier { id, target } => {
+                identifier(id, "condition modifier")?;
+                if !matches!(
+                    target,
+                    Target::SelfUnit | Target::AbilityTarget | Target::AllEnemies
+                ) {
+                    return Err(
+                        "modifier condition requires self, ability_target or all_enemies".into(),
+                    );
+                }
             }
             Self::ActionKind { .. } => {}
             Self::HitAttackType { .. } => {}
@@ -402,7 +437,20 @@ pub struct Event {
     pub attack_type: Option<AttackType>,
 }
 #[derive(Clone, Debug, Serialize)]
+pub struct QueueResult {
+    pub policy: String,
+    pub capacity: usize,
+    pub active_slots: Vec<Option<String>>,
+    pub remaining_ids: Vec<String>,
+}
+#[derive(Clone, Debug, Serialize)]
 pub struct BattleResult {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub queue: Option<QueueResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settlement: Option<crate::settlement::SettlementResult>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub assumptions: Vec<String>,
     pub provenance: Provenance,
     pub scenario_sha256: String,
     #[serde(serialize_with = "seed_decimal::serialize")]
@@ -422,7 +470,7 @@ pub struct BattleResult {
     pub units: Vec<UnitResult>,
     pub events: Vec<Event>,
     pub trace_truncated: bool,
-    /// Shared run settlement is deliberately outside the basic battle engine.
+    /// Actual loss under the explicit settlement policy; None for legacy/incomplete.
     pub run_hp_loss: Option<f64>,
     pub validation_scope: String,
 }
@@ -542,6 +590,7 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                             | Target::ContextTarget
                             | Target::EnemyLowestHp
                             | Target::EnemyRandomTaunt
+                            | Target::EnemyRandomUniform
                             | Target::AllEnemies
                     ) {
                         return Err("elemental damage requires enemy targets".into());
@@ -581,6 +630,7 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                             | Target::AbilityTarget
                             | Target::EnemyLowestHp
                             | Target::EnemyRandomTaunt
+                            | Target::EnemyRandomUniform
                             | Target::AllEnemies
                     ) {
                         return Err("damage requires enemy targets".into());
@@ -714,8 +764,15 @@ pub fn validate(scenario: Scenario) -> Result<ValidatedScenario, String> {
         }
     }
     for wave in &scenario.waves {
-        if wave.is_empty() || wave.len() > 32 {
-            return Err("enemy wave must contain 1..32 units".into());
+        if wave.is_empty()
+            || wave.len()
+                > if scenario.mechanics.queue_capacity.is_some() {
+                    3200
+                } else {
+                    32
+                }
+        {
+            return Err("enemy wave must contain 1..32 units (finite queue: 1..3200)".into());
         }
         for u in wave {
             validate_unit(u, &scenario.enemy_skill_points)?;
@@ -785,6 +842,14 @@ pub struct Trigger {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Mechanics {
+    /// Some enables a finite queue in `waves[0]`; remaining waves must be absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub queue_capacity: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settlement: Option<crate::settlement::SettlementPolicy>,
+    /// Caller-declared approximation/configuration ledger, echoed in all outputs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub assumptions: Vec<String>,
     /// Explicit immutable natural weaknesses. Missing units remain unknown.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub natural_weaknesses: std::collections::BTreeMap<String, Vec<crate::elements::Element>>,
@@ -821,6 +886,19 @@ fn one() -> f64 {
 }
 fn validate_mechanics(s: &Scenario) -> Result<(), String> {
     let m = &s.mechanics;
+    if let Some(capacity) = m.queue_capacity {
+        if !(1..=32).contains(&capacity) || s.waves.len() != 1 {
+            return Err(
+                "queue mode requires capacity 1..32 and exactly one queue in waves[0]".into(),
+            );
+        }
+    }
+    if let Some(policy) = &m.settlement {
+        policy.validate(s)?;
+    }
+    if m.assumptions.len() > 100 || m.assumptions.iter().any(|a| a.is_empty() || a.len() > 2000) {
+        return Err("invalid assumptions ledger".into());
+    }
     bounded(m.ally_damage_factor, 0.0, 1e6, "ally_damage_factor")?;
     if m.cycles.len() > 10000 {
         return Err("too many cycles".into());
@@ -867,6 +945,9 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
         .chain(m.triggers.iter().map(|t| &t.effects))
     {
         for e in flattened_effects(effects)? {
+            if let Effect::Conditional { condition, .. } = e {
+                condition.validate_modifier_references(&m.modifier_definitions)?;
+            }
             if matches!(e, Effect::ElementalDamage { .. })
                 && units
                     .iter()
@@ -941,6 +1022,9 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
 impl Default for Mechanics {
     fn default() -> Self {
         Self {
+            queue_capacity: None,
+            settlement: None,
+            assumptions: vec![],
             natural_weaknesses: Default::default(),
             modifier_weaknesses: Default::default(),
             element_profiles: Default::default(),

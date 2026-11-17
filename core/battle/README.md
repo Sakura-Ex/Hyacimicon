@@ -6,6 +6,25 @@ It continues PR8's damage/heal/shield math, target/critical random streams, CLI 
 batch implementation. It replaces the old `basic_v1` scheduler; old inputs must
 select `battle_v2` and account for the changed rules described below.
 
+## Runnable character scene
+
+The [Anaxa S2 scenario](ANAXA_SCENARIO.md) now runs a complete explicit battle
+through finite-queue replacement and named provisional run-HP settlement. It
+naturally executes basic, skill, ultimate, disclosure bonus action and S2 pursuit
+under one fixed strategy. Single runs and batches share the existing engine.
+The reference kit is approximate: random weakness implantation, full bonus-skill
+inheritance, hard control and other documented mechanics are omitted and can
+change the result. This is not full native reproduction or arbitrary-roster support.
+
+```text
+cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
+cargo run -p battle-core --release --locked -- batch core/battle/examples/anaxa-s2-full-battle.json 8 42
+```
+
+[Scenario details](ANAXA_SCENARIO.md) specify input fields, formula/order,
+source versions and approximations. [Data requirements](DATA_REQUIREMENTS.md)
+list evidence needed for future game alignment; no private tables are bundled.
+
 ## Run
 
 The repository root defines the Cargo workspace, shared package metadata and
@@ -29,9 +48,9 @@ cargo build --release --locked
 cargo run --release --locked -- simulate examples/team-waves.json 7
 ```
 
-These public
-examples are artificial operation tests. Game data is supplied separately, never
-bundled in this module. `validate FILE`, `simulate FILE SEED`, and
+The original public examples are artificial operation tests. The Anaxa example
+adds a documented public-reference character approximation with developer panels.
+Private game catalogs and player data are supplied separately, never bundled here. `validate FILE`, `simulate FILE SEED`, and
 `batch FILE TRIALS SEED` retain their CLI argument structure. Seeds remain decimal
 strings in results. The library entry points are `validate`, `simulate`,
 `simulate_cancellable`, and `simulate_with_policy`.
@@ -39,10 +58,13 @@ strings in results. The library entry points are `validate`, `simulate`,
 Results include `provenance`, outcome/termination, elapsed AV, charged penalty AV,
 current cycle and remaining cycle/total AV, final unit HP/shield/energy/distance/
 speed/toughness, and optional ordered replay events. `Incomplete` denotes a safety
-or cancellation stop, not a defeat. Full-scene execution and post-battle run HP
-settlement remain required work and are not yet implemented. `run_hp_loss` stays
-unknown; unit HP is not run HP. The planned `core/run` owns formal run-state
-updates under the project layout; this workspace change does not create it.
+or cancellation stop, not a defeat. Explicit `mechanics.settlement` enables the
+named provisional single-battle policy and reports progress, actual HP loss,
+recovery, clipping and HP after. `run_hp_loss` remains null for legacy inputs and
+Incomplete runs. Unit HP is not run HP. Combat `outcome`, minimum progress and
+run survival remain distinct; HP > 0 never implies combat victory. The planned
+`core/run` still owns persistent whole-run state; this module computes only this
+battle's configured HP transition and does not create or persist an entire run.
 
 ## Scheduling and operations
 
@@ -80,9 +102,10 @@ updates under the project layout; this workspace change does not create it.
   allowance, clamped to zero. It preserves the clock and all unit distances.
 - Terminal elimination is checked at the common boundary after complete actions
   and state-changing cycle events. Cycle exhaustion precedes safety cancellation.
-- `ability_target` chooses the lowest-HP enemy once at Action entry. Every hit
+- `ability_target` chooses the lowest-HP-fraction enemy once at Action entry. Every hit
   retains that identity; later hits stop if it dies. Existing `enemy_lowest_hp` and
-  `enemy_random_taunt` explicitly reselect per hit. A full game policy's target
+  `enemy_random_taunt` explicitly reselect per hit; `enemy_random_uniform` selects
+  uniformly from living enemies using the same seeded target stream. A full game policy's target
   selection/Retarget instructions need their own adapter.
 
 `Policy` receives an immutable observation and the legal `Operation` list.
@@ -256,3 +279,25 @@ truncation, dynamic speed, event expiry, cycle ties and terminal precedence.
 Source repository license: GPL-3.0-only. HSR_Nous formula attribution remains in
 `src/math.rs`; distance semantics reference f8935ddb407b297732fbd3c624d55897e3e648b9,
 with the MIT notice in `HSR_NOUS_LICENSE`. Raw game data is not redistributed here.
+
+
+## Optional finite queue and settlement
+
+`mechanics.queue_capacity` opts into a finite input queue in `waves[0]` with
+capacity 1..32 and up to 3200 unique enemies. Other waves must be absent. Empty
+slots refill only at complete-action boundaries before subsequent inserts;
+revival holds the slot, and remaining queued enemies prevent premature victory.
+The result records active slots and unspawned IDs. Existing wave inputs remain
+unchanged when this field is absent.
+
+`mechanics.settlement` requires the named policy, exactly one positive weight per
+enemy instance, minimum progress, HP before/cap, failure loss and recovery. All
+parameters are emitted; there are no implicit HP defaults. Cancellation and
+ActionLimit preserve an unprocessed snapshot. Trial ledgers now carry remaining
+AV and settlement, and only completed settlements contribute to HP averages.
+See [the full policy contract](ANAXA_SCENARIO.md#finite-queue-and-business-result).
+
+`has_modifier` conditions query self, the bound ability target or any living
+enemy without consuming RNG. Unknown modifier IDs and other target selectors
+are rejected. This narrowly supports the Anaxa disclosure gate and is not a
+native modifier callback interpreter.

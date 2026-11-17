@@ -35,10 +35,13 @@ pub struct TrialSummary {
     pub outcome: Outcome,
     pub termination: Termination,
     pub elapsed_av: f64,
+    pub remaining_av: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub settlement: Option<crate::settlement::SettlementResult>,
     pub penalty_av: f64,
     pub actions: u32,
     pub waves_cleared: usize,
-    /// Unknown settlement, never replaced by zero or remaining unit HP.
+    /// Actual provisional loss, or unknown/not applied; never remaining unit HP.
     pub run_hp_loss: Option<f64>,
 }
 
@@ -71,6 +74,9 @@ pub struct BatchResult {
     pub win_rate_ci95: Option<WilsonInterval>,
     pub loss_rate_ci95: Option<WilsonInterval>,
     pub run_hp_loss_unknown_count: u32,
+    pub settled_count: u32,
+    pub mean_hp_after: Option<f64>,
+    pub assumptions: Vec<String>,
     pub run_hp_loss_status: String,
     pub ledger: Vec<TrialSummary>,
     pub validation_scope: String,
@@ -148,10 +154,14 @@ pub fn run_batch(
         win_rate_ci95: None,
         loss_rate_ci95: None,
         run_hp_loss_unknown_count: 0,
+        settled_count: 0,
+        mean_hp_after: None,
+        assumptions: validated.scenario().mechanics.assumptions.clone(),
         run_hp_loss_status: "unknown: run settlement is outside battle_v2".into(),
         ledger: Vec::new(),
         validation_scope: "Explicit-input battle_v2 Monte Carlo; conditional on completed trials; not full 4.7 roster, live-game win-rate validation, or run HP settlement".into(),
     };
+    let mut hp_sum = 0.0;
     for index in 0..request.trials {
         if cancel() {
             output.cancellation_requested = true;
@@ -184,11 +194,6 @@ pub fn run_batch(
         {
             return Err(format!("trial {index}: engine result identity mismatch"));
         }
-        if result.run_hp_loss.is_some() {
-            return Err(format!(
-                "trial {index}: battle_v2 does not implement run HP settlement"
-            ));
-        }
         match result.outcome {
             Outcome::Victory => output.wins += 1,
             Outcome::Defeat => output.losses += 1,
@@ -200,22 +205,36 @@ pub fn run_batch(
             output.cancelled += 1;
         }
         output.started += 1;
-        output.run_hp_loss_unknown_count += 1;
+        output.run_hp_loss_unknown_count += u32::from(result.run_hp_loss.is_none());
+        if let Some(hp) = result.settlement.as_ref().and_then(|s| s.hp_after) {
+            output.settled_count += 1;
+            hp_sum += hp;
+        }
         output.ledger.push(TrialSummary {
             index,
             seed,
             outcome: result.outcome,
             termination: result.termination,
             elapsed_av: result.elapsed_av,
+            remaining_av: result.remaining_av,
+            settlement: result.settlement,
             penalty_av: result.penalty_av,
             actions: result.actions,
             waves_cleared: result.waves_cleared,
-            run_hp_loss: None,
+            run_hp_loss: result.run_hp_loss,
         });
         if observed_cancel || trial_cancelled {
             output.cancellation_requested = true;
             break;
         }
+    }
+    if validated.scenario().mechanics.settlement.is_some() {
+        output.run_hp_loss_status =
+            "explicit provisional policy; incomplete trials not settled".into();
+        output.validation_scope = "Explicit-input battle_v2; configured provisional settlement; no native gameplay validation".into();
+    }
+    if output.settled_count > 0 {
+        output.mean_hp_after = Some(hp_sum / f64::from(output.settled_count));
     }
     output.completed = output.wins + output.losses + output.draws;
     output.unstarted = output.total - output.started;
