@@ -13,6 +13,8 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import config_schema as schema
+from config_expression import stable_hash
 
 # These tasks only control camera/model/animation. Their ordering is recorded;
 # numeric tasks are never accepted by a name prefix or silently discarded.
@@ -41,6 +43,7 @@ class Compiler:
         """Load raw ability definitions; duplicate names are an input error."""
         self.abilities = {}
         self.modifiers = {}
+        self.modifier_pointers = {}
         self.bindings = bindings
         self.points = set(points)
         if not math.isfinite(hit_energy) or hit_energy < 0:
@@ -59,6 +62,7 @@ class Compiler:
                 self.abilities[name] = (ability, f'{path.as_posix()}#/AbilityList/{i}')
                 for key, modifier in ability.get('Modifiers', {}).items():
                     self.modifiers[(name,key)] = modifier
+                    self.modifier_pointers[(name,key)] = schema.child(f'{path.as_posix()}#/AbilityList/{i}/Modifiers', key)
 
     def scan(self, value: object) -> None:
         """Count every typed node, including branches not selected for execution."""
@@ -71,17 +75,24 @@ class Compiler:
             for child in value:
                 self.scan(child)
 
-    def number(self, value: dict) -> float:
-        """Resolve literal, dynamic load, and observed postfix arithmetic opcodes.
+    def number(self, value: dict, pointer: str = 'number', bindings: dict | None = None) -> float:
+        """Resolve a strictly shaped numeric wrapper with located failure evidence.
+
+        Args:
+            value: Supported literal, fixed or postfix number.
+            pointer: Exact source location of this expression.
+            bindings: Optional explicit local preshow parameters; never global writes.
 
         Raises:
-            Unsupported: Missing binding or unrecognized opcode/stack format.
+            Unsupported: Unknown fields/opcodes, missing binding or invalid stack.
         """
-        if 'Value' in value:
-            result = value['Value']
-        elif value['IsDynamic'] is False:
-            result = value['FixedValue']['Value']
-        else:
+        try:
+            schema.number(value, pointer)
+            resolved = self.bindings if bindings is None else bindings
+            if 'Value' in value:
+                return float(value['Value'])
+            if value['IsDynamic'] is False:
+                return float(value['FixedValue']['Value'])
             expr = value['PostfixExpr']
             codes = base64.b64decode(expr['OpCodes'], validate=True)
             if not codes or codes[-1] != 17:
@@ -98,9 +109,9 @@ class Compiler:
                         stack.append(expr['FixedValues'][operand]['Value'])
                     else:
                         key = str(expr['DynamicHashes'][operand])
-                        if key not in self.bindings:
+                        if key not in resolved:
                             raise Unsupported(f'unresolved dynamic hash {key}')
-                        stack.append(self.bindings[key])
+                        stack.append(resolved[key])
                 elif op == 14:
                     stack.append(-stack.pop())
                 elif op == 17 and index == len(codes):
@@ -109,28 +120,113 @@ class Compiler:
                     raise Unsupported(f'unsupported postfix opcode {op}')
             if len(stack) != 1:
                 raise Unsupported('invalid postfix stack')
-            result = stack[0]
-        if isinstance(result, bool) or not isinstance(result, (float, int)) or not math.isfinite(result):
-            raise ValueError('numeric expression must be finite')
-        return float(result)
+            schema.finite(stack[0], pointer)
+            return float(stack[0])
+        except (ValueError, IndexError, KeyError, TypeError) as error:
+            message = str(error)
+            if message.startswith(pointer + '/') or message.startswith(pointer + ':'):
+                raise Unsupported(message) from error
+            raise Unsupported(f'{pointer}/PostfixExpr/OpCodes: {message}') from error
 
-    def predicate(self, node: dict) -> bool:
-        """Evaluate only predicates fixed by the declared regular-skill context."""
-        kind = node['$type'].removeprefix('RPG.GameCore.')
-        if kind == 'BySkillPointActivated':
-            result = node['PointTriggerKey'] in self.points
-        elif kind == 'ByIsInsertAction':
-            result = False
-        elif kind == 'ByIsTurnOwnerEntity':
-            if node.get('TargetType') != {'$type':'RPG.GameCore.TargetAlias','Alias':'Caster'}:
-                raise Unsupported('turn owner predicate on non-caster')
-            result = True
-        else:
-            raise Unsupported(f'predicate {kind}')
-        inverse = node.get('Inverse', False)
-        if not isinstance(inverse, bool):
-            raise ValueError('predicate Inverse must be boolean')
-        return not result if inverse else result
+    def predicate(self, node: dict, pointer: str = 'predicate') -> bool:
+        """Evaluate only declared regular-context predicates, rejecting extra fields."""
+        try:
+            schema.fields(node, {'$type', 'PointTriggerKey', 'TargetType', 'Inverse'}, pointer, {'$type'})
+            schema.text(node['$type'], pointer + '/$type')
+            kind = node['$type'].removeprefix('RPG.GameCore.')
+            if node['$type'] != 'RPG.GameCore.' + kind:
+                raise Unsupported(f'{pointer}/$type: unsupported predicate namespace')
+            allowed = {
+                'BySkillPointActivated': {'PointTriggerKey', 'Inverse'},
+                'ByIsInsertAction': {'Inverse'},
+                'ByIsTurnOwnerEntity': {'TargetType', 'Inverse'},
+            }
+            if kind not in allowed:
+                raise Unsupported(f'{pointer}: predicate {kind}')
+            schema.fields(node, allowed[kind] | {'$type'}, pointer)
+            if kind == 'BySkillPointActivated':
+                schema.fields(node, allowed[kind] | {'$type'}, pointer, {'PointTriggerKey'})
+                schema.text(node['PointTriggerKey'], pointer + '/PointTriggerKey')
+                result = node['PointTriggerKey'] in self.points
+            elif kind == 'ByIsInsertAction':
+                result = False
+            else:
+                schema.fields(node, allowed[kind] | {'$type'}, pointer, {'TargetType'})
+                schema.alias(node['TargetType'], pointer + '/TargetType', {'Caster'})
+                result = True
+            inverse = node.get('Inverse', False)
+            schema.boolean(inverse, pointer + '/Inverse')
+            return not result if inverse else result
+        except ValueError as error:
+            raise Unsupported(str(error)) from error
+
+    def preshow_modifier(self, task: dict, pointer: str) -> None:
+        """Validate the inspected self-only action-delay preview modifier contract.
+
+        Numeric callbacks are rejected. Local dynamic values must match declared
+        preview hashes and are evaluated only for validating the preview data.
+        """
+        schema.fields(task, {'$type', 'ModifierName', 'TargetType', 'DynamicValues'}, pointer,
+                      {'ModifierName', 'TargetType'})
+        schema.alias(task['TargetType'], pointer + '/TargetType', {'Caster'})
+        key = schema.name(task['ModifierName'], pointer + '/ModifierName')
+        scoped = [(owner, key) for owner in reversed(self.stack) if (owner, key) in self.modifiers]
+        if not scoped:
+            raise Unsupported(f'{pointer}/ModifierName: unresolved modifier {key}')
+        modifier = self.modifiers[scoped[0]]
+        where = self.modifier_pointers[scoped[0]]
+        schema.fields(modifier, {'ModifierAffectedPreshowConfig', '_CallbackList', 'Stacking', 'DynamicValues'}, where,
+                      {'ModifierAffectedPreshowConfig'})
+        if 'Stacking' in modifier and modifier['Stacking'] != 'Multiple':
+            raise Unsupported(f'{where}/Stacking: unsupported preshow stacking')
+        callbacks = modifier.get('_CallbackList', [])
+        schema.sequence(callbacks, where + '/_CallbackList')
+        for index, callback in enumerate(callbacks):
+            location = f'{where}/_CallbackList/{index}'
+            schema.fields(callback, {'Event', 'CallbackConfig'}, location, {'Event', 'CallbackConfig'})
+            if callback['Event'] != 'OnActionEnd':
+                raise Unsupported(f'{location}/Event: numeric modifier callback {callback["Event"]}')
+            schema.sequence(callback['CallbackConfig'], location + '/CallbackConfig')
+            if len(callback['CallbackConfig']) != 1:
+                raise Unsupported(f'{location}/CallbackConfig: expected one RemoveSelfModifier')
+            removal = callback['CallbackConfig'][0]
+            schema.fields(removal, {'$type'}, location + '/CallbackConfig/0', {'$type'})
+            if removal['$type'] != 'RPG.GameCore.RemoveSelfModifier':
+                raise Unsupported(f'{location}/CallbackConfig/0/$type: only RemoveSelfModifier is inspected')
+        declared = modifier.get('DynamicValues', {'Floats': {}})
+        schema.fields(declared, {'Floats'}, where + '/DynamicValues', {'Floats'})
+        floats = declared['Floats']
+        if not isinstance(floats, dict):
+            raise Unsupported(f'{where}/DynamicValues/Floats: expected object')
+        for hashed, declaration in floats.items():
+            location = schema.child(where + '/DynamicValues/Floats', hashed)
+            schema.fields(declaration, {'ReadInfo'}, location, {'ReadInfo'})
+            schema.fields(declaration['ReadInfo'], {'Type', 'Index'}, location + '/ReadInfo', {'Type', 'Index'})
+            if (declaration['ReadInfo'] != {'Type': 'None', 'Index': 0}
+                    or type(declaration['ReadInfo']['Index']) is not int):
+                raise Unsupported(f'{location}/ReadInfo: unsupported preshow storage declaration')
+        supplied = task.get('DynamicValues', {})
+        if not isinstance(supplied, dict):
+            raise Unsupported(f'{pointer}/DynamicValues: expected object')
+        local = dict(self.bindings)
+        for name, value in supplied.items():
+            location = schema.child(pointer + '/DynamicValues', name)
+            hashed = stable_hash(name)
+            if hashed not in floats:
+                raise Unsupported(f'{location}: undeclared preshow dynamic value')
+            local[hashed] = self.number(value, location)
+        if set(floats) != {stable_hash(name) for name in supplied}:
+            raise Unsupported(f'{pointer}/DynamicValues: every preshow storage value must be explicitly supplied')
+        preview = modifier['ModifierAffectedPreshowConfig']
+        location = where + '/ModifierAffectedPreshowConfig'
+        schema.fields(preview, {'SkillTypes', 'TargetType', 'ActionDelayPreshowConfig'}, location,
+                      {'SkillTypes', 'TargetType', 'ActionDelayPreshowConfig'})
+        if preview['SkillTypes'] != ['Normal']:
+            raise Unsupported(f'{location}/SkillTypes: unsupported preshow skill types')
+        schema.alias(preview['TargetType'], location + '/TargetType', {'ModifierOwnerEntity'})
+        delay = preview['ActionDelayPreshowConfig']
+        schema.fields(delay, {'AddDelayRatio'}, location + '/ActionDelayPreshowConfig', {'AddDelayRatio'})
+        self.number(delay['AddDelayRatio'], location + '/ActionDelayPreshowConfig/AddDelayRatio', local)
 
     def ability(self, name: str) -> list[dict]:
         """Validate ability fields, then lower supported phases and references.
@@ -172,73 +268,96 @@ class Compiler:
             self.stack.pop()
 
     def tasks(self, tasks: list[dict], pointer: str) -> list[dict]:
-        """Lower ordered tasks; reject unknown logic at its exact source pointer."""
+        """Lower selected tasks with closed field schemas and located rejection."""
+        try:
+            schema.sequence(tasks, pointer)
+        except ValueError as error:
+            raise Unsupported(str(error)) from error
         effects = []
         for i, task in enumerate(tasks):
             where = f'{pointer}/{i}'
-            kind = task['$type'].removeprefix('RPG.GameCore.')
-            row = {'pointer': where, 'type': task['$type']}
+            row = {'pointer': where}
             self.evidence.append(row)
             try:
+                if not isinstance(task, dict) or not isinstance(task.get('$type'), str):
+                    raise Unsupported(f'{where}/$type: task requires a string type')
+                kind = task['$type'].removeprefix('RPG.GameCore.')
+                if task['$type'] != 'RPG.GameCore.' + kind:
+                    raise Unsupported(f'{where}/$type: unsupported task namespace')
+                row['type'] = task['$type']
                 if kind in PRESENTATION | WAITS | MARKERS:
+                    schema.presentation(kind, task, where)
                     row['handling'] = 'presentation_only' if kind in PRESENTATION else 'ordered_marker_zero_av'
                 elif kind == 'TriggerAbility':
+                    schema.fields(task, {'$type', 'AbilityName', 'TargetType', 'IsSkillPerform'}, where,
+                                  {'AbilityName', 'TargetType'})
+                    schema.alias(task['TargetType'], where + '/TargetType', {'Caster'})
+                    name = schema.name(task['AbilityName'], where + '/AbilityName')
+                    if 'IsSkillPerform' in task and task['IsSkillPerform'] is not True:
+                        raise Unsupported(f'{where}/IsSkillPerform: only explicit true or legacy omission is supported')
                     row['handling'] = 'resolve_reference'
-                    effects += self.ability(task['AbilityName']['Value'])
+                    effects += self.ability(name)
                 elif kind == 'PredicateTaskList':
-                    branch = 'SuccessTaskList' if self.predicate(task['Predicate']) else 'FailedTaskList'
+                    schema.fields(task, {'$type', 'Predicate', 'SuccessTaskList', 'FailedTaskList'}, where, {'Predicate'})
+                    for field in ['SuccessTaskList', 'FailedTaskList']:
+                        schema.sequence(task.get(field, []), where + '/' + field)
+                    branch = 'SuccessTaskList' if self.predicate(task['Predicate'], where + '/Predicate') else 'FailedTaskList'
                     row['handling'] = branch
+                    skipped = 'FailedTaskList' if branch == 'SuccessTaskList' else 'SuccessTaskList'
+                    self.evidence.append({'pointer': where + '/' + skipped,
+                        'handling': 'not_selected_declared_regular_context', 'task_count': len(task.get(skipped, []))})
                     effects += self.tasks(task.get(branch, []), where + '/' + branch)
                 elif kind == 'DamageByAttackProperty':
                     if 'CanTriggerLastKill' in task and task['CanTriggerLastKill'] is not True:
-                        raise Unsupported('unimplemented CanTriggerLastKill value; only explicit true was inspected')
+                        raise Unsupported(f'{where}/CanTriggerLastKill: unimplemented CanTriggerLastKill value; only explicit true was inspected')
+                    schema.fields(task, {'$type', 'TargetType', 'AttackProperty', 'SpecialHitSoundEvent', 'CanTriggerLastKill'}, where,
+                                  {'TargetType', 'AttackProperty'})
                     row['can_trigger_last_kill'] = 'explicit_true' if 'CanTriggerLastKill' in task else 'omitted_native_default_unresolved_legacy_direct_hit_contract'
-                    if task['TargetType'] != {'$type': 'RPG.GameCore.TargetAlias', 'Alias': 'AbilityTargetEntity'}:
-                        raise Unsupported('non-single explicit ability target')
-                    if set(task) - {'$type','TargetType','AttackProperty','SpecialHitSoundEvent','CanTriggerLastKill'}:
-                        raise Unsupported('unhandled damage task fields')
+                    schema.alias(task['TargetType'], where + '/TargetType', {'AbilityTargetEntity'})
+                    if 'SpecialHitSoundEvent' in task:
+                        schema.text(task['SpecialHitSoundEvent'], where + '/SpecialHitSoundEvent')
                     attack = task['AttackProperty']
-                    hit_energy_ratio = self.number(attack['SPHitRatio']) if 'SPHitRatio' in attack else 1.0
+                    location = where + '/AttackProperty'
                     allowed = {'$type', 'DamageType', 'DamagePercentage', 'StanceValue', 'HitSplitRatio',
                                'SPHitRatio', 'HitAnimation', 'HitEffect', 'HitEffectHeight', 'HitTimeSlowType',
                                'HitTimeSlowIntensity', 'HitPosHeight', 'HitAngleHorizontal', 'HitAngleVertical'}
-                    if set(attack) - allowed:
-                        raise Unsupported(f'attack fields {sorted(set(attack)-allowed)}')
-                    # Config omits split on unsplit hits. This default is an explicit
-                    # single-hit convention, recorded in the lowering evidence.
-                    split = self.number(attack['HitSplitRatio']) if 'HitSplitRatio' in attack else 1.0
-                    ratio = self.number(attack['DamagePercentage']) * split
+                    schema.fields(attack, allowed, location, {'$type', 'DamageType', 'DamagePercentage'})
+                    if attack['$type'] != 'RPG.GameCore.AttackData':
+                        raise Unsupported(f'{location}/$type: expected AttackData')
+                    schema.fields(attack['DamageType'], {'DamageType'}, location + '/DamageType', {'DamageType'})
+                    if attack['DamageType']['DamageType'] not in {'Physical', 'Fire', 'Ice', 'Thunder', 'Wind', 'Quantum', 'Imaginary'}:
+                        raise Unsupported(f'{location}/DamageType/DamageType: unsupported element')
+                    for field in ['HitAnimation', 'HitEffect', 'HitTimeSlowType', 'HitTimeSlowIntensity']:
+                        if field in attack: schema.text(attack[field], location + '/' + field)
+                    for field in ['HitEffectHeight', 'HitPosHeight', 'HitAngleHorizontal', 'HitAngleVertical']:
+                        if field in attack: schema.finite(attack[field], location + '/' + field)
+                    hit_energy_ratio = self.number(attack['SPHitRatio'], location + '/SPHitRatio') if 'SPHitRatio' in attack else 1.0
+                    # Unsplit-hit default is the existing explicit legacy convention.
+                    split = self.number(attack['HitSplitRatio'], location + '/HitSplitRatio') if 'HitSplitRatio' in attack else 1.0
+                    ratio = self.number(attack['DamagePercentage'], location + '/DamagePercentage') * split
                     effects.append(dict(type='damage', scale='attack', ratio=ratio, flat=0,
                                         hits=1, can_crit=True, target='ability_target'))
                     if 'StanceValue' in attack:
-                        effects.append(dict(type='toughness', amount=self.number(attack['StanceValue']) * split,
+                        effects.append(dict(type='toughness', amount=self.number(attack['StanceValue'], location + '/StanceValue') * split,
                                             target='ability_target'))
                     effects.append(dict(type='energy', amount=self.hit_energy * hit_energy_ratio, target='ability_target'))
                     row.update(handling='ordered_damage_hit', ratio=ratio, hit_split=split, hit_energy=self.hit_energy * hit_energy_ratio,
                                element=attack['DamageType']['DamageType'])
                 elif kind == 'ModifyCurrentSkillDelayCost':
-                    effects.append(dict(type='advance_next', fraction=-self.number(task['NormalizedValue']), target='self_unit'))
+                    schema.fields(task, {'$type', 'NormalizedValue', 'TargetType'}, where, {'NormalizedValue'})
+                    if 'TargetType' in task: schema.alias(task['TargetType'], where + '/TargetType', {'Caster'})
+                    effects.append(dict(type='advance_next', fraction=-self.number(task['NormalizedValue'], where + '/NormalizedValue'), target='self_unit'))
                     row['handling'] = 'turn_end_next_distance'
                 elif kind == 'AddModifier':
-                    key = task['ModifierName']['Value']
-                    scoped = [(owner,key) for owner in reversed(self.stack) if (owner,key) in self.modifiers]
-                    if not scoped:
-                        raise Unsupported(f'unresolved modifier {key}')
-                    modifier = self.modifiers[scoped[0]]
-                    # Accept only inspected preshow bookkeeping with no state callback.
-                    callbacks = modifier.get('_CallbackList', [])
-                    if set(modifier) <= {'ModifierAffectedPreshowConfig', '_CallbackList', 'Stacking', 'DynamicValues'} and all(
-                        c['Event'] == 'OnActionEnd' and c['CallbackConfig'] == [{'$type': 'RPG.GameCore.RemoveSelfModifier'}]
-                        for c in callbacks
-                    ) and 'ModifierAffectedPreshowConfig' in modifier:
-                        row['handling'] = 'preshow_only_modifier'
-                    else:
-                        raise Unsupported(f'numeric modifier {task["ModifierName"]["Value"]}')
+                    self.preshow_modifier(task, where)
+                    row['handling'] = 'preshow_only_modifier'
                 else:
                     raise Unsupported(f'task {kind}')
-            except (KeyError, IndexError, Unsupported) as error:
+            except (KeyError, IndexError, ValueError, TypeError) as error:
                 row['handling'] = 'rejected'
-                raise Unsupported(f'{where}: {error}') from error
+                message = str(error)
+                raise Unsupported(message if message.startswith(where + '/') or message.startswith(where + ':')
+                                  else f'{where}: {message}') from error
         return effects
 
 

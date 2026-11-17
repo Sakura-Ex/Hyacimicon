@@ -6,6 +6,7 @@ support does not imply every raw opcode has been identified.
 """
 import base64
 import math
+from config_schema import number as validate_number
 
 
 def stable_hash(name: str) -> str:
@@ -29,12 +30,13 @@ def constant(value: object) -> dict:
     return {'op': 'constant', 'value': float(value)}
 
 
-def compile_expression(value: dict, bindings: dict[str, float]) -> dict:
+def compile_expression(value: dict, bindings: dict[str, float], pointer: str = 'expression') -> dict:
     """Preserve unresolved dynamic loads for runtime lookup, never replace by zero.
 
     Args:
         value: Literal or raw PostfixExpr numeric configuration.
         bindings: Explicit immutable parameters resolved from Config/Excel rows.
+        pointer: Source JSON pointer for exact wrapper-field diagnostics.
 
     Returns:
         A typed numeric expression consumed by battle_core::expression.
@@ -42,6 +44,7 @@ def compile_expression(value: dict, bindings: dict[str, float]) -> dict:
     Raises:
         ValueError: Malformed bytecode, unknown operation, or nonfinite literal.
     """
+    validate_number(value, pointer)
     if 'Value' in value:
         return constant(value['Value'])
     if value.get('IsDynamic') is False:

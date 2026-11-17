@@ -132,7 +132,7 @@ https://github.com/Sakura-Ex/hsr-currency-wars-ai/pull/8#issuecomment-6922807938
 
 ```text
 python tools/config_actions.py REQUEST.json COMPILED.json
-python -m unittest discover -s tools -p test_config_actions.py
+python -m unittest discover -s tools -p "test_*.py"
 ```
 
 The request provides `ability_files`, `entry`, explicit numeric `bindings`,
@@ -148,6 +148,30 @@ callbacks (including OnEnd) reject at their source pointer before lowering; empt
 unsupported fields are recorded. TargetInfo, when present, must specify only
 SkillTargetEntityList. Unused Modifier definitions are declarations; referenced
 modifiers are validated by AddModifier.
+
+Every handled regular-skill task now uses a closed field contract, including
+presentation/wait/marker tasks. Camera, movement, target aliases, reference names,
+predicates, delay parameters and numeric wrappers are checked recursively at
+their consumed fields. Unknown fields (even empty payloads) and hidden task lists
+reject at their exact JSON pointer. `WaitSecond` accepts the inspected `WaitTime`
+field; an unrelated `Seconds` spelling is not inferred. `ModifyCurrentSkillDelayCost`
+permits an omitted target under the existing self-delay contract or an explicit
+Caster, never an ignored enemy target. `TriggerAbility` likewise requires the
+selected explicit Caster reference contract. Preshow modifiers may only contain
+the inspected preview structure, explicitly bound local values and optional
+OnActionEnd/RemoveSelfModifier bookkeeping; unknown callbacks or fields reject.
+The common numeric shape check also protects runtime expression lowering,
+including all supplied literal/fixed/postfix operand wrappers.
+
+Regular-context predicates select one branch using supplied active points and
+the declared non-insert/caster-turn context. Both branch containers must be lists;
+the excluded branch is recorded as `not_selected_declared_regular_context`, with
+its pointer and task count, and is not claimed as compiled or validated native
+logic. This preserves the selected actual regular-skill chains, whose excluded
+insert-only branches require other mechanisms. Runtime conditional lowering
+continues to check both executable branches. The field schemas cover selected
+inspected source structures, not arbitrary native camera/ability formats; new
+fields require an explicit supported interpretation before acceptance.
 
 Explicit `CanTriggerLastKill` values other than boolean `true` reject. For the
 legacy regular-skill compiler, an omitted value retains its documented direct-hit
