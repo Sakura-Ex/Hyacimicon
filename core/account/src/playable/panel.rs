@@ -10,6 +10,7 @@ use crate::{
 use super::{
     BASE_CRIT_DAMAGE, CharacterPanel, PanelStat,
     attributes::{Attribute, AttributeValues},
+    conversion::ConversionError,
 };
 
 /// 将一个来源的属性加入合计。
@@ -24,12 +25,12 @@ fn bonus(values: &AttributeValues, key: Attribute) -> f64 {
     values.get(&key).copied().unwrap_or(0.0)
 }
 
-/// 计算面板；属性合计包含遗器、行迹以及适用的常驻光锥与套装属性。
+/// 计算并检查最终面板，拒绝非有限分量及总值。
 pub(super) fn calculate(
     character: &CharacterData,
     cone: &LightConeData,
     values: &AttributeValues,
-) -> CharacterPanel {
+) -> Result<CharacterPanel, ConversionError> {
     let scaled = |base, flat, percent| PanelStat {
         base,
         added: base * bonus(values, percent) + bonus(values, flat),
@@ -49,7 +50,7 @@ pub(super) fn calculate(
         (value != 0.0).then_some((element, value))
     })
     .collect::<BTreeMap<_, _>>();
-    CharacterPanel {
+    let panel = CharacterPanel {
         hp: scaled(
             character.base.hp + cone.base.hp,
             Attribute::Hp,
@@ -82,7 +83,33 @@ pub(super) fn calculate(
         all_damage_boost: bonus(values, Attribute::AllDamageBoost),
         elemental_damage_boost,
         elation: bonus(values, Attribute::Elation),
+    };
+    let finite_scaled = [&panel.hp, &panel.attack, &panel.defense, &panel.speed]
+        .into_iter()
+        .all(|stat| stat.base.is_finite() && stat.added.is_finite() && stat.total().is_finite());
+    let finite_other = [
+        panel.aggro,
+        panel.crit_rate,
+        panel.crit_damage,
+        panel.effect_hit_rate,
+        panel.effect_resistance,
+        panel.break_effect,
+        panel.energy_regeneration_rate,
+        panel.outgoing_healing_boost,
+        panel.incoming_healing_boost,
+        panel.all_damage_boost,
+        panel.elation,
+    ]
+    .into_iter()
+    .chain(panel.elemental_damage_boost.values().copied())
+    .all(f64::is_finite);
+    if !finite_scaled || !finite_other {
+        return Err(ConversionError(format!(
+            "角色 {} 的静态面板包含非有限数值",
+            character.id
+        )));
     }
+    Ok(panel)
 }
 
 impl From<RelicMainStat> for Attribute {

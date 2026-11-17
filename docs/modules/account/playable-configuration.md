@@ -4,7 +4,7 @@
 
 ## 输入与交付
 
-公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID 和已核对的角色 ID 对照。角色来源由原始账号的实际持有情况确定，缺少必需资料或资源引用冲突时返回 `ConversionError`。
+公开入口 `playable::conversion::convert_playable_account(raw, data, request)` 接收 `RawAccount`、`PlayableData` 和 `ConversionRequest`，输出 `PlayableAccount`。请求包含输出配置 ID 和已核对的角色 ID 对照。角色来源由原始账号的实际持有情况确定，缺少必需资料、面板数值运算产生非有限结果或资源引用冲突时返回 `ConversionError`。
 
 账号模块完成来源选择、练度保底、技能加级和静态属性计算。局面模拟使用这份配置维护实际阵容。战斗输入组装再根据局面、敌人和游戏资料计算开战属性、固定系数及动作参数；战斗引擎执行战斗流程，实时处理 buff 和触发效果。调用关系见[账号数据流](../account-generation/data-flow.md)。
 

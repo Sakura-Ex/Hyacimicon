@@ -556,3 +556,48 @@ fn rejects_bad_relic_references_even_when_another_piece_triggers_mapping() {
         "角色 1004 引用的遗器 example:full:2 不存在"
     );
 }
+
+#[test]
+fn rejects_panels_that_overflow_when_finite_percent_bonuses_are_scaled() {
+    let data = PlayableData::bundled().unwrap();
+    for stat in [
+        RelicSubStat::HpPercent,
+        RelicSubStat::AtkPercent,
+        RelicSubStat::DefPercent,
+    ] {
+        let mut raw = fully_equipped_account();
+        raw.relics[0].substats.insert(stat, 1e308);
+        let Err(error) = convert_playable_account(&raw, &data, &request()) else {
+            panic!("百分比属性乘基础值溢出时应返回错误");
+        };
+        assert_eq!(error.0, "角色 1004 的静态面板包含非有限数值");
+    }
+    let mut raw = fully_equipped_account();
+    raw.relics[0]
+        .substats
+        .insert(RelicSubStat::AtkPercent, 1e100);
+    let result = convert_playable_account(&raw, &data, &request()).unwrap();
+    let welt = result
+        .characters
+        .iter()
+        .find(|role| role.character_id == "1004")
+        .unwrap();
+    assert!(welt.panel.attack.total().is_finite());
+}
+
+#[test]
+fn rejects_panels_whose_finite_base_and_added_overflow_when_combined() {
+    let mut data = PlayableData::bundled().unwrap();
+    data.characters
+        .iter_mut()
+        .find(|role| role.id == "1004")
+        .unwrap()
+        .base
+        .attack = 1e308;
+    let mut raw = fully_equipped_account();
+    raw.relics[0].substats.insert(RelicSubStat::AtkPercent, 1.0);
+    let Err(error) = convert_playable_account(&raw, &data, &request()) else {
+        panic!("基础值和加成相加溢出时应返回错误");
+    };
+    assert_eq!(error.0, "角色 1004 的静态面板包含非有限数值");
+}

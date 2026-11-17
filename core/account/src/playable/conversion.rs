@@ -192,9 +192,6 @@ pub fn convert_playable_account(
                 }
             }
         }
-        if values.values().any(|value| !value.is_finite()) {
-            return Err(ConversionError(format!("角色 {id} 的属性包含非有限数值")));
-        }
         characters.push(PlayableCharacter {
             character_id: id.clone(),
             origin: match owned {
@@ -208,7 +205,7 @@ pub fn convert_playable_account(
             traces,
             light_cone,
             relics,
-            panel: panel::calculate(definition, cone_data, &values),
+            panel: panel::calculate(definition, cone_data, &values)?,
         });
     }
     Ok(PlayableAccount {
