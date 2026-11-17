@@ -60,7 +60,7 @@ pub fn simulate_with_policy(
 ) -> Result<BattleResult, String> {
     let mut session = BattleSession::new(input, seed, trace)?;
     loop {
-        let (id, choice) = match session.advance_cancellable(cancel)? {
+        let (id, choice) = match session.advance_continuous(cancel)? {
             BattleStep::Decision(decision) => (
                 decision.id,
                 policy.decide(decision.point, &decision.observation, &decision.legal),

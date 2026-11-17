@@ -21,12 +21,16 @@ flowchart LR
 | `Decision` | 保存本场递增的`id`、决策点`point`、当前`observation`和合法操作`legal`。 |
 | `submit(id, choice)` | 验证决策ID和合法性后执行选择。旧ID、重复提交、非法操作和普通回合的空选择在修改状态前报错，当前决策仍可重试。 |
 | `BattleStep` | 通过`Decision`或`Finished`两种结果表示当前停在哪里。 |
-| `advance_cancellable` | 在推进边界检查取消；模型等待期间也可以取消，得到`Incomplete/Cancelled`快照。 |
+| `advance_cancellable` | 在推进边界、模型等待期间及插入提交后恢复推进前检查取消，得到`Incomplete/Cancelled`快照。 |
 | `into_result` | 消费已完成会话并取得最终结果。 |
 
 等待外部推理期间，时间推进、技能付费、事件分派和随机采样均停在当前决策点。重复读取保持同一决策ID和相同观测。
 
 普通Turn和额外Turn的`submit`执行一个完整Action。插入窗口的`submit`登记预选终结技请求；后续`advance`在该请求实际入Turn时检查资源并支付能量。`None`表示放弃本次插入机会。`legal`为空的插入窗口也可以直接提交`None`。
+
+公开分步接口在插入提交后恢复时先处理取消，防止等待期间的取消信号被漏过。同步`Policy`适配器连续调用同一调度实现，保留原有动作边界的取消轮询时点。
+
+`unit_before_cycle=true`时，已登记的即时插入先于同刻Cycle执行，普通单位在这些插入后结束Turn；其他同刻策略下，已进入的普通Turn也完成收尾，再处理到期Cycle。
 
 ## 推理与训练读取什么
 
@@ -79,6 +83,10 @@ let result = battle.into_result()?;
 - 四个公开示例逐决策驱动与同步运行的完整结果一致。
 - 终结技登记请求与实际入Turn付费的顺序。
 - 模型等待期间取消，返回未完成快照。
+- 插入提交后恢复时取消，保持AV和终结技能量，完成结果重复读取保持稳定。
 - 额度归零时先完成已进入的单位Turn，再发生CycleEnd；清场可独立提前结束。
+- 插入优先策略下，追击在普通TurnEnd前保有增益；Cycle优先策略下，单位回合先收尾，再处理倒计时。
 
 测试位于`core/battle/tests/session.rs`；其余现有回归继续检查波次、资源、监听、种子、CLI和批次统计。
+
+2026-11-17验证：workspace共168项Rust测试通过，其中分步会话10项；战斗crate严格Clippy、workspace格式检查和四个场景的可执行分步示例通过。独立评审首轮的取消恢复与同刻插入两项反例已修复并按原输入复验。

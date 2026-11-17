@@ -6,6 +6,7 @@ use battle_core::{
     engine::{simulate, BattleSession, BattleStep},
     expression::Expression,
     model::*,
+    modifiers::{Lifetime, ModifierDefinition, Property, PropertyChange, StackMode, TickUnit},
 };
 use common::*;
 
@@ -213,6 +214,61 @@ fn cancellation_while_waiting_returns_an_incomplete_snapshot_without_an_action()
 }
 
 #[test]
+fn cancellation_after_insert_submission_prevents_time_advance_and_ultimate_payment() {
+    for choose_ultimate in [false, true] {
+        let mut hero = unit("hero", 100.0);
+        hero.initial_energy = 100.0;
+        if choose_ultimate {
+            let mut ultimate = action("ultimate", vec![damage(1000.0, Target::AllEnemies)]);
+            ultimate.kind = ActionKind::Ultimate;
+            ultimate.energy_cost = 100.0;
+            hero.actions.insert(0, ultimate);
+        }
+        let input = validate(scenario(vec![hero], vec![vec![unit("enemy", 1.0)]])).unwrap();
+        let mut session = BattleSession::new(&input, 7, true).unwrap();
+        let d = decision(&mut session);
+        assert_eq!(d.point, DecisionPoint::Insert);
+        let choice = if choose_ultimate {
+            d.legal.first().cloned()
+        } else {
+            None
+        };
+        session.submit(d.id, choice).unwrap();
+        let mut polls = 0;
+        match session
+            .advance_cancellable(&mut || {
+                polls += 1;
+                true
+            })
+            .unwrap()
+        {
+            BattleStep::Finished(result) => {
+                assert_eq!(result.outcome, Outcome::Incomplete);
+                assert_eq!(result.termination, Termination::Cancelled);
+                assert_eq!(result.actions, 0);
+                close(result.elapsed_av, 0.0);
+                close(state(result, "hero").energy, 100.0);
+                close(state(result, "enemy").hp, 1000.0);
+                assert!(!result.events.iter().any(|e| e.kind == "energy_cost"));
+            }
+            BattleStep::Decision(_) => panic!("resume must observe cancellation first"),
+        }
+        assert_eq!(polls, 1);
+        let mut polled_again = false;
+        assert!(matches!(
+            session
+                .advance_cancellable(&mut || {
+                    polled_again = true;
+                    true
+                })
+                .unwrap(),
+            BattleStep::Finished(_)
+        ));
+        assert!(!polled_again);
+    }
+}
+
+#[test]
 fn execution_error_ends_the_session_and_cannot_be_retried_on_partially_changed_state() {
     let mut hero = unit("hero", 100.0);
     hero.actions[0].effects = vec![Effect::DynamicEnergy {
@@ -310,5 +366,96 @@ fn elimination_is_an_independent_trigger_and_can_finish_before_the_countdown_tur
         assert_eq!(result.actions, 1);
         close(result.remaining_av, 0.0);
         assert!(!result.events.iter().any(|e| e.kind == "cycle_end"));
+    }
+}
+
+#[test]
+fn zero_budget_preserves_insert_priority_and_turn_owned_modifiers_until_followup() {
+    for unit_before_cycle in [false, true] {
+        let mut hero = unit("hero", 100.0);
+        let mut follow = action("follow", vec![damage(600.0, Target::AllEnemies)]);
+        follow.kind = ActionKind::FollowUp;
+        hero.actions = vec![
+            action(
+                "hit",
+                vec![
+                    damage(1000.0, Target::AllEnemies),
+                    Effect::Request {
+                        kind: RequestKind::FollowUp,
+                        action: Some("follow".into()),
+                        target: Target::SelfUnit,
+                    },
+                ],
+            ),
+            follow,
+        ];
+        let mut enemy = unit("enemy", 1.0);
+        enemy.revival = Some(Revival {
+            charges: 1,
+            hp_fraction: 1.0,
+            av_penalty: 50.0,
+        });
+        let mut s = scenario(vec![hero], vec![vec![enemy]]);
+        s.max_av = 150.0;
+        s.mechanics.unit_before_cycle = unit_before_cycle;
+        s.mechanics.modifier_definitions.insert(
+            "buff".into(),
+            ModifierDefinition {
+                stack_mode: StackMode::ReplaceBySource,
+                max_stacks: 1,
+                lifetime: Some(Lifetime {
+                    event: BattleEvent::TurnEnd,
+                    unit: TickUnit::Owner,
+                    ticks: 1,
+                }),
+                properties: vec![PropertyChange {
+                    property: Property::DamageBonus,
+                    value: Expression::Constant { value: 1.0 },
+                }],
+            },
+        );
+        let mut start = hook(
+            "hero",
+            BattleEvent::BattleStart,
+            vec![Effect::AddModifier {
+                id: "buff".into(),
+                stacks: Expression::Constant { value: 1.0 },
+                target: Target::SelfUnit,
+            }],
+        );
+        start.subject = None;
+        s.mechanics.triggers.push(start);
+        let result = simulate(&validate(s).unwrap(), 7, true).unwrap();
+        close(result.remaining_av, 0.0);
+        if unit_before_cycle {
+            assert_eq!(result.outcome, Outcome::Victory);
+            assert_eq!(result.actions, 2);
+            close(state(&result, "enemy").hp, 0.0);
+            let hit = result
+                .events
+                .iter()
+                .find(|e| e.kind == "damage" && e.action.as_deref() == Some("follow"))
+                .unwrap();
+            assert_eq!(hit.amount, Some(1200.0));
+            assert!(!result.events.iter().any(|e| e.kind == "modifier_expired"
+                || e.kind == "normal_turn_end"
+                || e.kind == "cycle_end"));
+        } else {
+            assert_eq!(result.outcome, Outcome::Defeat);
+            assert_eq!(result.termination, Termination::AvBudgetExhausted);
+            assert_eq!(result.actions, 1);
+            close(state(&result, "enemy").hp, 1000.0);
+            let turn_end = result
+                .events
+                .iter()
+                .position(|e| e.kind == "normal_turn_end")
+                .unwrap();
+            let cycle_end = result
+                .events
+                .iter()
+                .position(|e| e.kind == "cycle_end")
+                .unwrap();
+            assert!(turn_end < cycle_end);
+        }
     }
 }

@@ -47,7 +47,7 @@ impl<'input> BattleSession<'input> {
         self.advance_cancellable(&mut || false)
     }
 
-    /// 在动作边界检查取消；外部模型等待中的决策也可以取消。
+    /// 在动作边界检查取消；等待决策及提交插入后恢复推进时也检查取消。
     ///
     /// 已完成的结果优先返回。取消产生`Incomplete/Cancelled`快照，
     /// 完整Action执行期间保持原子性。运行错误结束会话并保留错误原因。
@@ -55,9 +55,18 @@ impl<'input> BattleSession<'input> {
         &mut self,
         cancel: &mut impl FnMut() -> bool,
     ) -> Result<BattleStep<'_>, String> {
-        if matches!(self.phase, Phase::Awaiting(_)) && cancel() {
+        if matches!(self.phase, Phase::Awaiting(_) | Phase::AfterInsert) && cancel() {
             self.conclude(Outcome::Incomplete, Termination::Cancelled);
         }
+        self.advance_continuous(cancel)
+    }
+
+    /// 同步适配器连续选招后恢复原调度，沿用连续运行的边界取消轮询。
+    /// 公开分步入口在调用本函数前另检查外部暂停期间的取消信号。
+    pub(super) fn advance_continuous(
+        &mut self,
+        cancel: &mut impl FnMut() -> bool,
+    ) -> Result<BattleStep<'_>, String> {
         if let Err(error) = self.advance_inner(cancel) {
             self.phase = Phase::Failed(error.clone());
             return Err(error);
@@ -221,7 +230,9 @@ impl<'input> BattleSession<'input> {
                 }
                 // 负责人确认（2026-11-17）：清场/全灭与倒计时回合结束是独立
                 // 结算触发。额度归零时，已进入的单位Turn先完成收尾。
-                if self.state.timeline.remaining == 0.0 {
+                if self.state.timeline.remaining == 0.0
+                    && !input.scenario().mechanics.unit_before_cycle
+                {
                     if let Some(actor) = self.state.turn {
                         self.end_normal_turn(actor)?;
                         continue;
@@ -232,7 +243,8 @@ impl<'input> BattleSession<'input> {
                     return Ok(());
                 }
                 let zero_time_due = input.scenario().mechanics.unit_before_cycle
-                    && (!self.state.pending.is_empty()
+                    && (self.state.turn.is_some()
+                        || !self.state.pending.is_empty()
                         || self
                             .state
                             .units
