@@ -1,4 +1,5 @@
-//! Synthetic vectors evaluated by the pinned MIT HSR_Nous expression engine.
+//! 用固定参考向量核对伤害、治疗与护盾计算。
+//! 向量来源与版本记录见 fixtures/math-oracle.json。
 use battle_core::math::{damage, heal, shield, DamageInput};
 use serde_json::Value;
 fn close(actual: f64, expected: f64) {
