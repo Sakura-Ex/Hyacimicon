@@ -48,8 +48,12 @@ impl State<'_> {
         Ok(())
     }
 
-    /// 生成决策数据；该步骤只读当前状态，选招由调用方单独完成。
-    pub(super) fn decision(&self, point: DecisionPoint, actor: Option<usize>, id: u64) -> Decision {
+    /// 只生成当前合法操作；决策快照与倒计时收尾共用同一规则。
+    pub(super) fn legal_operations(
+        &self,
+        point: DecisionPoint,
+        actor: Option<usize>,
+    ) -> Vec<Operation> {
         let mut legal = Vec::new();
         for (i, u) in self.units.iter().enumerate() {
             if !u.alive() || actor.is_some_and(|a| a != i) {
@@ -96,6 +100,12 @@ impl State<'_> {
                 .then(a.action.cmp(&b.action))
             });
         }
+        legal
+    }
+
+    /// 生成决策数据；该步骤只读当前状态，选招由调用方单独完成。
+    pub(super) fn decision(&self, point: DecisionPoint, actor: Option<usize>, id: u64) -> Decision {
+        let legal = self.legal_operations(point, actor);
         let mut axis: Vec<_> = self
             .units
             .iter()

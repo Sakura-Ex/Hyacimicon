@@ -55,7 +55,16 @@ impl<'input> BattleSession<'input> {
         &mut self,
         cancel: &mut impl FnMut() -> bool,
     ) -> Result<BattleStep<'_>, String> {
-        if matches!(self.phase, Phase::Awaiting(_) | Phase::AfterInsert) && cancel() {
+        // 已放弃插入且仅剩到期回合收尾时，先完成TurnEnd/CycleEnd。
+        // 其他恢复点仍在推进时间或执行新Action前观察暂停期间的取消。
+        let finishing_turn = matches!(self.phase, Phase::AfterInsert)
+            && self.state.timeline.remaining == 0.0
+            && self.state.turn.is_some()
+            && self.state.pending.is_empty();
+        if !finishing_turn
+            && matches!(self.phase, Phase::Awaiting(_) | Phase::AfterInsert)
+            && cancel()
+        {
             self.conclude(Outcome::Incomplete, Termination::Cancelled);
         }
         self.advance_continuous(cancel)
@@ -230,12 +239,18 @@ impl<'input> BattleSession<'input> {
                 }
                 // 负责人确认（2026-11-17）：清场/全灭与倒计时回合结束是独立
                 // 结算触发。额度归零时，已进入的单位Turn先完成收尾。
-                if self.state.timeline.remaining == 0.0
-                    && !input.scenario().mechanics.unit_before_cycle
-                {
+                if self.state.timeline.remaining == 0.0 {
                     if let Some(actor) = self.state.turn {
-                        self.end_normal_turn(actor)?;
-                        continue;
+                        let insert_first = input.scenario().mechanics.unit_before_cycle
+                            && (!self.state.pending.is_empty()
+                                || !self
+                                    .state
+                                    .legal_operations(DecisionPoint::Insert, None)
+                                    .is_empty());
+                        if !insert_first {
+                            self.end_normal_turn(actor)?;
+                            continue;
+                        }
                     }
                 }
                 if self.state.exhausted {

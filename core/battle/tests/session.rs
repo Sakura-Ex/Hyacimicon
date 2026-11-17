@@ -459,3 +459,94 @@ fn zero_budget_preserves_insert_priority_and_turn_owned_modifiers_until_followup
         }
     }
 }
+
+#[test]
+fn zero_time_turn_bookkeeping_finishes_before_new_action_limits_or_cancellation() {
+    for cancel_after_action in [false, true] {
+        let mut s = scenario(vec![unit("hero", 100.0)], vec![vec![unit("enemy", 1.0)]]);
+        s.max_av = 100.0;
+        s.max_actions = if cancel_after_action { 1000 } else { 1 };
+        s.mechanics.unit_before_cycle = true;
+        s.mechanics.triggers.push(hook(
+            "hero",
+            BattleEvent::TurnEnd,
+            vec![Effect::Energy {
+                amount: 7.0,
+                target: Target::SelfUnit,
+            }],
+        ));
+        let input = validate(s).unwrap();
+        let mut session = BattleSession::new(&input, 7, true).unwrap();
+        let d = turn(&mut session);
+        close(d.observation.cycle_remaining_av, 0.0);
+        session.submit(d.id, d.legal.first().cloned()).unwrap();
+        let mut polls = 0;
+        match session
+            .advance_cancellable(&mut || {
+                polls += 1;
+                cancel_after_action
+            })
+            .unwrap()
+        {
+            BattleStep::Finished(result) => {
+                assert_eq!(result.outcome, Outcome::Defeat);
+                assert_eq!(result.termination, Termination::AvBudgetExhausted);
+                assert_eq!(result.actions, 1);
+                close(state(result, "hero").energy, 7.0);
+                let turn_end = result
+                    .events
+                    .iter()
+                    .position(|e| e.kind == "normal_turn_end")
+                    .unwrap();
+                let cycle_end = result
+                    .events
+                    .iter()
+                    .position(|e| e.kind == "cycle_end")
+                    .unwrap();
+                assert!(turn_end < cycle_end);
+            }
+            BattleStep::Decision(_) => panic!("only turn/cycle bookkeeping remains"),
+        }
+        assert_eq!(polls, 0);
+    }
+}
+
+#[test]
+fn declining_the_last_insert_finishes_the_expired_turn_before_new_cancellation() {
+    let mut hero = unit("hero", 100.0);
+    hero.actions[0].energy_gain = 100.0;
+    let mut ultimate = action("ultimate", vec![damage(1.0, Target::AllEnemies)]);
+    ultimate.kind = ActionKind::Ultimate;
+    ultimate.energy_cost = 100.0;
+    hero.actions.push(ultimate);
+    let mut s = scenario(vec![hero], vec![vec![unit("enemy", 1.0)]]);
+    s.max_av = 100.0;
+    s.mechanics.unit_before_cycle = true;
+    let input = validate(s).unwrap();
+    let mut session = BattleSession::new(&input, 7, true).unwrap();
+    let d = turn(&mut session);
+    session.submit(d.id, d.legal.first().cloned()).unwrap();
+    let insert = decision(&mut session);
+    assert_eq!(insert.point, DecisionPoint::Insert);
+    assert_eq!(insert.legal.len(), 1);
+    close(insert.observation.cycle_remaining_av, 0.0);
+    session.submit(insert.id, None).unwrap();
+    let mut polls = 0;
+    match session
+        .advance_cancellable(&mut || {
+            polls += 1;
+            true
+        })
+        .unwrap()
+    {
+        BattleStep::Finished(result) => {
+            assert_eq!(result.termination, Termination::AvBudgetExhausted);
+            assert_eq!(result.actions, 1);
+            close(state(result, "hero").energy, 100.0);
+            assert!(result.events.iter().any(|e| e.kind == "normal_turn_end"));
+            assert!(result.events.iter().any(|e| e.kind == "cycle_end"));
+        }
+        BattleStep::Decision(_) => panic!("declined insert leaves only turn/cycle bookkeeping"),
+    }
+    assert_eq!(polls, 0);
+}
