@@ -4,16 +4,23 @@ use super::*;
 /// 推进到的外部可见边界。借用结束后可以向同一会话提交选择。
 #[derive(Debug)]
 pub enum BattleStep<'session> {
+    /// 等待调用方回答的决策引用。
     Decision(&'session Decision),
+    /// 已经完成的战斗结果。
     Finished(&'session BattleResult),
 }
 
 /// 本场推进阶段；决策、完成结果与失败互斥。
 enum Phase {
+    /// 公共调度边界。
     Boundary,
+    /// 插入选择提交后恢复排队请求或普通行动。
     AfterInsert,
+    /// 等待外部策略提交的决策。
     Awaiting(Decision),
+    /// 已经完成的战斗结果。
     Finished(Box<BattleResult>),
+    /// 执行失败的原始原因，后续调用继续返回错误。
     Failed(String),
 }
 
@@ -22,21 +29,47 @@ enum Phase {
 /// `advance`推进到下一个决策或结果；`submit`验证并执行选择。
 /// 等待外部推理期间，读取同一决策保持AV、资源和随机流不变。
 pub struct BattleSession<'input> {
+    /// 所属对象的当前运行状态。
     state: State<'input>,
-    seed: u64,
+    /// 下一个会话内递增决策编号。
     next_decision_id: u64,
+    /// 当前互斥推进阶段。
     phase: Phase,
 }
 
 impl<'input> BattleSession<'input> {
     /// 创建独立状态，执行开战与首波事件，暂不调用任何选招策略。
-    pub fn new(input: &'input ValidatedScenario, seed: u64, trace: bool) -> Result<Self, String> {
-        let mut state = State::new(input, seed, trace);
+    pub fn new(input: &'input Scenario, seed: u64) -> Result<Self, String> {
+        Self::create(
+            input,
+            seed,
+            #[cfg(feature = "diagnostics")]
+            false,
+        )
+    }
+
+    /// 创建开发会话；trace 指定是否收集回放，规则执行与正式入口共用。
+    #[cfg(feature = "diagnostics")]
+    pub fn with_trace(input: &'input Scenario, seed: u64, trace: bool) -> Result<Self, String> {
+        Self::create(input, seed, trace)
+    }
+
+    /// 初始化本场状态和开战事件，诊断选项在正式构建中被排除。
+    fn create(
+        input: &'input Scenario,
+        seed: u64,
+        #[cfg(feature = "diagnostics")] trace: bool,
+    ) -> Result<Self, String> {
+        let mut state = State::new(
+            input,
+            seed,
+            #[cfg(feature = "diagnostics")]
+            trace,
+        );
         state.dispatch(BattleEvent::BattleStart, None, None)?;
         state.dispatch(BattleEvent::WaveStart, None, None)?;
         Ok(Self {
             state,
-            seed,
             next_decision_id: 0,
             phase: Phase::Boundary,
         })
@@ -129,6 +162,7 @@ impl<'input> BattleSession<'input> {
         }
     }
 
+    /// 执行普通或额外回合选择，插入窗口只登记终结技。
     fn execute_choice(
         &mut self,
         point: DecisionPoint,
@@ -148,14 +182,22 @@ impl<'input> BattleSession<'input> {
             if point == DecisionPoint::ExtraTurn {
                 self.state
                     .dispatch(BattleEvent::TurnEnd, Some(op.actor), None)?;
-                self.state
-                    .emit("extra_turn_end", op.actor, None, None, None, None);
+                trace!(
+                    self.state,
+                    "extra_turn_end",
+                    op.actor,
+                    None,
+                    None,
+                    None,
+                    None
+                );
             }
             self.phase = Phase::Boundary;
         }
         Ok(())
     }
 
+    /// 创建当前决策并递增会话内编号。
     fn pause(&mut self, point: DecisionPoint, actor: Option<usize>) -> Result<(), String> {
         let id = self.next_decision_id;
         self.next_decision_id = id.checked_add(1).ok_or("decision sequence exhausted")?;
@@ -163,21 +205,18 @@ impl<'input> BattleSession<'input> {
         Ok(())
     }
 
+    /// 判断当前存活敌人与待入场有限队列是否仍有单位。
     fn enemies_present(&self) -> bool {
-        let input = self.state.input.scenario();
+        let input = self.state.input;
         let queued = input.mechanics.queue_capacity.is_some()
             && self.state.queue_next < input.waves[0].len();
         queued || self.state.units.iter().any(|u| !u.ally && u.alive())
     }
 
+    /// 保存完成结果并结束本场推进。
     fn conclude(&mut self, outcome: Outcome, termination: Termination) {
         let cleared = self.state.wave + usize::from(!self.enemies_present());
-        self.phase = Phase::Finished(Box::new(self.state.finish(
-            self.seed,
-            outcome,
-            termination,
-            cleared,
-        )));
+        self.phase = Phase::Finished(Box::new(self.state.finish(outcome, termination, cleared)));
     }
 
     /// 清场/全灭独立触发结算；未来波次或尚未入场的队列仍参与敌方存在判断。
@@ -187,7 +226,7 @@ impl<'input> BattleSession<'input> {
         let end = match (allies, enemies) {
             (false, false) => Some((Outcome::Draw, Termination::BothDefeated)),
             (false, true) => Some((Outcome::Defeat, Termination::AlliesDefeated)),
-            (true, false) if self.state.wave + 1 == self.state.input.scenario().waves.len() => {
+            (true, false) if self.state.wave + 1 == self.state.input.waves.len() => {
                 Some((Outcome::Victory, Termination::EnemiesDefeated))
             }
             _ => None,
@@ -200,6 +239,7 @@ impl<'input> BattleSession<'input> {
         }
     }
 
+    /// 分派普通回合结束事件并重置距离、应用下次提前。
     fn end_normal_turn(&mut self, actor: usize) -> Result<(), String> {
         self.state
             .dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
@@ -207,7 +247,8 @@ impl<'input> BattleSession<'input> {
             (DISTANCE - self.state.units[actor].next_shift).max(0.0);
         self.state.units[actor].next_shift = 0.0;
         self.state.turn = None;
-        self.state.emit(
+        trace!(
+            self.state,
             "normal_turn_end",
             actor,
             None,
@@ -218,6 +259,7 @@ impl<'input> BattleSession<'input> {
         Ok(())
     }
 
+    /// 按战斗边界推进换波、倒计时、插入及普通行动，直到暂停或结束。
     fn advance_inner(&mut self, cancel: &mut impl FnMut() -> bool) -> Result<(), String> {
         let input = self.state.input;
         loop {
@@ -227,12 +269,10 @@ impl<'input> BattleSession<'input> {
                 }
                 if !self.enemies_present() {
                     self.state.wave += 1;
-                    for u in &input.scenario().waves[self.state.wave] {
-                        self.state.units.push(CombatUnit::new(
-                            u,
-                            false,
-                            &input.scenario().mechanics,
-                        ));
+                    for u in &input.waves[self.state.wave] {
+                        self.state
+                            .units
+                            .push(CombatUnit::new(u, false, &input.mechanics));
                     }
                     self.state.dispatch(BattleEvent::WaveStart, None, None)?;
                     continue;
@@ -243,7 +283,7 @@ impl<'input> BattleSession<'input> {
                     if let Some(actor) = self.state.turn {
                         // 完整Action后的补位先于TurnEnd，也先于新入场单位的插入检查。
                         self.state.refill_queue();
-                        let insert_first = input.scenario().mechanics.unit_before_cycle
+                        let insert_first = input.mechanics.unit_before_cycle
                             && (!self.state.pending.is_empty()
                                 || !self
                                     .state
@@ -259,7 +299,7 @@ impl<'input> BattleSession<'input> {
                     self.conclude(Outcome::Defeat, Termination::AvBudgetExhausted);
                     return Ok(());
                 }
-                let zero_time_due = input.scenario().mechanics.unit_before_cycle
+                let zero_time_due = input.mechanics.unit_before_cycle
                     && (self.state.turn.is_some()
                         || !self.state.pending.is_empty()
                         || self
@@ -268,7 +308,8 @@ impl<'input> BattleSession<'input> {
                             .iter()
                             .any(|u| u.alive() && u.remaining == 0.0));
                 if self.state.timeline.remaining == 0.0 && !zero_time_due {
-                    self.state.emit(
+                    trace!(
+                        self.state,
                         "cycle_end",
                         0,
                         None,
@@ -286,7 +327,7 @@ impl<'input> BattleSession<'input> {
                     self.conclude(Outcome::Incomplete, Termination::Cancelled);
                     return Ok(());
                 }
-                if self.state.actions >= input.scenario().max_actions {
+                if self.state.actions >= input.max_actions {
                     self.conclude(Outcome::Incomplete, Termination::ActionLimit);
                     return Ok(());
                 }
@@ -301,13 +342,19 @@ impl<'input> BattleSession<'input> {
             if let Some(request) = self.state.pending.pop_front() {
                 let actor = request.actor;
                 if !self.state.units[actor].alive() {
-                    self.state
-                        .emit("request_invalid", actor, None, None, None, None);
+                    trace!(self.state, "request_invalid", actor, None, None, None, None);
                     continue;
                 }
                 if request.kind == RequestKind::ExtraTurn {
-                    self.state
-                        .emit("extra_turn_start", actor, None, None, None, None);
+                    trace!(
+                        self.state,
+                        "extra_turn_start",
+                        actor,
+                        None,
+                        None,
+                        None,
+                        None
+                    );
                     self.state
                         .dispatch(BattleEvent::TurnStart, Some(actor), None)?;
                     if !self.state.units[actor].alive() {
@@ -321,14 +368,14 @@ impl<'input> BattleSession<'input> {
                     .state
                     .affordable(actor, &self.state.units[actor].spec.actions[action])
                 {
-                    self.state
-                        .emit("request_invalid", actor, None, None, None, None);
+                    trace!(self.state, "request_invalid", actor, None, None, None, None);
                     continue;
                 }
                 if request.kind == RequestKind::Ultimate {
                     let skill = self.state.units[actor].spec.actions[action].clone();
                     self.state.pay(actor, &skill);
-                    self.state.emit(
+                    trace!(
+                        self.state,
                         "ultimate_turn_start",
                         actor,
                         None,
@@ -347,8 +394,7 @@ impl<'input> BattleSession<'input> {
                 if request.kind != RequestKind::FollowUp {
                     self.state
                         .dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
-                    self.state
-                        .emit("extra_turn_end", actor, None, None, None, None);
+                    trace!(self.state, "extra_turn_end", actor, None, None, None, None);
                 }
                 continue;
             }
@@ -366,8 +412,7 @@ impl<'input> BattleSession<'input> {
             )
             .ok_or("empty axis")?;
             let cycle_first = self.state.timeline.remaining < wait
-                || (self.state.timeline.remaining == wait
-                    && !input.scenario().mechanics.unit_before_cycle);
+                || (self.state.timeline.remaining == wait && !input.mechanics.unit_before_cycle);
             let delta = wait.min(self.state.timeline.remaining);
             self.state.timeline.advance(delta);
             for u in &mut self.state.units {
@@ -379,7 +424,8 @@ impl<'input> BattleSession<'input> {
                 continue;
             }
             self.state.turn = Some(actor);
-            self.state.emit(
+            trace!(
+                self.state,
                 "normal_turn_start",
                 actor,
                 None,
@@ -390,9 +436,11 @@ impl<'input> BattleSession<'input> {
             if self.state.units[actor].shield_turns > 0 {
                 self.state.units[actor].shield_turns -= 1;
                 if self.state.units[actor].shield_turns == 0 {
+                    #[cfg(feature = "diagnostics")]
                     let expired = self.state.units[actor].shield;
                     self.state.units[actor].shield = 0.0;
-                    self.state.emit(
+                    trace!(
+                        self.state,
                         "shield_expired",
                         actor,
                         Some(actor),

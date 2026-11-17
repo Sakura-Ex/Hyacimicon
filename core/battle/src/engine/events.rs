@@ -2,8 +2,9 @@
 use super::*;
 
 impl State<'_> {
+    /// 从自然弱点与当前活动状态合成单位弱点。
     pub(super) fn weakness_state(&self, owner: usize) -> Option<crate::weakness::WeaknessState> {
-        let mechanics = &self.input.scenario().mechanics;
+        let mechanics = &self.input.mechanics;
         let unit = &self.units[owner];
         let natural = mechanics.natural_weaknesses.get(&unit.spec.id)?;
         let attached = unit.modifiers.instances.iter().flat_map(|instance| {
@@ -17,6 +18,8 @@ impl State<'_> {
         Some(crate::weakness::WeaknessState::compose(natural, attached))
     }
 
+    #[cfg(feature = "diagnostics")]
+    /// 合成弱点变化时输出诊断记录。
     pub(super) fn record_weakness_change(
         &mut self,
         owner: usize,
@@ -27,7 +30,8 @@ impl State<'_> {
         if before != after {
             if let Some(after) = after {
                 // Observation only; this is not a native OnBeingStackWeakness callback.
-                self.emit(
+                trace!(
+                    self,
                     "weakness_count",
                     owner,
                     Some(owner),
@@ -39,6 +43,7 @@ impl State<'_> {
         }
     }
 
+    /// 先处理适用状态到期，再按声明顺序运行事件监听器。
     pub(super) fn dispatch(
         &mut self,
         event: BattleEvent,
@@ -50,13 +55,8 @@ impl State<'_> {
         }
         self.event_depth += 1;
         let subject_id = subject.map(|i| self.units[i].spec.id.clone());
-        let weakness_before: Vec<_> = if self
-            .input
-            .scenario()
-            .mechanics
-            .modifier_weaknesses
-            .is_empty()
-        {
+        #[cfg(feature = "diagnostics")]
+        let weakness_before: Vec<_> = if self.input.mechanics.modifier_weaknesses.is_empty() {
             Vec::new()
         } else {
             (0..self.units.len())
@@ -64,25 +64,33 @@ impl State<'_> {
                 .collect()
         };
         // Settle all expiry before callbacks. Future-wave units are absent here.
+        #[cfg(feature = "diagnostics")]
         let mut expired = vec![];
-        for (owner, unit) in self.units.iter_mut().enumerate() {
-            for modifier in unit
+        let units = self.units.iter_mut();
+        #[cfg(feature = "diagnostics")]
+        let units = units.enumerate();
+        #[cfg(not(feature = "diagnostics"))]
+        let units = units.map(|unit| ((), unit));
+        for (_owner, unit) in units {
+            let _expired = unit
                 .modifiers
-                .tick(event, subject_id.as_deref(), &unit.spec.id)
-            {
-                expired.push((owner, modifier.id));
-            }
+                .tick(event, subject_id.as_deref(), &unit.spec.id);
+            #[cfg(feature = "diagnostics")]
+            expired.extend(_expired.into_iter().map(|modifier| (_owner, modifier.id)));
         }
-        for (owner, id) in expired {
-            self.emit(
+        #[cfg(feature = "diagnostics")]
+        for (_owner, _id) in expired {
+            trace!(
+                self,
                 "modifier_expired",
-                owner,
-                Some(owner),
-                Some(&id),
+                _owner,
+                Some(_owner),
+                Some(&_id),
                 None,
                 None,
             );
         }
+        #[cfg(feature = "diagnostics")]
         for (owner, before) in weakness_before.into_iter().enumerate() {
             self.record_weakness_change(owner, before, action);
         }
@@ -129,13 +137,15 @@ impl State<'_> {
                 *left -= 1;
             }
             let effects = t.spec.effects.clone();
-            self.emit("trigger", owner, subject, action, None, None);
+            trace!(self, "trigger", owner, subject, action, None, None);
             self.apply_effects(owner, action.unwrap_or("event"), &effects)?;
         }
         self.event_depth -= 1;
         Ok(())
     }
 
+    #[cfg(feature = "diagnostics")]
+    /// 按 trace 开关与条数上限保存诊断记录。
     pub(super) fn emit(
         &mut self,
         kind: &str,
@@ -152,7 +162,7 @@ impl State<'_> {
             self.trace_truncated = true;
             return;
         }
-        self.events.push(Event {
+        self.events.push(crate::diagnostics::Event {
             index: self.events.len() as u32,
             av: self.timeline.now(),
             kind: kind.into(),
@@ -166,8 +176,17 @@ impl State<'_> {
         });
     }
 
+    /// 分派死亡事件并处理护盾清除、即时复活和当前轮罚时。
     pub(super) fn resolve_death(&mut self, target: usize, action: &str) -> Result<(), String> {
-        self.emit("death", target, Some(target), Some(action), None, None);
+        trace!(
+            self,
+            "death",
+            target,
+            Some(target),
+            Some(action),
+            None,
+            None
+        );
         self.dispatch(BattleEvent::Death, Some(target), Some(action))?;
         self.units[target].shield = 0.0;
         self.units[target].shield_turns = 0;
@@ -184,8 +203,9 @@ impl State<'_> {
                 "revival hp",
             )?;
             // Revival preserves distance and clock; only current-cycle AV is charged.
-            let applied = self.timeline.penalize(r.av_penalty);
-            self.emit(
+            let _applied = self.timeline.penalize(r.av_penalty);
+            trace!(
+                self,
                 "revive",
                 target,
                 Some(target),
@@ -193,12 +213,13 @@ impl State<'_> {
                 Some(self.units[target].hp),
                 None,
             );
-            self.emit(
+            trace!(
+                self,
                 "revival_av_penalty",
                 target,
                 Some(target),
                 Some(action),
-                Some(applied),
+                Some(_applied),
                 None,
             );
         }

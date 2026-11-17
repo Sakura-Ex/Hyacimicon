@@ -1,5 +1,5 @@
 use battle_core::batch::{derive_trial_seed, run_batch, wilson_interval, BatchRequest};
-use battle_core::engine::simulate;
+use battle_core::diagnostics::simulate;
 use battle_core::model::*;
 
 fn stats(attack: f64, speed: f64) -> Stats {
@@ -57,14 +57,6 @@ fn unit(id: &str, attack: f64, speed: f64) -> Unit {
 fn scenario(ally_attack: f64, enemy_attack: f64) -> Scenario {
     Scenario {
         mechanics: Mechanics::default(),
-        schema_version: 1,
-        ruleset: "battle_v2".into(),
-        provenance: Provenance {
-            game_version: "synthetic".into(),
-            data_snapshot: "batch-test-v1".into(),
-            description: "Synthetic battle fixture; not game data".into(),
-        },
-        unsupported_mechanics: vec![],
         max_av: 1_000.0,
         max_actions: 100,
         ally_skill_points: SkillPoints {
@@ -113,9 +105,9 @@ fn wilson_has_reference_values_and_preserves_no_observations() {
 }
 
 #[test]
-fn wins_losses_are_actual_engine_outcomes_and_settlement_stays_unknown() {
-    for (ally, enemy, wins, losses) in [(1_000.0, 0.0, 4, 0), (0.0, 1_000.0, 0, 4)] {
-        let input = validate(scenario(ally, enemy)).unwrap();
+fn completed_samples_use_only_battle_outcomes() {
+    for (ally, enemy, wins, losses) in [(1000.0, 0.0, 4, 0), (0.0, 1000.0, 0, 4)] {
+        let input = scenario(ally, enemy);
         let result = run_batch(
             &input,
             &BatchRequest {
@@ -125,20 +117,11 @@ fn wins_losses_are_actual_engine_outcomes_and_settlement_stays_unknown() {
             &mut || false,
         )
         .unwrap();
-        assert_eq!((result.total, result.started, result.completed), (4, 4, 4));
         assert_eq!(
-            (result.wins, result.losses, result.draws, result.incomplete),
-            (wins, losses, 0, 0)
+            (result.wins, result.losses, result.completed),
+            (wins, losses, 4)
         );
-        assert_eq!(result.probability_denominator, 4);
-        assert_eq!(result.run_hp_loss_unknown_count, 4);
-        assert!(result
-            .ledger
-            .iter()
-            .all(|trial| trial.run_hp_loss.is_none()));
-        let json = serde_json::to_value(&result).unwrap();
-        assert!(json["ledger"][0]["run_hp_loss"].is_null());
-        assert_eq!(result.scenario_sha256, input.fingerprint());
+        assert_eq!(result.ledger.len(), 4);
     }
 }
 
@@ -146,7 +129,7 @@ fn wins_losses_are_actual_engine_outcomes_and_settlement_stays_unknown() {
 fn action_limit_is_incomplete_and_not_a_loss_or_zero_probability() {
     let mut raw = scenario(0.0, 0.0);
     raw.max_actions = 1;
-    let input = validate(raw).unwrap();
+    let input = raw;
     let result = run_batch(&input, &BatchRequest { trials: 3, seed: 9 }, &mut || false).unwrap();
     assert_eq!(
         (
@@ -171,7 +154,7 @@ fn incomplete_trials_are_excluded_from_a_mixed_batch_denominator() {
     let mut raw = scenario(60.0, 0.0);
     raw.allies[0].stats.crit_rate = 0.5;
     raw.max_actions = 1;
-    let input = validate(raw).unwrap();
+    let input = raw;
     let result = run_batch(
         &input,
         &BatchRequest {
@@ -198,7 +181,7 @@ fn incomplete_trials_are_excluded_from_a_mixed_batch_denominator() {
 fn explicit_profile_budget_defeat_is_preserved_with_its_reason() {
     let mut raw = scenario(0.0, 0.0);
     raw.max_av = 1.0;
-    let input = validate(raw).unwrap();
+    let input = raw;
     let result = run_batch(&input, &BatchRequest { trials: 2, seed: 3 }, &mut || false).unwrap();
     assert_eq!(
         (result.completed, result.losses, result.incomplete),
@@ -214,7 +197,7 @@ fn explicit_profile_budget_defeat_is_preserved_with_its_reason() {
 
 #[test]
 fn cancellation_before_start_keeps_all_trials_unstarted() {
-    let input = validate(scenario(1_000.0, 0.0)).unwrap();
+    let input = scenario(1_000.0, 0.0);
     let result = run_batch(
         &input,
         &BatchRequest {
@@ -235,13 +218,12 @@ fn cancellation_before_start_keeps_all_trials_unstarted() {
     );
     assert!(result.cancellation_requested);
     assert_eq!(result.win_rate_ci95, None);
-    assert_eq!(result.run_hp_loss_unknown_count, 0);
     assert!(result.ledger.is_empty());
 }
 
 #[test]
 fn cancellation_propagates_into_engine_and_stops_following_trials() {
-    let input = validate(scenario(0.0, 0.0)).unwrap();
+    let input = scenario(0.0, 0.0);
     let mut polls = 0;
     let result = run_batch(
         &input,
@@ -275,7 +257,7 @@ fn trials_replay_by_index_and_interleaved_runs_do_not_leak_state() {
     let mut raw = scenario(60.0, 150.0);
     raw.allies[0].stats.speed = 101.0;
     raw.allies[0].stats.crit_rate = 0.5;
-    let input = validate(raw).unwrap();
+    let input = raw;
     let request = BatchRequest {
         trials: 64,
         seed: 1234,
@@ -293,7 +275,7 @@ fn trials_replay_by_index_and_interleaved_runs_do_not_leak_state() {
             derive_trial_seed(request.seed, u64::from(trial.index))
         );
     }
-    let other = validate(scenario(0.0, 1_000.0)).unwrap();
+    let other = scenario(0.0, 1_000.0);
     run_batch(
         &other,
         &BatchRequest {
@@ -312,7 +294,7 @@ fn trials_replay_by_index_and_interleaved_runs_do_not_leak_state() {
 
 #[test]
 fn invalid_trial_counts_are_rejected_before_cancellation_or_engine_work() {
-    let input = validate(scenario(1_000.0, 0.0)).unwrap();
+    let input = scenario(1_000.0, 0.0);
     for trials in [0, 1_000_001] {
         let mut polls = 0;
         let result = run_batch(&input, &BatchRequest { trials, seed: 1 }, &mut || {
@@ -351,7 +333,7 @@ fn json_seeds_are_lossless_decimal_strings_including_u64_max() {
         serde_json::from_str::<BatchRequest>(r#"{"trials":1,"seed":"18446744073709551616"}"#)
             .is_err()
     );
-    let input = validate(scenario(1_000.0, 0.0)).unwrap();
+    let input = scenario(1_000.0, 0.0);
     let result = run_batch(&input, &request, &mut || false).unwrap();
     let serialized = serde_json::to_value(&result).unwrap();
     assert_eq!(serialized["master_seed"], u64::MAX.to_string());

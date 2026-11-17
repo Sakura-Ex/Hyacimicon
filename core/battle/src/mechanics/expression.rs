@@ -1,51 +1,79 @@
 //! Runtime numeric expressions. Variable lookup is supplied by the owning state.
 use crate::dynamic_scope::DynamicScope;
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(
+    feature = "diagnostics",
+    serde(tag = "op", rename_all = "snake_case", deny_unknown_fields)
+)]
+/// 由常量、变量和算术运算构成的动态数值树。
 pub enum Expression {
-    Constant { value: f64 },
-    Variable { key: String },
-    ScopedVariable { scope: DynamicScope, key: String },
-    Add { left: Box<Self>, right: Box<Self> },
-    Subtract { left: Box<Self>, right: Box<Self> },
-    Multiply { left: Box<Self>, right: Box<Self> },
-    Divide { left: Box<Self>, right: Box<Self> },
-    Maximum { left: Box<Self>, right: Box<Self> },
-    Floor { value: Box<Self> },
-    Negate { value: Box<Self> },
+    /// 直接返回有限常量。
+    Constant {
+        /// 要写入、计算或应用的数值。
+        value: f64,
+    },
+    /// 读取单位持久变量。
+    Variable {
+        /// 单位或临时作用域中的变量名。
+        key: String,
+    },
+    /// 读取最内层匹配调用帧中的临时变量。
+    ScopedVariable {
+        /// 临时变量所属调用范围。
+        scope: DynamicScope,
+        /// 单位或临时作用域中的变量名。
+        key: String,
+    },
+    /// 计算两侧之和。
+    Add {
+        /// 左侧表达式。
+        left: Box<Self>,
+        /// 右侧表达式。
+        right: Box<Self>,
+    },
+    /// 计算左侧减右侧。
+    Subtract {
+        /// 左侧表达式。
+        left: Box<Self>,
+        /// 右侧表达式。
+        right: Box<Self>,
+    },
+    /// 计算两侧乘积。
+    Multiply {
+        /// 左侧表达式。
+        left: Box<Self>,
+        /// 右侧表达式。
+        right: Box<Self>,
+    },
+    /// 计算左侧除以右侧，分母为零时返回错误。
+    Divide {
+        /// 左侧表达式。
+        left: Box<Self>,
+        /// 右侧表达式。
+        right: Box<Self>,
+    },
+    /// 取两侧数值的较大值。
+    Maximum {
+        /// 左侧表达式。
+        left: Box<Self>,
+        /// 右侧表达式。
+        right: Box<Self>,
+    },
+    /// 向下取整。
+    Floor {
+        /// 要写入、计算或应用的数值。
+        value: Box<Self>,
+    },
+    /// 对数值取负。
+    Negate {
+        /// 要写入、计算或应用的数值。
+        value: Box<Self>,
+    },
 }
 
 impl Expression {
-    pub fn validate(&self) -> Result<(), String> {
-        self.validate_at(0)
-    }
-    fn validate_at(&self, depth: usize) -> Result<(), String> {
-        if depth > 32 {
-            return Err("expression nesting exceeds 32".into());
-        }
-        match self {
-            Self::Constant { value } if !value.is_finite() => {
-                Err("nonfinite expression constant".into())
-            }
-            Self::Variable { key } | Self::ScopedVariable { key, .. }
-                if key.is_empty() || key.len() > 200 =>
-            {
-                Err("invalid dynamic key".into())
-            }
-            Self::Add { left, right }
-            | Self::Subtract { left, right }
-            | Self::Multiply { left, right }
-            | Self::Divide { left, right }
-            | Self::Maximum { left, right } => {
-                left.validate_at(depth + 1)?;
-                right.validate_at(depth + 1)
-            }
-            Self::Negate { value } | Self::Floor { value } => value.validate_at(depth + 1),
-            _ => Ok(()),
-        }
-    }
     /// Missing bindings and invalid arithmetic fail; neither becomes a zero value.
     pub fn evaluate(&self, lookup: &impl Fn(&str) -> Option<f64>) -> Result<f64, String> {
         self.evaluate_with_scopes(lookup, &|_, _| None)

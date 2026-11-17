@@ -2,6 +2,7 @@
 use super::*;
 
 impl State<'_> {
+    /// 逐命中读取当前属性并结算伤害、护盾、生命和监听事件。
     pub(super) fn damage_hits(
         &mut self,
         actor: usize,
@@ -35,7 +36,7 @@ impl State<'_> {
                 )?;
                 let defender = &self.units[victim].spec.stats;
                 let resistance = if let Some(element) = self.damage_element {
-                    let profiles = &self.input.scenario().mechanics.element_profiles;
+                    let profiles = &self.input.mechanics.element_profiles;
                     let source = profiles
                         .get(&self.units[actor].spec.id)
                         .ok_or("missing attack element panel")?;
@@ -75,20 +76,19 @@ impl State<'_> {
                         crit_damage: attacker.crit_damage,
                     },
                     critical,
-                )?
-                .amount
-                    * if self.units[actor].ally {
-                        self.input.scenario().mechanics.ally_damage_factor
-                    } else {
-                        1.0
-                    };
+                )? * if self.units[actor].ally {
+                    self.input.mechanics.ally_damage_factor
+                } else {
+                    1.0
+                };
                 finite(amount, "mode damage")?;
                 let absorbed = amount.min(self.units[victim].shield);
                 self.units[victim].shield -= absorbed;
                 let hp_loss = (amount - absorbed).min(self.units[victim].hp);
                 self.units[victim].hp -= hp_loss;
                 let died_from_this_hit = self.units[victim].hp == 0.0;
-                self.emit(
+                trace!(
+                    self,
                     "damage",
                     actor,
                     Some(victim),
@@ -96,7 +96,8 @@ impl State<'_> {
                     Some(amount),
                     Some(critical),
                 );
-                self.emit(
+                trace!(
+                    self,
                     "shield_absorbed",
                     actor,
                     Some(victim),
@@ -104,7 +105,8 @@ impl State<'_> {
                     Some(absorbed),
                     None,
                 );
-                self.emit(
+                trace!(
+                    self,
                     "hp_loss",
                     actor,
                     Some(victim),

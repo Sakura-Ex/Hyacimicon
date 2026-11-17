@@ -1,18 +1,13 @@
 mod common;
 
 use battle_core::{
-    engine::{simulate, simulate_cancellable},
+    diagnostics::{simulate, simulate_cancellable},
     model::*,
 };
 use common::*;
 
 fn run(input: Scenario) -> BattleResult {
-    simulate(
-        &validate(input).expect("valid artificial scenario"),
-        42,
-        true,
-    )
-    .expect("finite artificial battle")
+    simulate(&input, 42, true).expect("finite artificial battle")
 }
 
 fn actions(result: &BattleResult) -> Vec<(&str, &str, f64)> {
@@ -66,7 +61,6 @@ fn speed_queue_and_equal_time_ties_follow_input_order() {
         .events
         .windows(2)
         .all(|pair| pair[0].av <= pair[1].av));
-    assert_eq!(result.run_hp_loss, None);
 }
 
 #[test]
@@ -428,7 +422,7 @@ fn revival_penalty_can_exhaust_budget_without_advancing_natural_time() {
 fn action_limit_and_cancellation_are_incomplete_not_defeats() {
     let mut input = scenario(vec![unit("ally", 100.0)], vec![vec![unit("enemy", 100.0)]]);
     input.max_actions = 1;
-    let validated = validate(input).unwrap();
+    let validated = input;
     let limited = simulate(&validated, 42, true).unwrap();
     assert_eq!(limited.outcome, Outcome::Incomplete);
     assert_eq!(limited.termination, Termination::ActionLimit);
@@ -441,7 +435,7 @@ fn action_limit_and_cancellation_are_incomplete_not_defeats() {
 
 #[test]
 fn same_seed_replays_the_full_result_and_trace_does_not_change_state() {
-    let validated = validate(targeting_scenario(true)).unwrap();
+    let validated = targeting_scenario(true);
     for seed in [0, 1, 42, u64::MAX] {
         let first = simulate(&validated, seed, true).unwrap();
         let second = simulate(&validated, seed, true).unwrap();
@@ -454,53 +448,11 @@ fn same_seed_replays_the_full_result_and_trace_does_not_change_state() {
         assert!(quiet.events.is_empty());
         traced["events"] = serde_json::json!([]);
         assert_eq!(traced, serde_json::to_value(quiet).unwrap());
-        assert_eq!(first.seed, seed);
-        assert_eq!(first.scenario_sha256, validated.fingerprint());
     }
     assert_ne!(
         hit_targets(&simulate(&validated, 0, true).unwrap()),
         hit_targets(&simulate(&validated, 1, true).unwrap())
     );
-}
-
-#[test]
-fn illegal_and_explicitly_unsupported_scenarios_are_rejected() {
-    let base = scenario(vec![unit("ally", 100.0)], vec![vec![unit("enemy", 100.0)]]);
-    type RejectedInputCase = (&'static str, fn(&mut Scenario));
-    let changes: Vec<RejectedInputCase> = vec![
-        ("zero speed", |s| s.allies[0].stats.speed = 0.0),
-        ("nonfinite speed", |s| s.allies[0].stats.speed = f64::NAN),
-        ("invalid critical probability", |s| {
-            s.allies[0].stats.crit_rate = 1.01
-        }),
-        ("nonfinite deadline", |s| s.max_av = f64::INFINITY),
-        ("empty wave", |s| s.waves[0].clear()),
-        ("ambiguous unit identity", |s| {
-            s.waves[0][0].id = "ally".into()
-        }),
-        ("resource overflow", |s| s.allies[0].initial_energy = 101.0),
-        ("illegal action cost", |s| {
-            s.allies[0].actions[0].sp_cost = 6
-        }),
-        ("missing free fallback", |s| {
-            s.allies[0].actions[0].energy_cost = 1.0
-        }),
-        ("free ultimate", |s| {
-            s.allies[0].actions[0].kind = ActionKind::Ultimate
-        }),
-        ("unsupported profile", |s| s.ruleset = "full_game".into()),
-        ("declared unsupported mechanic", |s| {
-            s.unsupported_mechanics.push("summon".into())
-        }),
-        ("damage to ally", |s| {
-            s.allies[0].actions[0].effects = vec![damage(10.0, Target::SelfUnit)]
-        }),
-    ];
-    for (label, change) in changes {
-        let mut invalid = base.clone();
-        change(&mut invalid);
-        assert!(validate(invalid).is_err(), "accepted {label}");
-    }
 }
 
 #[test]
@@ -620,7 +572,7 @@ fn immediate_ultimate_chains_obey_both_limit_and_mid_chain_cancellation() {
     ally.actions = vec![ultimate, idle()];
     let mut input = scenario(vec![ally], vec![vec![unit("enemy", 100.0)]]);
     input.max_actions = 10;
-    let validated = validate(input).unwrap();
+    let validated = input;
     let limited = simulate(&validated, 42, true).unwrap();
     assert_eq!(limited.outcome, Outcome::Incomplete);
     assert_eq!(limited.termination, Termination::ActionLimit);

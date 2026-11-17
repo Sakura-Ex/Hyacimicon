@@ -2,6 +2,7 @@
 use super::*;
 
 impl State<'_> {
+    /// 按 target 取得当前存活目标，随机选择消耗目标随机流。
     pub(super) fn targets(&mut self, actor: usize, target: Target) -> Result<Vec<usize>, String> {
         if target == Target::ContextTarget {
             let index = self

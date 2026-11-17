@@ -1,6 +1,6 @@
 mod common;
 use battle_core::{
-    elements::Element, engine::simulate, expression::Expression, model::*, modifiers::*,
+    diagnostics::simulate, elements::Element, expression::Expression, model::*, modifiers::*,
 };
 use common::*;
 
@@ -64,7 +64,7 @@ fn natural_and_attached_weaknesses_are_unioned_without_implicit_resistance_chang
         .natural_weaknesses
         .insert("e".into(), vec![Element::Wind, Element::Fire]);
     s.max_actions = 1;
-    let input = validate(s).unwrap();
+    let input = s;
     for trace in [false, true] {
         let r = simulate(&input, 3, trace).unwrap();
         let e = state(&r, "e");
@@ -90,13 +90,13 @@ fn refresh_and_source_removal_preserve_other_sources_and_natural_weaknesses() {
         mount("b", vec![add("wind")]),
     ];
     s.max_actions = 1;
-    let r = simulate(&validate(s.clone()).unwrap(), 0, true).unwrap();
+    let r = simulate(&s.clone(), 0, true).unwrap();
     let e = state(&r, "e");
     assert_eq!(e.modifiers.len(), 1);
     assert_eq!(e.modifiers[0].source, "b");
     assert_eq!(e.weaknesses.as_ref().unwrap().all.len(), 2);
     s.allies[0].actions[0].effects.push(remove("wind", true));
-    let r = simulate(&validate(s).unwrap(), 0, true).unwrap();
+    let r = simulate(&s, 0, true).unwrap();
     let w = state(&r, "e").weaknesses.as_ref().unwrap();
     assert!(w.attached.is_empty());
     assert_eq!(w.all, [Element::Fire].into());
@@ -140,7 +140,7 @@ fn owner_expiry_is_observed_before_same_event_listener_attaches_another_element(
         },
     ];
     s.max_actions = 2;
-    let r = simulate(&validate(s).unwrap(), 0, true).unwrap();
+    let r = simulate(&s, 0, true).unwrap();
     let w = state(&r, "e").weaknesses.as_ref().unwrap();
     assert_eq!(w.all, [Element::Physical, Element::Ice].into());
     let counts: Vec<_> = r
@@ -153,23 +153,11 @@ fn owner_expiry_is_observed_before_same_event_listener_attaches_another_element(
 }
 
 #[test]
-fn unknown_natural_input_is_distinct_from_empty_and_attachment_definitions_validate() {
+fn unknown_natural_input_is_distinct_from_empty() {
     let mut s = scenario(vec![unit("a", 100.0)], vec![vec![unit("e", 1.0)]]);
     s.mechanics.natural_weaknesses.insert("e".into(), vec![]);
     s.max_actions = 1;
-    let r = simulate(&validate(s.clone()).unwrap(), 0, false).unwrap();
+    let r = simulate(&s, 0, false).unwrap();
     assert!(state(&r, "a").weaknesses.is_none());
     assert!(state(&r, "e").weaknesses.as_ref().unwrap().all.is_empty());
-    install(&mut s, "wind", vec![Element::Wind], None);
-    s.mechanics.natural_weaknesses.remove("a");
-    assert!(validate(s.clone())
-        .unwrap_err()
-        .contains("explicit natural sets"));
-    s.mechanics.natural_weaknesses.insert("a".into(), vec![]);
-    s.mechanics
-        .modifier_weaknesses
-        .insert("wind".into(), vec![Element::Wind, Element::Wind]);
-    assert!(validate(s)
-        .unwrap_err()
-        .contains("duplicate attached weakness"));
 }

@@ -1,7 +1,7 @@
 mod common;
 use battle_core::{
     decision::*,
-    engine::{simulate, simulate_with_policy},
+    diagnostics::{simulate, simulate_with_policy},
     model::*,
 };
 use common::*;
@@ -19,7 +19,7 @@ fn hook(owner: &str, event: BattleEvent, effects: Vec<Effect>) -> Trigger {
     }
 }
 fn run(s: Scenario) -> BattleResult {
-    simulate(&validate(s).unwrap(), 7, true).unwrap()
+    simulate(&s, 7, true).unwrap()
 }
 fn request(kind: RequestKind, name: Option<&str>) -> Effect {
     Effect::Request {
@@ -136,7 +136,7 @@ fn complete_action_then_followup_without_turn_events_or_av() {
             .count(),
         1
     );
-    let quiet = simulate(&validate(s).unwrap(), 7, false).unwrap();
+    let quiet = simulate(&s, 7, false).unwrap();
     close(state(&quiet, "e").hp, 985.0);
 }
 #[test]
@@ -170,8 +170,7 @@ fn extra_turn_selects_after_entry_and_keeps_normal_actor_at_axis_top() {
             legal.first().cloned()
         }
     };
-    let r =
-        simulate_with_policy(&validate(s).unwrap(), 7, true, &mut || false, &mut policy).unwrap();
+    let r = simulate_with_policy(&s, 7, true, &mut || false, &mut policy).unwrap();
     assert!(extra_seen);
     close(r.elapsed_av, 100.0);
     close(state(&r, "e").hp, 999.0);
@@ -321,11 +320,9 @@ fn event_status_expiry_and_illegal_policy_are_observable() {
             action: 999,
         })
     };
-    assert!(
-        simulate_with_policy(&validate(s).unwrap(), 1, false, &mut || false, &mut bad)
-            .unwrap_err()
-            .contains("illegal operation")
-    );
+    assert!(simulate_with_policy(&s, 1, false, &mut || false, &mut bad)
+        .unwrap_err()
+        .contains("illegal operation"));
 }
 
 #[test]
@@ -425,7 +422,7 @@ fn runtime_listeners_continue_after_trace_limit() {
     );
     t.uses = 0;
     s.mechanics.triggers = vec![t];
-    let checked = validate(s).unwrap();
+    let checked = s;
     let noisy = simulate(&checked, 7, true).unwrap();
     let quiet = simulate(&checked, 7, false).unwrap();
     assert!(noisy.trace_truncated);

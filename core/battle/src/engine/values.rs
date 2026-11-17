@@ -2,6 +2,7 @@
 use super::*;
 
 impl State<'_> {
+    /// 使用调用方提供的变量读取函数求值，算术失败返回原因。
     pub(super) fn evaluate(
         &self,
         owner: usize,
@@ -13,6 +14,7 @@ impl State<'_> {
         )
     }
 
+    /// 读取当前动作和命中上下文，短路计算条件树。
     pub(super) fn condition(&self, actor: usize, condition: &Condition) -> Result<bool, String> {
         Ok(match condition {
             Condition::HasModifier { id, target } => {

@@ -9,6 +9,14 @@ use crate::{
 };
 use rand_chacha::ChaCha8Rng;
 
+// 编译时排除回放及其参数构造，正式执行保留同一套规则分派。
+macro_rules! trace {
+    ($state:expr, $($argument:expr),* $(,)?) => {
+        #[cfg(feature = "diagnostics")]
+        $state.emit($($argument),*);
+    };
+}
+
 mod damage;
 mod effects;
 mod events;
@@ -27,38 +35,50 @@ use state::{CombatUnit, Pending, State};
 
 pub use session::{BattleSession, BattleStep};
 
+/// 诊断报告记录的随机算法及分流版本。
+#[cfg(feature = "diagnostics")]
 pub const RNG_ALGORITHM: &str =
     "ChaCha8Rng/rand_chacha=0.9.0; SHA256-separated target/critical/element streams v1";
+/// 单场诊断回放的条数上限。
+#[cfg(feature = "diagnostics")]
 const TRACE_LIMIT: usize = 100_000;
 
-/// Run a single scenario without cancellation; the input remains unchanged.
-pub fn simulate(input: &ValidatedScenario, seed: u64, trace: bool) -> Result<BattleResult, String> {
-    simulate_cancellable(input, seed, trace, &mut || false)
-}
-/// Check cancellation before each action, including immediate ultimate chains.
-/// Checks occur at action boundaries before selecting an action or advancing AV,
-/// never partway through an action's effects. A callback returning `true` yields
-/// `Ok(BattleResult)` with [`Outcome::Incomplete`] and [`Termination::Cancelled`].
-/// 清场/全灭优先结束；AV归零后，已进入的单位Turn先完成收尾，
-/// 最终倒计时回合结束后才按额度耗尽结算，再处理新的取消或行动保护。
-pub fn simulate_cancellable(
-    input: &ValidatedScenario,
-    seed: u64,
-    trace: bool,
-    cancel: &mut impl FnMut() -> bool,
-) -> Result<BattleResult, String> {
-    simulate_with_policy(input, seed, trace, cancel, &mut Automatic)
+/// 使用默认策略完成一场战斗，输入配置保持只读。
+///
+/// seed 初始化本场目标、暴击和元素随机流；运行错误返回具体原因。
+pub fn simulate(input: &Scenario, seed: u64) -> Result<BattleResult, String> {
+    simulate_cancellable(input, seed, &mut || false)
 }
 
-/// Execute through legal operations; policy cannot mutate battle state.
-pub fn simulate_with_policy(
-    input: &ValidatedScenario,
+/// 使用默认策略运行，并在完整动作边界检查取消。
+///
+/// 取消得到 Incomplete/Cancelled；清场及已到期的 Turn/Cycle 收尾按规则先结算。
+pub fn simulate_cancellable(
+    input: &Scenario,
     seed: u64,
-    trace: bool,
+    cancel: &mut impl FnMut() -> bool,
+) -> Result<BattleResult, String> {
+    simulate_with_policy(input, seed, cancel, &mut Automatic)
+}
+
+/// 让外部策略从当前合法操作中选招，执行规则由同一会话维护。
+///
+/// policy 可以保存自身记忆；cancel 在调度边界轮询，执行错误保持为 Err。
+pub fn simulate_with_policy(
+    input: &Scenario,
+    seed: u64,
     cancel: &mut impl FnMut() -> bool,
     policy: &mut impl Policy,
 ) -> Result<BattleResult, String> {
-    let mut session = BattleSession::new(input, seed, trace)?;
+    drive(BattleSession::new(input, seed)?, cancel, policy)
+}
+
+/// 连续驱动一个已初始化会话，供正式入口与诊断入口共用。
+pub(crate) fn drive(
+    mut session: BattleSession<'_>,
+    cancel: &mut impl FnMut() -> bool,
+    policy: &mut impl Policy,
+) -> Result<BattleResult, String> {
     loop {
         let (id, choice) = match session.advance_continuous(cancel)? {
             BattleStep::Decision(decision) => (

@@ -1,7 +1,8 @@
+//! 仅由 diagnostics 功能启用的开发场景命令行入口。
 use battle_core::{
     batch::{run_batch, BatchRequest},
-    engine::{simulate, RNG_ALGORITHM},
-    model::{validate, Scenario},
+    diagnostics::{simulate, ScenarioFile},
+    engine::RNG_ALGORITHM,
 };
 use serde_json::{json, Value};
 use std::{
@@ -9,10 +10,11 @@ use std::{
     io::{self, Read, Write},
 };
 
+/// 读取文件和命令参数，返回开发报告或明确的解析错误。
 fn execute() -> Result<Value, String> {
     let args: Vec<_> = env::args().collect();
     if args.len() < 3 {
-        return Err("usage: hcwa-battle validate SCENARIO.json | simulate SCENARIO.json SEED | batch SCENARIO.json TRIALS SEED".into());
+        return Err("usage: hcwa-battle inspect SCENARIO.json | simulate SCENARIO.json SEED | batch SCENARIO.json TRIALS SEED".into());
     }
     let mut bytes = Vec::new();
     fs::File::open(&args[2])
@@ -23,23 +25,18 @@ fn execute() -> Result<Value, String> {
     if bytes.len() > 16 * 1024 * 1024 {
         return Err("scenario exceeds 16 MiB input limit".into());
     }
-    let raw: Scenario =
-        serde_json::from_slice(&bytes).map_err(|e| format!("scenario schema: {e}"))?;
-    let input = validate(raw)?;
+    let file = ScenarioFile::from_slice(&bytes).map_err(|e| format!("scenario schema: {e}"))?;
+    let input = &file.battle;
     match args[1].as_str() {
-        "validate" if args.len() == 3 => {
-            Ok(json!({"status":"valid","ruleset":input.scenario().ruleset,
-            "scenario_sha256":input.fingerprint(),"provenance":input.scenario().provenance,
-            "rng":RNG_ALGORITHM,"scope":"explicit_battle_v2_operations"}))
-        }
-        "simulate" if args.len() == 4 => serde_json::to_value(simulate(
-            &input,
-            args[3]
+        "inspect" if args.len() == 3 => Ok(json!({"status":"parsed",
+            "scenario_sha256":file.fingerprint,"provenance":file.provenance,"rng":RNG_ALGORITHM})),
+        "simulate" if args.len() == 4 => {
+            let seed = args[3]
                 .parse()
-                .map_err(|_| "seed must be an unsigned integer")?,
-            true,
-        )?)
-        .map_err(|e| e.to_string()),
+                .map_err(|_| "seed must be an unsigned integer")?;
+            let result = simulate(input, seed, true)?;
+            serde_json::to_value(file.report(result, seed)).map_err(|e| e.to_string())
+        }
         "batch" if args.len() == 5 => {
             let request = BatchRequest {
                 trials: args[3]
@@ -49,12 +46,13 @@ fn execute() -> Result<Value, String> {
                     .parse()
                     .map_err(|_| "seed must be an unsigned integer")?,
             };
-            serde_json::to_value(run_batch(&input, &request, &mut || false)?)
+            serde_json::to_value(run_batch(input, &request, &mut || false)?)
                 .map_err(|e| e.to_string())
         }
         _ => Err("invalid command or argument count".into()),
     }
 }
+/// 输出 JSON 报告，文件或执行失败时以退出码 2 结束。
 fn main() {
     match execute() {
         Ok(result) => {

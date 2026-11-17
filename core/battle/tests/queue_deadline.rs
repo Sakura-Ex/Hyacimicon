@@ -3,7 +3,8 @@ mod common;
 
 use battle_core::{
     decision::DecisionPoint,
-    engine::{simulate, BattleSession, BattleStep},
+    diagnostics::simulate,
+    engine::{BattleSession, BattleStep},
     model::*,
 };
 use common::*;
@@ -41,12 +42,7 @@ fn queued_at_deadline(before_cycle: bool, revival: bool, turn_end: Effect) -> Sc
 #[test]
 fn queue_refills_after_the_complete_action_and_before_expired_turn_end() {
     for (before_cycle, revival) in [(true, false), (true, true), (false, true)] {
-        let input = validate(queued_at_deadline(
-            before_cycle,
-            revival,
-            damage(1000.0, Target::AllEnemies),
-        ))
-        .unwrap();
+        let input = queued_at_deadline(before_cycle, revival, damage(1000.0, Target::AllEnemies));
         let result = simulate(&input, 7, true).unwrap();
         assert_eq!(result.outcome, Outcome::Victory);
         assert_eq!(result.termination, Termination::EnemiesDefeated);
@@ -93,7 +89,7 @@ fn queue_refill_is_preserved_in_timeout_snapshots_without_turn_end_damage() {
         },
     );
     s.max_actions = 1;
-    let result = simulate(&validate(s).unwrap(), 7, true).unwrap();
+    let result = simulate(&s, 7, true).unwrap();
     assert_eq!(result.termination, Termination::AvBudgetExhausted);
     assert_eq!(result.actions, 1);
     assert_eq!(result.units.len(), 3);
@@ -136,8 +132,8 @@ fn a_refilled_units_ultimate_is_available_before_deciding_that_only_turn_end_rem
     ultimate.kind = ActionKind::Ultimate;
     ultimate.energy_cost = 100.0;
     arriving.actions.insert(0, ultimate);
-    let input = validate(s).unwrap();
-    let mut session = BattleSession::new(&input, 7, true).unwrap();
+    let input = s;
+    let mut session = BattleSession::with_trace(&input, 7, true).unwrap();
     let d = match session.advance().unwrap() {
         BattleStep::Decision(d) => d.clone(),
         BattleStep::Finished(_) => panic!("expected initial insert window"),

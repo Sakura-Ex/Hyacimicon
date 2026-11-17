@@ -1,92 +1,114 @@
 //! Explicit property-modifier storage. No raw Config defaults are inferred.
 use crate::{expression::Expression, model::BattleEvent};
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(rename_all = "snake_case"))]
+/// 当前状态系统支持贡献的属性。
 pub enum Property {
+    /// 对暴击伤害加成作加法贡献。
     CritDamage,
+    /// 对伤害提高池作加法贡献。
     DamageBonus,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+/// 按表达式计算的一项每层属性贡献。
 pub struct PropertyChange {
+    /// 当前贡献修改的属性。
     pub property: Property,
+    /// 施加或刷新状态时求值的每层贡献表达式。
     pub value: Expression,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(rename_all = "snake_case"))]
+/// 同名状态按来源叠加或替换的方式。
 pub enum StackMode {
+    /// 同 ID 同来源替换，不同来源共存。
     ReplaceBySource,
+    /// 同 ID 同来源叠层并刷新，不同来源共存。
     AddBySource,
+    /// 同 ID 跨来源替换。
     ReplaceGlobal,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(rename_all = "snake_case"))]
+/// 有限寿命匹配事件主体的归属对象。
 pub enum TickUnit {
+    /// 跟随状态持有者的事件计时。
     Owner,
+    /// 跟随状态施加者的事件计时。
     Source,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+/// 状态按指定事件和单位扣减寿命的规则。
 pub struct Lifetime {
+    /// 监听或寿命计时匹配的规则事件。
     pub event: BattleEvent,
+    /// 寿命跟随持有者或来源单位。
     pub unit: TickUnit,
+    /// 初始寿命事件次数。
     pub ticks: u32,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+/// 属性状态的叠层、寿命和每层贡献定义。
 pub struct ModifierDefinition {
+    /// 同 ID 状态的来源匹配及叠层方式。
     pub stack_mode: StackMode,
+    /// 每个状态实例的层数上限。
     pub max_stacks: u32,
+    /// 可选的有限寿命配置。
     pub lifetime: Option<Lifetime>,
+    /// 每层属性贡献表达式。
     pub properties: Vec<PropertyChange>,
 }
 
-impl ModifierDefinition {
-    pub fn validate(&self) -> Result<(), String> {
-        if self.max_stacks == 0 || self.max_stacks > 10_000 {
-            return Err("modifier max_stacks must be 1..10000".into());
-        }
-        if self.lifetime.as_ref().is_some_and(|l| l.ticks == 0) {
-            return Err("modifier lifetime ticks must be positive".into());
-        }
-        if self.properties.len() > 32 {
-            return Err("too many modifier properties".into());
-        }
-        for property in &self.properties {
-            property.value.validate()?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Serialize))]
+/// 活动属性状态的来源、层数与剩余寿命。
 pub struct ModifierState {
+    /// 所属对象的稳定标识。
     pub id: String,
+    /// 施加该状态的单位 ID。
     pub source: String,
+    /// 本次施加或当前持有的状态层数。
     pub stacks: u32,
+    /// 剩余寿命事件次数，None 表示无有限计时。
     pub remaining_ticks: Option<u32>,
 }
 
+/// 状态定义与施加或刷新时求值的属性快照。
 pub(crate) struct ModifierInstance {
+    /// 所属对象的当前运行状态。
     pub state: ModifierState,
+    /// 施加时使用的状态规则副本。
     pub definition: ModifierDefinition,
     // Values are evaluated at application/stack time and replaced on refresh.
+    /// 施加或刷新时求值的每层属性贡献快照。
     pub values: Vec<(Property, f64)>,
 }
 
 #[derive(Default)]
+/// 单个单位拥有的全部活动属性状态。
 pub(crate) struct ModifierBook {
+    /// 当前所有活动状态实例。
     pub instances: Vec<ModifierInstance>,
 }
 
 impl ModifierBook {
+    /// 按 ID、来源和叠层规则施加状态，返回最终层数。
     pub fn apply(
         &mut self,
         id: &str,
@@ -123,10 +145,15 @@ impl ModifierBook {
         stacks
     }
 
+    /// 按 ID 和可选来源移除状态，诊断构建返回被移除快照。
     pub fn remove(&mut self, id: &str, source: Option<&str>) -> Vec<ModifierState> {
+        #[cfg(feature = "diagnostics")]
         let mut removed = vec![];
+        #[cfg(not(feature = "diagnostics"))]
+        let removed = vec![];
         self.instances.retain(|m| {
             let matches = m.state.id == id && source.is_none_or(|s| m.state.source == s);
+            #[cfg(feature = "diagnostics")]
             if matches {
                 removed.push(m.state.clone());
             }
@@ -135,13 +162,17 @@ impl ModifierBook {
         removed
     }
 
+    /// 按事件和主体扣减寿命，移除到期状态并返回诊断快照。
     pub fn tick(
         &mut self,
         event: BattleEvent,
         subject: Option<&str>,
         owner: &str,
     ) -> Vec<ModifierState> {
+        #[cfg(feature = "diagnostics")]
         let mut removed = vec![];
+        #[cfg(not(feature = "diagnostics"))]
+        let removed = vec![];
         self.instances.retain_mut(|m| {
             if let Some(lifetime) = &m.definition.lifetime {
                 let unit = match lifetime.unit {
@@ -153,9 +184,10 @@ impl ModifierBook {
                         .state
                         .remaining_ticks
                         .as_mut()
-                        .expect("validated finite lifetime");
+                        .expect("有限寿命在状态施加时初始化");
                     *left -= 1;
                     if *left == 0 {
+                        #[cfg(feature = "diagnostics")]
                         removed.push(m.state.clone());
                         return false;
                     }
@@ -166,6 +198,7 @@ impl ModifierBook {
         removed
     }
 
+    /// 合计指定属性的每层贡献乘层数，非有限合计返回错误。
     pub fn delta(&self, property: Property) -> Result<f64, String> {
         let value: f64 = self
             .instances
@@ -182,6 +215,7 @@ impl ModifierBook {
         Ok(value)
     }
 
+    /// 导出当前活动状态的来源、层数和余寿命。
     pub fn states(&self) -> Vec<ModifierState> {
         self.instances.iter().map(|m| m.state.clone()).collect()
     }

@@ -1,5 +1,5 @@
 mod common;
-use battle_core::{engine::simulate, model::*};
+use battle_core::{diagnostics::simulate, model::*};
 use common::*;
 
 fn energy(amount: f64, target: Target) -> Effect {
@@ -23,7 +23,7 @@ fn expiring(mut t: Trigger, event: BattleEvent, duration: u32) -> Trigger {
     t
 }
 fn run(s: Scenario) -> BattleResult {
-    simulate(&validate(s).unwrap(), 7, true).unwrap()
+    simulate(&s, 7, true).unwrap()
 }
 
 #[test]
@@ -89,14 +89,6 @@ fn global_lifetimes_expire_all_present_owners_before_any_nested_callback() {
         for owner in ["a", "b", "e"] {
             close(state(&r, owner).energy, 0.0);
         }
-        let mut invalid = scenario(vec![unit("a", 100.0)], vec![vec![unit("e", 1.0)]]);
-        let mut t = hook("a", global, vec![energy(1.0, Target::SelfUnit)]);
-        t.subject = Some("a".into());
-        invalid.mechanics.triggers.push(t);
-        assert_eq!(
-            validate(invalid).unwrap_err(),
-            "global trigger event has no unit subject"
-        );
     }
 }
 
@@ -189,7 +181,7 @@ fn nested_hit_settles_each_death_once_and_keeps_remaining_action_effects() {
                 vec![1000.0, 1000.0]
             }
         );
-        let quiet = simulate(&validate(s).unwrap(), 7, false).unwrap();
+        let quiet = simulate(&s, 7, false).unwrap();
         close(state(&quiet, "a").energy, 19.0);
     }
 }

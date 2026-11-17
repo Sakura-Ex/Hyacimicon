@@ -2,11 +2,13 @@
 use super::*;
 
 impl State<'_> {
+    /// 从当前资源中扣除该动作费用，调用前已确认可支付。
     pub(super) fn pay(&mut self, actor: usize, action: &Action) {
         let side = self.side(actor);
         self.sp[side] -= action.sp_cost;
         self.units[actor].energy -= action.energy_cost;
-        self.emit(
+        trace!(
+            self,
             "energy_cost",
             actor,
             Some(actor),
@@ -16,15 +18,8 @@ impl State<'_> {
         );
     }
 
+    /// 登记后续动作，去重同单位终结技并限制排队工作量。
     pub(super) fn enqueue(&mut self, request: Pending) -> Result<(), String> {
-        if let Some(a) = request.action {
-            let kind = self.units[request.actor].spec.actions[a].kind;
-            if (request.kind == RequestKind::Ultimate && kind != ActionKind::Ultimate)
-                || (request.kind == RequestKind::FollowUp && kind != ActionKind::FollowUp)
-            {
-                return Err("request/action kind mismatch".into());
-            }
-        }
         if request.kind == RequestKind::Ultimate
             && self
                 .pending
@@ -36,7 +31,8 @@ impl State<'_> {
         if self.pending.len() >= 10000 {
             return Err("pending action limit exceeded".into());
         }
-        self.emit(
+        trace!(
+            self,
             "request_queued",
             request.actor,
             None,
@@ -82,7 +78,7 @@ impl State<'_> {
             }
         }
         if point == DecisionPoint::Insert {
-            let rules = &self.input.scenario().mechanics;
+            let rules = &self.input.mechanics;
             legal.sort_by(|a, b| {
                 let priority = |op: &Operation| {
                     *rules
@@ -141,6 +137,7 @@ impl State<'_> {
         }
     }
 
+    /// 执行一个完整动作，依次处理绑定、付费、效果、收益与结束事件。
     pub(super) fn act(
         &mut self,
         actor: usize,
@@ -148,9 +145,7 @@ impl State<'_> {
         prepaid: bool,
     ) -> Result<(), String> {
         let action = self.units[actor].spec.actions[action_index].clone();
-        if !prepaid && !self.affordable(actor, &action) {
-            return Err("selected action is not affordable".into());
-        }
+        // 普通选招已通过当前合法列表；排队请求在实际入口重新检查资源。
         // Bind once even when a nested conditional/loop is the first target use.
         self.bound_target = self.targets(actor, Target::EnemyLowestHp)?.first().copied();
         self.current_action_kind = Some(action.kind);
@@ -163,7 +158,7 @@ impl State<'_> {
         self.actions += 1;
         self.dispatch(BattleEvent::ActionStart, Some(actor), Some(&action.id))?;
         self.dispatch(BattleEvent::BeforeSkillUse, Some(actor), Some(&action.id))?;
-        self.emit("action", actor, None, Some(&action.id), None, None);
+        trace!(self, "action", actor, None, Some(&action.id), None, None);
         self.apply_effects(actor, &action.id, &action.effects)?;
         if self.units[actor].alive() {
             self.sp[side] = self.sp[side]
@@ -173,7 +168,15 @@ impl State<'_> {
                 .min(self.units[actor].spec.max_energy);
         }
         self.dispatch(BattleEvent::ActionEnd, Some(actor), Some(&action.id))?;
-        self.emit("action_end", actor, None, Some(&action.id), None, None);
+        trace!(
+            self,
+            "action_end",
+            actor,
+            None,
+            Some(&action.id),
+            None,
+            None
+        );
         self.bound_target = None;
         self.current_action_kind = None;
         self.attack_owner = None;

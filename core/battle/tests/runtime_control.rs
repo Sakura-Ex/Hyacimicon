@@ -1,5 +1,5 @@
 mod common;
-use battle_core::{engine::simulate, expression::Expression, model::*};
+use battle_core::{diagnostics::simulate, expression::Expression, model::*};
 use common::*;
 
 fn num(value: f64) -> Expression {
@@ -53,7 +53,7 @@ fn counter_threshold_branches_read_updated_state_and_keep_fractional_progress() 
     );
     s.max_actions = 5;
     for trace in [false, true] {
-        let r = simulate(&validate(s.clone()).unwrap(), 8, trace).unwrap();
+        let r = simulate(&s.clone(), 8, trace).unwrap();
         close(state(&r, "a").dynamic_values["count"], 1.0);
         close(state(&r, "a").dynamic_values["persistent"], 9.0);
     }
@@ -86,13 +86,13 @@ fn loop_count_is_captured_once_and_missing_branch_value_stays_unread() {
         .dynamic_values
         .insert("a".into(), [("count".into(), 3.0)].into());
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 1, false).unwrap();
+    let r = simulate(&s, 1, false).unwrap();
     close(state(&r, "a").energy, 6.0);
     close(state(&r, "a").dynamic_values["count"], 0.0);
 }
 
 #[test]
-fn invalid_loop_count_and_unreachable_invalid_effect_are_rejected() {
+fn runtime_loop_counts_remain_bounded() {
     for count in [-1.0, 0.5, 10001.0] {
         let mut a = unit("a", 100.0);
         a.actions = vec![action(
@@ -102,30 +102,11 @@ fn invalid_loop_count_and_unreachable_invalid_effect_are_rejected() {
                 effects: vec![],
             }],
         )];
-        let s = validate(scenario(vec![a], vec![vec![unit("e", 1.0)]])).unwrap();
-        assert!(simulate(&s, 0, false).unwrap_err().contains("repeat count"));
+        let input = scenario(vec![a], vec![vec![unit("e", 1.0)]]);
+        assert!(simulate(&input, 0, false)
+            .unwrap_err()
+            .contains("repeat count"));
     }
-    let mut a = unit("a", 100.0);
-    a.actions = vec![action(
-        "bad",
-        vec![Effect::Conditional {
-            condition: Condition::ActionKind {
-                kind: ActionKind::Ultimate,
-            },
-            then_effects: vec![Effect::Damage {
-                scale: Scale::Attack,
-                ratio: -1.0,
-                flat: 0.0,
-                hits: 1,
-                can_crit: false,
-                target: Target::AbilityTarget,
-            }],
-            else_effects: vec![],
-        }],
-    )];
-    assert!(validate(scenario(vec![a], vec![vec![unit("e", 1.0)]]))
-        .unwrap_err()
-        .contains("damage ratio"));
 }
 
 #[test]
@@ -147,7 +128,7 @@ fn nested_damage_keeps_one_action_target() {
     )];
     let mut s = scenario(vec![a], vec![vec![unit("e1", 1.0), unit("e2", 1.0)]]);
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 1, true).unwrap();
+    let r = simulate(&s, 1, true).unwrap();
     close(state(&r, "e1").hp, 0.0);
     close(state(&r, "e2").hp, 1000.0);
     assert_eq!(r.events.iter().filter(|e| e.kind == "damage").count(), 1);

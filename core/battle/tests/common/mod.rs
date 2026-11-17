@@ -2,6 +2,7 @@
 //! Artificial fixtures. Values are chosen for hand calculation, not game kits.
 use battle_core::model::*;
 
+/// 构造无需暴击、可手算的固定伤害效果。
 pub fn damage(amount: f64, target: Target) -> Effect {
     Effect::Damage {
         scale: Scale::Attack,
@@ -13,6 +14,7 @@ pub fn damage(amount: f64, target: Target) -> Effect {
     }
 }
 
+/// 构造无费用和收益的普攻动作。
 pub fn action(id: &str, effects: Vec<Effect>) -> Action {
     Action {
         id: id.into(),
@@ -25,6 +27,7 @@ pub fn action(id: &str, effects: Vec<Effect>) -> Action {
     }
 }
 
+/// 构造不改变资源的等待动作。
 pub fn idle() -> Action {
     action(
         "wait",
@@ -35,6 +38,7 @@ pub fn idle() -> Action {
     )
 }
 
+/// 构造具有指定速度的最小合成人工单位。
 pub fn unit(id: &str, speed: f64) -> Unit {
     Unit {
         id: id.into(),
@@ -68,17 +72,10 @@ pub fn unit(id: &str, speed: f64) -> Unit {
     }
 }
 
+/// 模拟局面层已组装完成的双方配置和初始预算。
 pub fn scenario(allies: Vec<Unit>, waves: Vec<Vec<Unit>>) -> Scenario {
     Scenario {
         mechanics: Mechanics::default(),
-        schema_version: 1,
-        ruleset: "battle_v2".into(),
-        provenance: Provenance {
-            game_version: "synthetic".into(),
-            data_snapshot: "hand-computed-tests-v1".into(),
-            description: "Artificial panels and supported primitives; no game data".into(),
-        },
-        unsupported_mechanics: vec![],
         max_av: 1000.0,
         max_actions: 1000,
         ally_skill_points: SkillPoints {
@@ -94,6 +91,7 @@ pub fn scenario(allies: Vec<Unit>, waves: Vec<Vec<Unit>>) -> Scenario {
     }
 }
 
+/// 检查浮点结果与独立手算期望的绝对误差。
 pub fn close(actual: f64, expected: f64) {
     assert!(
         (actual - expected).abs() < 1e-9,
@@ -101,6 +99,7 @@ pub fn close(actual: f64, expected: f64) {
     );
 }
 
+/// 按单位 ID 取得最终状态，样例保证该单位已经入场。
 pub fn state<'a>(result: &'a BattleResult, id: &str) -> &'a UnitResult {
     result
         .units

@@ -1,74 +1,64 @@
 //! Explicit provisional business settlement, separate from combat outcome.
-use crate::model::{Outcome, Scenario};
+use crate::model::Outcome;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
+/// 开发场景使用的临时加权击败进度与 HP 结算规则。
 pub struct SettlementPolicy {
+    /// 临时结算策略的名称。
     pub name: String,
+    /// 每个敌人实例贡献的正进度权重。
     pub enemy_weights: BTreeMap<String, f64>,
+    /// 免除罚血所需的最低击败进度。
     pub minimum_progress: f64,
+    /// 临时结算前的整局 HP。
     pub hp_before: f64,
+    /// 整局 HP 上限。
     pub hp_cap: f64,
+    /// 进度不足时请求扣除的 HP。
     pub failure_loss: f64,
+    /// 扣血后请求恢复的 HP。
     pub recovery: f64,
 }
 
-impl SettlementPolicy {
-    pub fn validate(&self, scenario: &Scenario) -> Result<(), String> {
-        if self.name != "weighted_kills_flat_penalty_v1" {
-            return Err("unsupported settlement policy".into());
-        }
-        for (name, value, max) in [
-            ("minimum_progress", self.minimum_progress, 1.0),
-            ("hp_before", self.hp_before, self.hp_cap),
-            ("hp_cap", self.hp_cap, 1e12),
-            ("failure_loss", self.failure_loss, 1e12),
-            ("recovery", self.recovery, 1e12),
-        ] {
-            if !value.is_finite() || value < 0.0 || value > max {
-                return Err(format!("invalid settlement {name}"));
-            }
-        }
-        if self.hp_cap <= 0.0 || self.hp_before <= 0.0 {
-            return Err("battle requires positive run HP and cap".into());
-        }
-        let enemies: Vec<_> = scenario.waves.iter().flatten().collect();
-        if enemies.len() != self.enemy_weights.len()
-            || enemies.iter().any(|u| {
-                !self
-                    .enemy_weights
-                    .get(&u.id)
-                    .is_some_and(|w| w.is_finite() && *w > 0.0 && *w <= 1e9)
-            })
-        {
-            return Err("settlement needs exactly one positive weight per enemy instance".into());
-        }
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug, Serialize)]
+/// 开发工具侧临时结算的进度与实际 HP 变化。
 pub struct SettlementResult {
+    /// 结算已应用或因战斗未完成而未应用的状态。
     pub status: String,
+    /// 本次使用的完整临时结算规则。
     pub policy: SettlementPolicy,
+    /// 已经入场且最终死亡的敌人 ID。
     pub defeated_ids: Vec<String>,
+    /// 已击败敌人的权重合计。
     pub defeated_weight: f64,
+    /// 全部敌人权重合计，包含尚未入场者。
     pub total_weight: f64,
+    /// 已击败权重除以总权重。
     pub progress: f64,
+    /// 当前进度是否达到免罚血阈值。
     pub minimum_progress_met: bool,
+    /// 完成战斗请求的扣血量，未完成时为 None。
     pub requested_loss: Option<f64>,
+    /// 按当前 HP 裁剪后的实际扣血量。
     pub actual_loss: Option<f64>,
+    /// 完成战斗请求的恢复量。
     pub requested_recovery: Option<f64>,
+    /// 按 HP 上限裁剪后的实际恢复量。
     pub actual_recovery: Option<f64>,
+    /// 因当前 HP 不足而裁剪掉的扣血量。
     pub loss_clipped: Option<f64>,
+    /// 因 HP 上限而裁剪掉的恢复量。
     pub recovery_clipped: Option<f64>,
+    /// 应用临时结算后的 HP，未完成时为 None。
     pub hp_after: Option<f64>,
+    /// 临时结算后 HP 是否仍大于零。
     pub run_alive: Option<bool>,
 }
 
-/// The engine calls this once at return. Incomplete snapshots never settle HP.
+/// 开发报告生成时计算一次临时结算；未完成战斗保留未应用状态。
 pub(crate) fn settle(
     policy: &SettlementPolicy,
     defeated_ids: Vec<String>,

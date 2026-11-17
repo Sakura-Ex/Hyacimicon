@@ -1,5 +1,5 @@
 mod common;
-use battle_core::{engine::simulate, expression::Expression, model::*};
+use battle_core::{diagnostics::simulate, expression::Expression, model::*};
 use common::*;
 
 fn load(key: &str) -> Expression {
@@ -34,7 +34,7 @@ fn dynamic_updates_are_ordered_runtime_state_and_visible_to_later_effects() {
         .dynamic_values
         .insert("a".into(), [("-169675107".into(), 0.0)].into());
     s.max_actions = 3;
-    let validated = validate(s).unwrap();
+    let validated = s;
     for trace in [false, true] {
         let r = simulate(&validated, 7, trace).unwrap();
         close(state(&r, "a").energy, 6.0);
@@ -52,7 +52,7 @@ fn missing_runtime_values_are_errors_not_zero() {
             target: Target::SelfUnit,
         }],
     )];
-    let checked = validate(scenario(vec![a], vec![vec![unit("e", 1.0)]])).unwrap();
+    let checked = scenario(vec![a], vec![vec![unit("e", 1.0)]]);
     assert_eq!(
         simulate(&checked, 7, false).unwrap_err(),
         "unresolved dynamic key missing"

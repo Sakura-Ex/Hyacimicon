@@ -1,6 +1,6 @@
 mod common;
 use battle_core::{
-    dynamic_scope::DynamicScope, engine::simulate, expression::Expression, model::*,
+    diagnostics::simulate, dynamic_scope::DynamicScope, expression::Expression, model::*,
 };
 use common::*;
 
@@ -82,7 +82,7 @@ fn repeated_ability_and_nested_template_invocations_isolate_same_named_counters(
         .dynamic_values
         .insert("a".into(), [("_count".into(), 90.0)].into());
     s.max_actions = 1;
-    let input = validate(s).unwrap();
+    let input = s;
     for trace in [false, true] {
         let r = simulate(&input, 0, trace).unwrap();
         let a = state(&r, "a");
@@ -113,7 +113,7 @@ fn inner_missing_value_never_falls_through_to_outer_frame_or_persistent_storage(
         .dynamic_values
         .insert("a".into(), [("_count".into(), 99.0)].into());
     assert_eq!(
-        simulate(&validate(s).unwrap(), 0, false).unwrap_err(),
+        simulate(&s, 0, false).unwrap_err(),
         "unresolved Ability dynamic key _count"
     );
 }
@@ -136,7 +136,7 @@ fn frame_is_unavailable_after_invocation_and_cannot_be_created_by_a_write() {
     ] {
         let mut a = unit("a", 100.0);
         a.actions = vec![action("skill", effects)];
-        let s = validate(scenario(vec![a], vec![vec![unit("e", 1.0)]])).unwrap();
+        let s = scenario(vec![a], vec![vec![unit("e", 1.0)]]);
         assert_eq!(simulate(&s, 0, false).unwrap_err(), expected);
     }
 }
@@ -164,29 +164,7 @@ fn another_owner_cannot_read_the_callers_active_ability_frame() {
         duration: 0,
     });
     assert_eq!(
-        simulate(&validate(s).unwrap(), 0, false).unwrap_err(),
+        simulate(&s, 0, false).unwrap_err(),
         "unresolved Ability dynamic key _count"
     );
-}
-
-#[test]
-fn validation_visits_effects_inside_unexecuted_scopes() {
-    let mut a = unit("a", 100.0);
-    a.actions = vec![action(
-        "skill",
-        vec![Effect::Repeat {
-            count: num(0.0),
-            effects: vec![frame(
-                DynamicScope::Ability,
-                vec![Effect::SetScopedDynamicValue {
-                    scope: DynamicScope::Ability,
-                    key: String::new(),
-                    value: num(1.0),
-                }],
-            )],
-        }],
-    )];
-    assert!(validate(scenario(vec![a], vec![vec![unit("e", 1.0)]]))
-        .unwrap_err()
-        .contains("dynamic key"));
 }

@@ -1,5 +1,5 @@
 mod common;
-use battle_core::{elements::*, engine::simulate, expression::Expression, model::*};
+use battle_core::{diagnostics::simulate, elements::*, expression::Expression, model::*};
 use common::*;
 
 fn num(value: f64) -> Expression {
@@ -78,14 +78,14 @@ fn attack_finish_retargets_only_living_targets_already_hit_in_this_action() {
     });
     install_panels(&mut s);
     s.max_actions = 1;
-    let checked = validate(s.clone()).unwrap();
+    let checked = s.clone();
     for trace in [false, true] {
         let r = simulate(&checked, 9, trace).unwrap();
         close(state(&r, "e1").hp, 790.0);
         close(state(&r, "e2").hp, 1000.0);
     }
     s.waves[0][0].initial_hp = 5.0;
-    let r = simulate(&validate(s).unwrap(), 9, true).unwrap();
+    let r = simulate(&s, 9, true).unwrap();
     close(state(&r, "e2").hp, 1000.0);
     assert_eq!(r.events.iter().filter(|e| e.kind == "damage").count(), 1);
 }
@@ -134,7 +134,7 @@ fn explicit_element_panel_replaces_scalar_resistance_and_does_not_leak_to_nested
         duration: 0,
     });
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 0, true).unwrap();
+    let r = simulate(&s, 0, true).unwrap();
     let hits: Vec<_> = r
         .events
         .iter()
@@ -201,7 +201,7 @@ fn lethal_pursuit_restores_hit_kind_after_nested_death_listener_damage() {
         duration: 0,
     });
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 0, true).unwrap();
+    let r = simulate(&s, 0, true).unwrap();
     let hits: Vec<_> = r
         .events
         .iter()
@@ -224,23 +224,15 @@ fn lethal_pursuit_restores_hit_kind_after_nested_death_listener_damage() {
 }
 
 #[test]
-fn missing_element_panels_and_missing_retarget_context_fail_explicitly() {
-    let mut a = unit("a", 100.0);
-    a.actions = vec![action(
-        "random",
-        vec![elemental(DamageElement::RandomAll, Target::AbilityTarget)],
-    )];
-    assert!(validate(scenario(vec![a], vec![vec![unit("e", 1.0)]]))
-        .unwrap_err()
-        .contains("explicit seven-element panels"));
+fn missing_retarget_context_fails_during_execution() {
     let mut a = unit("a", 100.0);
     a.actions = vec![action(
         "bad_target",
         vec![damage(100.0, Target::ContextTarget)],
     )];
-    let checked = validate(scenario(vec![a], vec![vec![unit("e", 1.0)]])).unwrap();
+    let input = scenario(vec![a], vec![vec![unit("e", 1.0)]]);
     assert_eq!(
-        simulate(&checked, 0, false).unwrap_err(),
+        simulate(&input, 0, false).unwrap_err(),
         "context target used outside a retarget scope"
     );
 }

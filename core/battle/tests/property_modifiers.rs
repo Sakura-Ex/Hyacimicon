@@ -1,5 +1,5 @@
 mod common;
-use battle_core::{engine::simulate, expression::Expression, model::*, modifiers::*};
+use battle_core::{diagnostics::simulate, expression::Expression, model::*, modifiers::*};
 use common::*;
 
 fn num(value: f64) -> Expression {
@@ -79,7 +79,7 @@ fn sourced_property_values_apply_once_and_owner_expiry_restores_base() {
         .triggers
         .push(mount("a", vec![add("buff", Target::SelfUnit)]));
     s.max_actions = 2;
-    let r = simulate(&validate(s).unwrap(), 4, true).unwrap();
+    let r = simulate(&s, 4, true).unwrap();
     let hits: Vec<_> = r
         .events
         .iter()
@@ -118,7 +118,7 @@ fn stacking_sources_are_separate_and_explicit_removal_is_source_scoped() {
         mount("b", vec![add("buff", Target::AllAllies)]),
     ];
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 4, true).unwrap();
+    let r = simulate(&s, 4, true).unwrap();
     for id in ["a", "b"] {
         let mods = &state(&r, id).modifiers;
         assert_eq!(mods.len(), 1);
@@ -167,7 +167,7 @@ fn source_clock_expiry_happens_before_turn_end_listener_damage() {
     });
     // The action-limit checkpoint is before TurnEnd; allow that turn to finish.
     s.max_actions = 2;
-    let r = simulate(&validate(s).unwrap(), 4, true).unwrap();
+    let r = simulate(&s, 4, true).unwrap();
     close(
         r.events
             .iter()
@@ -210,7 +210,7 @@ fn a_hit_listener_property_change_affects_the_next_hit_in_the_same_action() {
         duration: 0,
     });
     s.max_actions = 1;
-    let r = simulate(&validate(s).unwrap(), 4, true).unwrap();
+    let r = simulate(&s, 4, true).unwrap();
     let hits: Vec<_> = r
         .events
         .iter()

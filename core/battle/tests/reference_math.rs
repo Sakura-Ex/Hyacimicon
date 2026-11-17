@@ -18,9 +18,7 @@ fn upstream_expression_oracle_matches_all_eighteen_cases() {
     for row in source["damage"].as_array().unwrap() {
         let input: DamageInput = serde_json::from_value(row["input"].clone()).unwrap();
         close(
-            damage(&input, row["critical"].as_bool().unwrap())
-                .unwrap()
-                .amount,
+            damage(&input, row["critical"].as_bool().unwrap()).unwrap(),
             row["expected"].as_f64().unwrap(),
         );
         count += 1;

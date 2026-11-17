@@ -14,6 +14,7 @@ impl State<'_> {
             .try_for_each(|effect| self.apply_effect(actor, action, effect))
     }
 
+    /// 执行一个效果节点并维护当前递归深度和执行量。
     pub(super) fn apply_effect(
         &mut self,
         actor: usize,
@@ -33,6 +34,7 @@ impl State<'_> {
         result
     }
 
+    /// 按效果分支修改资源、属性、变量或排队请求。
     pub(super) fn apply_effect_inner(
         &mut self,
         actor: usize,
@@ -42,7 +44,8 @@ impl State<'_> {
         match *effect {
             Effect::WithDynamicScope { scope, ref effects } => {
                 self.dynamic_scopes.push(actor, scope);
-                self.emit(
+                trace!(
+                    self,
                     &format!("{}_scope_enter", scope.name()),
                     actor,
                     Some(actor),
@@ -52,7 +55,8 @@ impl State<'_> {
                 );
                 let result = self.apply_effects(actor, action, effects);
                 self.dynamic_scopes.pop();
-                self.emit(
+                trace!(
+                    self,
                     &format!("{}_scope_exit", scope.name()),
                     actor,
                     Some(actor),
@@ -69,7 +73,8 @@ impl State<'_> {
             } => {
                 let amount = self.evaluate(actor, value)?;
                 self.dynamic_scopes.set(actor, scope, key, amount)?;
-                self.emit(
+                trace!(
+                    self,
                     &format!("{}_dynamic_value", scope.name()),
                     actor,
                     Some(actor),
@@ -98,7 +103,8 @@ impl State<'_> {
                         Element::ALL[(uniform(&mut self.elements) * 7.0) as usize]
                     }
                 };
-                self.emit(
+                trace!(
+                    self,
                     &format!("damage_element_{}", element.name()),
                     actor,
                     self.context_target,
@@ -158,7 +164,6 @@ impl State<'_> {
             } => {
                 let definition = self
                     .input
-                    .scenario()
                     .mechanics
                     .modifier_definitions
                     .get(id)
@@ -175,22 +180,25 @@ impl State<'_> {
                     .collect::<Result<Vec<_>, _>>()?;
                 let source = self.units[actor].spec.id.clone();
                 for recipient in self.targets(actor, target)? {
+                    #[cfg(feature = "diagnostics")]
                     let weakness_before = self.weakness_state(recipient);
-                    let count = self.units[recipient].modifiers.apply(
+                    let _count = self.units[recipient].modifiers.apply(
                         id,
                         &source,
                         count as u32,
                         &definition,
                         values.clone(),
                     );
-                    self.emit(
+                    trace!(
+                        self,
                         "modifier_applied",
                         actor,
                         Some(recipient),
                         Some(id),
-                        Some(f64::from(count)),
+                        Some(f64::from(_count)),
                         None,
                     );
+                    #[cfg(feature = "diagnostics")]
                     self.record_weakness_change(recipient, weakness_before, Some(id));
                 }
             }
@@ -201,12 +209,14 @@ impl State<'_> {
             } => {
                 let source = self.units[actor].spec.id.clone();
                 for recipient in self.targets(actor, target)? {
+                    #[cfg(feature = "diagnostics")]
                     let weakness_before = self.weakness_state(recipient);
                     let removed = self.units[recipient]
                         .modifiers
                         .remove(id, if from_any_source { None } else { Some(&source) });
                     for _ in removed {
-                        self.emit(
+                        trace!(
+                            self,
                             "modifier_removed",
                             actor,
                             Some(recipient),
@@ -215,6 +225,7 @@ impl State<'_> {
                             None,
                         );
                     }
+                    #[cfg(feature = "diagnostics")]
                     self.record_weakness_change(recipient, weakness_before, Some(id));
                 }
             }
@@ -253,7 +264,8 @@ impl State<'_> {
                     self.units[recipient]
                         .dynamic_values
                         .insert(key.clone(), amount);
-                    self.emit(
+                    trace!(
+                        self,
                         "dynamic_value",
                         actor,
                         Some(recipient),
@@ -304,7 +316,8 @@ impl State<'_> {
                     let actual =
                         raw.min(self.units[recipient].spec.stats.max_hp - self.units[recipient].hp);
                     self.units[recipient].hp += actual;
-                    self.emit(
+                    trace!(
+                        self,
                         "heal",
                         actor,
                         Some(recipient),
@@ -331,7 +344,8 @@ impl State<'_> {
                     self.units[recipient].shield += actual;
                     self.units[recipient].shield_turns =
                         self.units[recipient].shield_turns.max(duration_turns);
-                    self.emit(
+                    trace!(
+                        self,
                         "shield",
                         actor,
                         Some(recipient),
@@ -346,7 +360,8 @@ impl State<'_> {
                     let before = self.units[recipient].energy;
                     self.units[recipient].energy =
                         (before + amount).clamp(0.0, self.units[recipient].spec.max_energy);
-                    self.emit(
+                    trace!(
+                        self,
                         "energy",
                         actor,
                         Some(recipient),
@@ -364,7 +379,8 @@ impl State<'_> {
                         self.units[recipient].remaining =
                             (self.units[recipient].remaining - DISTANCE * fraction).max(0.0);
                     }
-                    self.emit(
+                    trace!(
+                        self,
                         "advance",
                         actor,
                         Some(recipient),
@@ -377,7 +393,8 @@ impl State<'_> {
             Effect::Speed { value, target } => {
                 for recipient in self.targets(actor, target)? {
                     self.units[recipient].spec.stats.speed = value;
-                    self.emit(
+                    trace!(
+                        self,
                         "speed",
                         actor,
                         Some(recipient),
@@ -396,7 +413,15 @@ impl State<'_> {
                     self.units[recipient].toughness = (before - amount).max(0.0);
                     if before > 0.0 && self.units[recipient].toughness == 0.0 {
                         self.units[recipient].spec.stats.toughness_broken = true;
-                        self.emit("break", actor, Some(recipient), Some(action), None, None);
+                        trace!(
+                            self,
+                            "break",
+                            actor,
+                            Some(recipient),
+                            Some(action),
+                            None,
+                            None
+                        );
                         self.dispatch(BattleEvent::Break, Some(recipient), Some(action))?;
                     }
                 }
@@ -430,6 +455,7 @@ impl State<'_> {
     }
 }
 
+/// 返回有限计算结果，遇到 NaN 或无穷值时附带字段名报错。
 pub(super) fn finite(value: f64, name: &str) -> Result<f64, String> {
     if value.is_finite() {
         Ok(value)
