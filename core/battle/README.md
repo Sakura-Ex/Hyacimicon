@@ -2,18 +2,20 @@
 
 `battle-core` 是崩铁货币战争 AI 系统的独立战斗模拟核心，提供纯 Rust 编写的确定性战斗规则演算、蒙特卡洛批次评估以及命令行工具 `hcwa-battle`。
 
-本模块不直接依赖 UI 框架与游戏客户端，接收已经组装完毕的有效属性面板与技能定义，输出精确的对局结果、单位快照与事件序列。
+本模块不依赖游戏客户端与 UI 框架，在架构上实现了**纯内存轻量运行时 (Core Runtime)** 与**诊断及序列化系统 (Diagnostics)** 的解耦：默认编译为零额外反序列化开销的高性能纯内存核心；在启用 `diagnostics` 特性时提供场景 JSON 校验、序列化输出与整局血量（Run HP）结算诊断。
 
 详细的系统设计、时序机制与分步 API 请查阅模块技术文档：
 - [系统架构与逻辑设计](../../docs/modules/battle-simulation/design.md)
 - [外部选招与分步会话接口](../../docs/modules/battle-simulation/stepping.md)
 - [测试与回归验证指南](../../docs/modules/battle-simulation/validation.md)
+- [光锥效果数据](../../docs/game-data/light-cone-effects.md)
+- [遗器套装效果数据](../../docs/game-data/relic-set-effects.md)
 
 ---
 
 ## 1. 命令行工具 (`hcwa-battle`)
 
-Crate 内置命令行工具 `hcwa-battle`，用于离线校验场景输入、单局模拟与批量蒙特卡洛评估。
+Crate 内置命令行工具 `hcwa-battle`（位于 `src/main.rs`），要求 `diagnostics` 特性，用于离线校验场景输入、单局模拟与批量蒙特卡洛评估。
 
 ### 1.1 子命令手册
 
@@ -118,14 +120,14 @@ cargo run -p battle-core --release --locked -- batch <SCENARIO.json> <TRIALS> <M
 
 ## 3. Rust 库调用示例
 
-### 3.1 同步快速模拟
+### 3.1 同步快速模拟（启用 `diagnostics` 特性时支持 JSON 解析）
 
 ```rust
 use battle_core::model::validate;
 use battle_core::engine::simulate;
 
 fn run_single_battle(scenario_json: &str, seed: u64) -> Result<(), String> {
-    // 1. 反序列化场景
+    // 1. 反序列化场景（需 features = ["diagnostics"]）
     let raw_scenario = serde_json::from_str(scenario_json).map_err(|e| e.to_string())?;
 
     // 2. 结构与参数校验
