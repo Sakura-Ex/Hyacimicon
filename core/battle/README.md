@@ -110,6 +110,11 @@ unsupported fields are recorded. TargetInfo, when present, must specify only
 SkillTargetEntityList. Unused Modifier definitions are declarations; referenced
 modifiers are validated by AddModifier.
 
+Explicit `CanTriggerLastKill` values other than boolean `true` reject. For the
+legacy regular-skill compiler, an omitted value retains its documented direct-hit
+contract and is recorded as an unresolved native default. The S2 pursued-hit
+compiler requires explicit `true`; it does not treat this field as presentation.
+
 This is **selected regular-skill-chain execution**, not a complete roster importer.
 Provide resistance already resolved for the emitted damage element. The local
 acceptance run resolves GridFight Seele Skill01 through its Advanced parent,
@@ -148,6 +153,34 @@ The two raw property-name mappings were cross-checked against HSR_Nous
 `00185ddc4d57039894caf19467f602e716329e40`'s `adapters/enemy_ability.py`.
 Its inferred modifier defaults and unconsumed active-skill callbacks are not
 imported. The existing MIT notice is retained in `HSR_NOUS_LICENSE`.
+
+The S2 callback integration also exposes `before_skill_use` at action entry
+after payment, and `after_attack` only when the explicit `attack_finish` effect
+is executed. The latter represents the selected source's DamagePerformFinish
+boundary, not Action completion. `retarget_attack_random` samples one living
+member of the current actor's already-hit target list and restores nested target
+scope on return; an empty list executes its explicit empty branch.
+
+`elemental_damage` requires complete seven-element panels for every unit. Its
+element resistance replaces the legacy resolved scalar; element-specific bonus
+adds to common bonus and active property contributions. A separately derived
+element RNG stream preserves the existing target/critical stream seeds. Random
+selection is the simulator's uniform seven-element contract; client distribution
+and RNG are unmeasured. Nested listener hits select their own element context.
+Each elemental hit also supplies its `attack_type`. Damage trace events and
+`hit_attack_type` conditions retain `pursued` independently of the enclosing
+Skill action kind. Hit and death listeners receive that hit's context; nested
+hits use their own kind, then restore the caller's context on return. Legacy
+damage effects are `direct` and do not inherit a listener's triggering hit kind.
+
+The current raw expression decoder additionally handles multiplication/division
+and the selected character's `floor` and `max` calls. Function hashes, argument
+counts and stack shape were cross-checked against the S2 pursuit count, parent
+weakness-weight clamping, and the GridFight timer. This is a structural inference
+from pinned configuration, not a client-interpreter measurement. Unknown functions
+and invalid call arities still reject. Numeric S2 callbacks have been executed
+together with synthetic skill carriers and checked hit by hit; this does not
+complete the parent character kit, its additional skills/weaknesses or a stage.
 
 ## Compatibility and verification
 

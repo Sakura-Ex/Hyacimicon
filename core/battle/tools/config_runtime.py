@@ -11,10 +11,36 @@ from config_expression import compile_expression, stable_hash
 class RuntimeLowering:
     """Lower supported callbacks while retaining unresolved mechanism failures."""
 
-    def __init__(self, compiler, runtime_keys: dict[str, str]):
+    def __init__(self, compiler, runtime_keys: dict[str, str], templates: dict | None = None):
         """Share immutable bindings/evidence and retain explicit storage mappings."""
         self.compiler = compiler
         self.runtime_keys = runtime_keys
+        self.templates = templates if templates is not None else {}
+
+    def presentation_delay_template(self, name: str) -> None:
+        """Check a supplied timing-only template before excluding animation delay.
+
+        Only the inspected PerformanceDelay variable may be written. Any new
+        numeric task rejects; later numerical reads of this variable still lack
+        a runtime storage binding and cannot silently become zero.
+        """
+        if name != 'PursuedDamage_PerformanceDelay' or name not in self.templates:
+            raise Unsupported(f'unresolved presentation template {name}')
+        allowed = {'DefineDynamicValue','SetDynamicValue','Retarget','PredicateTaskList',
+                   'PerformDelayExecute','VCameraConfigChange','RadialBlurCurveEffect',
+                   'TargetAlias','ByTargetAliveState','BySimulateSpeedUp','ByInTimelinePerform'}
+        def inspect(node: object) -> None:
+            """Reject hidden numeric tasks in every branch and delayed task list."""
+            if isinstance(node, dict):
+                kind = node.get('$type', '').removeprefix('RPG.GameCore.')
+                if kind and kind not in allowed:
+                    raise Unsupported(f'non-presentation template node {kind}')
+                if kind in {'DefineDynamicValue','SetDynamicValue'} and node.get('DynamicKey') != {'Value':'MDF_PerformanceDelay'}:
+                    raise Unsupported('presentation template writes a numerical runtime key')
+                for child in node.values(): inspect(child)
+            elif isinstance(node, list):
+                for child in node: inspect(child)
+        inspect(self.templates[name])
 
     def key(self, name: str) -> str:
         """Resolve a named variable to explicitly selected storage scope."""
@@ -125,6 +151,41 @@ class RuntimeLowering:
                     # HUD state is presentation. Validate the numeric expression anyway.
                     self.expression(task['CurrentCount'])
                     row['handling'] = 'presentation_only_energy_bar'
+                elif kind == 'Retarget':
+                    self.fields(task, {'TargetType', 'ByRandom', 'MaxNumber', 'TaskList', 'FailedTaskList'})
+                    if task['TargetType'] != {'$type':'RPG.GameCore.TargetAlias','Alias':'AttackTargetList'} or task.get('ByRandom') is not True or self.compiler.number(task['MaxNumber']) != 1:
+                        raise Unsupported('only one random prior attack target is implemented')
+                    effects.append(dict(type='retarget_attack_random', effects=self.tasks(task['TaskList'], where+'/TaskList'),
+                                        empty_effects=self.tasks(task.get('FailedTaskList', []), where+'/FailedTaskList')))
+                    row['handling'] = 'live_prior_attack_target_list'
+                elif kind == 'IncludeTaskListTemplate':
+                    self.fields(task, {'Name','ParamTarget'})
+                    if task.get('ParamTarget') != {'$type':'RPG.GameCore.TargetAlias','Alias':'ParamEntity'}:
+                        raise Unsupported('presentation template target is not current retarget context')
+                    self.presentation_delay_template(task['Name'])
+                    row['handling'] = 'inspected_presentation_delay_zero_av'
+                elif kind == 'DamageByAttackProperty':
+                    self.fields(task, {'TargetType','AttackProperty','CanTriggerLastKill','PerformanceDelay','IsHitAnimPerformanceDelay'})
+                    if task['TargetType'] != {'$type':'RPG.GameCore.TargetAlias','Alias':'ParamEntity'}:
+                        raise Unsupported('runtime pursued hit requires retarget context')
+                    attack = task['AttackProperty']
+                    self.fields(attack, {'DamageType','DamagePercentage','AttackType','HitAnimation','HitEffect',
+                        'HitEffectMinMutexTime','HitEffectMaxMutexCount','HitEffectHeight','HitPosHeight','RandomHitAngleHorizontal'})
+                    if attack.get('$type') != 'RPG.GameCore.AttackData' or attack.get('AttackType') != 'Pursued':
+                        raise Unsupported('runtime damage supports the sourced Pursued hit contract only')
+                    if task.get('CanTriggerLastKill') is not True:
+                        raise Unsupported('pursued death attribution requires explicit CanTriggerLastKill=true')
+                    if attack.get('DamageType') != {'SourceType':'Random'}:
+                        raise Unsupported('pursued damage element source is unsupported')
+                    # Damage text/animation delay is zero AV under the atomic Action
+                    # contract; never reuse this field as a damage/resource input.
+                    if 'PerformanceDelay' in task and task['PerformanceDelay'] != {'IsDynamic':True,
+                        'PostfixExpr':{'OpCodes':'AQAR','FixedValues':[],'DynamicHashes':[1854514093]}}:
+                        raise Unsupported('unrecognized pursued performance delay')
+                    effects.append(dict(type='elemental_damage', scale='attack', ratio=self.expression(attack['DamagePercentage']),
+                        flat=dict(op='constant', value=0), element=dict(selection='random_all'), attack_type='pursued', can_crit=True, target='context_target'))
+                    row['handling'] = 'random_element_pursued_hit_explicit_panels'
+                    row['raw_attack_type'] = attack['AttackType']
                 else:
                     raise Unsupported(f'runtime task {kind}')
             except (Unsupported, KeyError, TypeError) as error:

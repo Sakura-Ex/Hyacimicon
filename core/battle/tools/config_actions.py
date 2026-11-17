@@ -190,6 +190,9 @@ class Compiler:
                     row['handling'] = branch
                     effects += self.tasks(task.get(branch, []), where + '/' + branch)
                 elif kind == 'DamageByAttackProperty':
+                    if 'CanTriggerLastKill' in task and task['CanTriggerLastKill'] is not True:
+                        raise Unsupported('unimplemented CanTriggerLastKill value; only explicit true was inspected')
+                    row['can_trigger_last_kill'] = 'explicit_true' if 'CanTriggerLastKill' in task else 'omitted_native_default_unresolved_legacy_direct_hit_contract'
                     if task['TargetType'] != {'$type': 'RPG.GameCore.TargetAlias', 'Alias': 'AbilityTargetEntity'}:
                         raise Unsupported('non-single explicit ability target')
                     if set(task) - {'$type','TargetType','AttackProperty','SpecialHitSoundEvent','CanTriggerLastKill'}:

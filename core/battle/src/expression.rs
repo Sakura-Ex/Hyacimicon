@@ -10,6 +10,8 @@ pub enum Expression {
     Subtract { left: Box<Self>, right: Box<Self> },
     Multiply { left: Box<Self>, right: Box<Self> },
     Divide { left: Box<Self>, right: Box<Self> },
+    Maximum { left: Box<Self>, right: Box<Self> },
+    Floor { value: Box<Self> },
     Negate { value: Box<Self> },
 }
 
@@ -31,11 +33,12 @@ impl Expression {
             Self::Add { left, right }
             | Self::Subtract { left, right }
             | Self::Multiply { left, right }
-            | Self::Divide { left, right } => {
+            | Self::Divide { left, right }
+            | Self::Maximum { left, right } => {
                 left.validate_at(depth + 1)?;
                 right.validate_at(depth + 1)
             }
-            Self::Negate { value } => value.validate_at(depth + 1),
+            Self::Negate { value } | Self::Floor { value } => value.validate_at(depth + 1),
             _ => Ok(()),
         }
     }
@@ -57,6 +60,8 @@ impl Expression {
                 left.evaluate(lookup)? / denominator
             }
             Self::Negate { value } => -value.evaluate(lookup)?,
+            Self::Floor { value } => value.evaluate(lookup)?.floor(),
+            Self::Maximum { left, right } => left.evaluate(lookup)?.max(right.evaluate(lookup)?),
         };
         if !value.is_finite() {
             return Err("nonfinite dynamic expression result".into());

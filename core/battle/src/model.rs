@@ -37,6 +37,8 @@ pub enum Scale {
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Target {
+    /// One target explicitly bound by a Retarget effect; nested scopes restore it.
+    ContextTarget,
     /// Select lowest-HP enemy once at Action entry and retain it for every hit.
     AbilityTarget,
     EnemyLowestHp,
@@ -49,6 +51,22 @@ pub enum Target {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Effect {
+    /// One sourced hit with explicit element panels; no implicit toughness effect.
+    ElementalDamage {
+        scale: Scale,
+        ratio: crate::expression::Expression,
+        flat: crate::expression::Expression,
+        element: crate::elements::DamageElement,
+        attack_type: AttackType,
+        can_crit: bool,
+        target: Target,
+    },
+    /// Source DamagePerformFinish boundary, distinct from completion of Action.
+    AttackFinish,
+    RetargetAttackRandom {
+        effects: Vec<Effect>,
+        empty_effects: Vec<Effect>,
+    },
     AddModifier {
         id: String,
         stacks: crate::expression::Expression,
@@ -138,6 +156,9 @@ pub enum Comparison {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Condition {
+    HitAttackType {
+        attack_type: AttackType,
+    },
     Compare {
         left: crate::expression::Expression,
         comparison: Comparison,
@@ -167,6 +188,7 @@ impl Condition {
                 right.validate()?;
             }
             Self::ActionKind { .. } => {}
+            Self::HitAttackType { .. } => {}
             Self::Not { condition } => condition.validate(depth + 1)?,
             Self::All { conditions } | Self::Any { conditions } => {
                 if conditions.is_empty() || conditions.len() > 32 {
@@ -205,6 +227,13 @@ fn flattened_effects(effects: &[Effect]) -> Result<Vec<&Effect>, String> {
                     visit(then_effects, depth + 1, out)?;
                     visit(else_effects, depth + 1, out)?;
                 }
+                Effect::RetargetAttackRandom {
+                    effects,
+                    empty_effects,
+                } => {
+                    visit(effects, depth + 1, out)?;
+                    visit(empty_effects, depth + 1, out)?;
+                }
                 Effect::Repeat { effects, .. } => visit(effects, depth + 1, out)?,
                 _ => {}
             }
@@ -222,6 +251,13 @@ pub enum ActionKind {
     Skill,
     Ultimate,
     FollowUp,
+}
+/// Hit classification is independent of the enclosing skill/action kind.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AttackType {
+    Direct,
+    Pursued,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -349,6 +385,7 @@ pub struct Event {
     pub action: Option<String>,
     pub amount: Option<f64>,
     pub critical: Option<bool>,
+    pub attack_type: Option<AttackType>,
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct BattleResult {
@@ -477,6 +514,26 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
         }
         for e in flattened_effects(&a.effects)? {
             match e {
+                Effect::ElementalDamage {
+                    ratio,
+                    flat,
+                    target,
+                    ..
+                } => {
+                    ratio.validate()?;
+                    flat.validate()?;
+                    if !matches!(
+                        target,
+                        Target::AbilityTarget
+                            | Target::ContextTarget
+                            | Target::EnemyLowestHp
+                            | Target::EnemyRandomTaunt
+                            | Target::AllEnemies
+                    ) {
+                        return Err("elemental damage requires enemy targets".into());
+                    }
+                }
+                Effect::AttackFinish | Effect::RetargetAttackRandom { .. } => {}
                 Effect::AddModifier { id, stacks, .. } => {
                     identifier(id, "modifier id")?;
                     stacks.validate()?;
@@ -503,7 +560,8 @@ fn validate_unit(unit: &Unit, sp: &SkillPoints) -> Result<(), String> {
                     }
                     if !matches!(
                         target,
-                        Target::AbilityTarget
+                        Target::ContextTarget
+                            | Target::AbilityTarget
                             | Target::EnemyLowestHp
                             | Target::EnemyRandomTaunt
                             | Target::AllEnemies
@@ -670,6 +728,8 @@ pub enum BattleEvent {
     TurnStart,
     TurnEnd,
     ActionStart,
+    BeforeSkillUse,
+    AfterAttack,
     ActionEnd,
     Hit,
     Break,
@@ -709,6 +769,8 @@ pub struct Trigger {
 #[serde(deny_unknown_fields)]
 pub struct Mechanics {
     #[serde(default)]
+    pub element_profiles: std::collections::BTreeMap<String, crate::elements::ElementProfile>,
+    #[serde(default)]
     pub modifier_definitions:
         std::collections::BTreeMap<String, crate::modifiers::ModifierDefinition>,
     /// Explicit initial actor variables; missing runtime reads are errors.
@@ -747,6 +809,12 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
         return Err("cycle AV sum must equal max_av".into());
     }
     let units: Vec<_> = s.allies.iter().chain(s.waves.iter().flatten()).collect();
+    for (id, profile) in &m.element_profiles {
+        if !units.iter().any(|u| &u.id == id) {
+            return Err("unknown element-profile unit".into());
+        }
+        profile.validate()?;
+    }
     for (id, definition) in &m.modifier_definitions {
         identifier(id, "modifier id")?;
         definition.validate()?;
@@ -757,6 +825,15 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
         .chain(m.triggers.iter().map(|t| &t.effects))
     {
         for e in flattened_effects(effects)? {
+            if matches!(e, Effect::ElementalDamage { .. })
+                && units
+                    .iter()
+                    .any(|u| !m.element_profiles.contains_key(&u.id))
+            {
+                return Err(
+                    "elemental damage requires explicit seven-element panels for every unit".into(),
+                );
+            }
             if let Effect::AddModifier { id, .. } | Effect::RemoveModifier { id, .. } = e {
                 if !m.modifier_definitions.contains_key(id) {
                     return Err(format!("unknown modifier definition {id}"));
@@ -822,6 +899,7 @@ fn validate_mechanics(s: &Scenario) -> Result<(), String> {
 impl Default for Mechanics {
     fn default() -> Self {
         Self {
+            element_profiles: Default::default(),
             modifier_definitions: Default::default(),
             dynamic_values: Default::default(),
             cycles: vec![],

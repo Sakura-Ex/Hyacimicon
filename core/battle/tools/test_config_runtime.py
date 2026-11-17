@@ -59,6 +59,42 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(Unsupported, 'unsupported property modifier callback OnDestroy'):
             self.lowering.property_changes(definition, 'modifier')
 
+    def test_presentation_template_cannot_hide_numeric_tasks(self):
+        """Inspect delayed/conditional branches instead of trusting a template name."""
+        name = 'PursuedDamage_PerformanceDelay'
+        lowering = RuntimeLowering(self.compiler, {}, {name: {'Name':name,'TaskList':[
+            {'$type':'RPG.GameCore.PerformDelayExecute','PerformTaskList':[
+                {'$type':'RPG.GameCore.DamageByAttackProperty'}]}]}})
+        with self.assertRaisesRegex(Unsupported, 'non-presentation template node DamageByAttackProperty'):
+            lowering.presentation_delay_template(name)
+
+    def test_retarget_does_not_expand_pool_or_drop_failure_branch(self):
+        """Only sourced one-target selection is accepted; both task lists compile."""
+        node = {'$type':'RPG.GameCore.Retarget',
+                'TargetType':{'$type':'RPG.GameCore.TargetAlias','Alias':'AttackTargetList'},
+                'ByRandom':True,'MaxNumber':{'Value':1},'TaskList':[],
+                'FailedTaskList':[{'$type':'RPG.GameCore.UnknownNumeric'}]}
+        with self.assertRaisesRegex(Unsupported, 'FailedTaskList/0: runtime task UnknownNumeric'):
+            self.lowering.tasks([node], 'retarget')
+
+    def test_pursued_hit_preserves_kind_and_requires_explicit_last_kill(self):
+        """Do not reinterpret a pursued hit as the carrier skill or infer a flag."""
+        node = {'$type':'RPG.GameCore.DamageByAttackProperty',
+                'TargetType':{'$type':'RPG.GameCore.TargetAlias','Alias':'ParamEntity'},
+                'CanTriggerLastKill':True,
+                'AttackProperty':{'$type':'RPG.GameCore.AttackData',
+                    'AttackType':'Pursued','DamageType':{'SourceType':'Random'},
+                    'DamagePercentage':{'Value':0.7}}}
+        result = self.lowering.tasks([node], 'pursued')
+        self.assertEqual(result[0]['attack_type'], 'pursued')
+        for value in [False, 0, 1, None]:
+            node['CanTriggerLastKill'] = value
+            with self.subTest(value=value), self.assertRaisesRegex(Unsupported, 'explicit CanTriggerLastKill=true'):
+                self.lowering.tasks([node], 'pursued')
+        del node['CanTriggerLastKill']
+        with self.assertRaisesRegex(Unsupported, 'explicit CanTriggerLastKill=true'):
+            self.lowering.tasks([node], 'pursued')
+
 
 if __name__ == '__main__':
     unittest.main()

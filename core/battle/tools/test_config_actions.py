@@ -36,6 +36,12 @@ class ConfigTests(unittest.TestCase):
         effects=self.compiler.tasks([{'$type':'RPG.GameCore.DamageByAttackProperty','TargetType':{'$type':'RPG.GameCore.TargetAlias','Alias':'AbilityTargetEntity'},'AttackProperty':{'$type':'RPG.GameCore.AttackData','DamageType':{'DamageType':'Quantum'},'DamagePercentage':{'Value':2.5},'SPHitRatio':{'Value':0.5}}}],'probe')
         self.assertEqual(effects[-1],{'type':'energy','amount':5.0,'target':'ability_target'})
 
+    def test_explicit_unimplemented_last_kill_flag_rejects(self):
+        """Do not silently accept false or nonboolean last-kill behavior."""
+        for value in [False, 0, 1, None]:
+            with self.subTest(value=value), self.assertRaisesRegex(Unsupported, 'unimplemented CanTriggerLastKill value'):
+                self.compiler.tasks([{'$type':'RPG.GameCore.DamageByAttackProperty','CanTriggerLastKill':value}], 'probe')
+
     def test_nonempty_unknown_ability_fields_reject_before_lowering(self):
         """An unhandled callback cannot disappear behind a compiled OnStart."""
         damage = {'$type':'RPG.GameCore.DamageByAttackProperty',

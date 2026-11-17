@@ -1,6 +1,7 @@
 //! Single-owner event loop for the explicit battle_v2 contract.
 use crate::{
     decision::*,
+    elements::{DamageElement, Element},
     math,
     model::*,
     modifiers::{ModifierBook, Property},
@@ -11,7 +12,7 @@ use rand_core::{RngCore, SeedableRng};
 use sha2::{Digest, Sha256};
 
 pub const RNG_ALGORITHM: &str =
-    "ChaCha8Rng/rand_chacha=0.9.0; SHA256-separated target/critical streams v1";
+    "ChaCha8Rng/rand_chacha=0.9.0; SHA256-separated target/critical/element streams v1";
 const TRACE_LIMIT: usize = 100_000;
 
 struct CombatUnit {
@@ -80,6 +81,9 @@ struct State<'a> {
     current_action_kind: Option<ActionKind>,
     exhausted: bool,
     bound_target: Option<usize>,
+    context_target: Option<usize>,
+    attack_owner: Option<usize>,
+    attack_targets: Vec<usize>,
     actions: u32,
     wave: usize,
     sp: [u8; 2],
@@ -88,6 +92,10 @@ struct State<'a> {
     trace_truncated: bool,
     targets: ChaCha8Rng,
     criticals: ChaCha8Rng,
+    elements: ChaCha8Rng,
+    damage_element: Option<Element>,
+    damage_attack_type: Option<AttackType>,
+    event_attack_type: Option<AttackType>,
 }
 fn stream(seed: u64, domain: &[u8]) -> ChaCha8Rng {
     let mut hash = Sha256::new();
@@ -369,6 +377,9 @@ impl<'a> State<'a> {
             current_action_kind: None,
             exhausted: false,
             bound_target: None,
+            context_target: None,
+            attack_owner: None,
+            attack_targets: vec![],
             actions: 0,
             wave: 0,
             sp: [s.ally_skill_points.initial, s.enemy_skill_points.initial],
@@ -377,6 +388,10 @@ impl<'a> State<'a> {
             trace_truncated: false,
             targets: stream(seed, b"targets"),
             criticals: stream(seed, b"criticals"),
+            elements: stream(seed, b"elements"),
+            damage_element: None,
+            damage_attack_type: None,
+            event_attack_type: None,
         }
     }
     fn emit(
@@ -404,6 +419,8 @@ impl<'a> State<'a> {
             action: action.map(str::to_owned),
             amount,
             critical,
+            attack_type: (kind == "damage")
+                .then_some(self.damage_attack_type.unwrap_or(AttackType::Direct)),
         });
     }
     fn side(&self, actor: usize) -> usize {
@@ -421,6 +438,16 @@ impl<'a> State<'a> {
             && action.energy_cost <= self.units[actor].energy
     }
     fn targets(&mut self, actor: usize, target: Target) -> Result<Vec<usize>, String> {
+        if target == Target::ContextTarget {
+            let index = self
+                .context_target
+                .ok_or("context target used outside a retarget scope")?;
+            return Ok(if self.units[index].alive() {
+                vec![index]
+            } else {
+                vec![]
+            });
+        }
         if target == Target::AbilityTarget {
             return Ok(self
                 .bound_target
@@ -480,6 +507,7 @@ impl<'a> State<'a> {
                     .ok_or("target selection unexpectedly empty")?])
             }
             Target::AbilityTarget => unreachable!("bound target handled above"),
+            Target::ContextTarget => unreachable!("context target handled above"),
             Target::SelfUnit => unreachable!("self target handled before candidate selection"),
         }
     }
@@ -543,6 +571,9 @@ impl<'a> State<'a> {
                 }
             }
             Condition::ActionKind { kind } => self.current_action_kind == Some(*kind),
+            Condition::HitAttackType { attack_type } => {
+                self.event_attack_type == Some(*attack_type)
+            }
             Condition::Not { condition } => !self.condition(actor, condition)?,
             Condition::All { conditions } => {
                 let mut yes = true;
@@ -586,6 +617,84 @@ impl<'a> State<'a> {
         effect: &Effect,
     ) -> Result<(), String> {
         match *effect {
+            Effect::ElementalDamage {
+                scale,
+                ref ratio,
+                ref flat,
+                element,
+                attack_type,
+                can_crit,
+                target,
+            } => {
+                let lookup = |key: &str| self.units[actor].dynamic_values.get(key).copied();
+                let ratio = ratio.evaluate(&lookup)?;
+                let flat = flat.evaluate(&lookup)?;
+                if ratio < 0.0 || flat < 0.0 {
+                    return Err("negative dynamic damage coefficient".into());
+                }
+                let element = match element {
+                    DamageElement::Fixed { element } => element,
+                    DamageElement::RandomAll => {
+                        Element::ALL[(uniform(&mut self.elements) * 7.0) as usize]
+                    }
+                };
+                self.emit(
+                    &format!("damage_element_{}", element.name()),
+                    actor,
+                    self.context_target,
+                    Some(action),
+                    None,
+                    None,
+                );
+                let saved = self.damage_element.replace(element);
+                let saved_attack_type = self.damage_attack_type.replace(attack_type);
+                let result = self.apply_effect(
+                    actor,
+                    action,
+                    &Effect::Damage {
+                        scale,
+                        ratio,
+                        flat,
+                        hits: 1,
+                        can_crit,
+                        target,
+                    },
+                );
+                self.damage_element = saved;
+                self.damage_attack_type = saved_attack_type;
+                result?;
+            }
+            Effect::AttackFinish => {
+                self.dispatch(BattleEvent::AfterAttack, Some(actor), Some(action))?;
+            }
+            Effect::RetargetAttackRandom {
+                ref effects,
+                ref empty_effects,
+            } => {
+                if self.attack_owner != Some(actor) {
+                    return Err("attack target list does not belong to callback owner".into());
+                }
+                let choices: Vec<_> = self
+                    .attack_targets
+                    .iter()
+                    .copied()
+                    .filter(|&i| self.units[i].alive())
+                    .collect();
+                if choices.is_empty() {
+                    for child in empty_effects {
+                        self.apply_effect(actor, action, child)?;
+                    }
+                } else {
+                    let selected =
+                        choices[(uniform(&mut self.targets) * choices.len() as f64) as usize];
+                    let saved = self.context_target.replace(selected);
+                    let result = effects
+                        .iter()
+                        .try_for_each(|child| self.apply_effect(actor, action, child));
+                    self.context_target = saved;
+                    result?;
+                }
+            }
             Effect::AddModifier {
                 ref id,
                 ref stacks,
@@ -729,6 +838,11 @@ impl<'a> State<'a> {
                         if !self.units[victim].alive() {
                             continue;
                         }
+                        if self.attack_owner == Some(actor)
+                            && !self.attack_targets.contains(&victim)
+                        {
+                            self.attack_targets.push(victim);
+                        }
                         // A prior hit's callbacks may have changed active properties.
                         let mut attacker = self.units[actor].spec.stats.clone();
                         attacker.crit_damage = finite(
@@ -742,6 +856,29 @@ impl<'a> State<'a> {
                             "modified damage bonus",
                         )?;
                         let defender = &self.units[victim].spec.stats;
+                        let resistance = if let Some(element) = self.damage_element {
+                            let profiles = &self.input.scenario().mechanics.element_profiles;
+                            let source = profiles
+                                .get(&self.units[actor].spec.id)
+                                .ok_or("missing attack element panel")?;
+                            let target = profiles
+                                .get(&self.units[victim].spec.id)
+                                .ok_or("missing defense element panel")?;
+                            attacker.damage_bonus = finite(
+                                attacker.damage_bonus
+                                    + source
+                                        .damage_bonus
+                                        .get(&element)
+                                        .ok_or("missing element damage bonus")?,
+                                "element damage bonus",
+                            )?;
+                            *target
+                                .resistance
+                                .get(&element)
+                                .ok_or("missing element resistance")?
+                        } else {
+                            defender.resistance
+                        };
                         let critical =
                             can_crit && uniform(&mut self.criticals) < attacker.crit_rate;
                         let amount = math::damage(
@@ -751,7 +888,7 @@ impl<'a> State<'a> {
                                 defense: defender.defense,
                                 defense_reduction: attacker.defense_reduction,
                                 defense_ignore: attacker.defense_ignore,
-                                resistance: defender.resistance,
+                                resistance,
                                 resistance_penetration: attacker.resistance_penetration,
                                 damage_bonus: attacker.damage_bonus,
                                 vulnerability: defender.vulnerability,
@@ -798,10 +935,24 @@ impl<'a> State<'a> {
                             Some(hp_loss),
                             None,
                         );
-                        self.dispatch(BattleEvent::Hit, Some(actor), Some(action))?;
-                        if died_from_this_hit {
-                            self.resolve_death(victim, action)?;
-                        }
+                        // The active element belongs to this hit, not nested hits
+                        // dispatched by listeners. Such hits select their own panel.
+                        let active_element = self.damage_element.take();
+                        let active_attack_type = self.damage_attack_type.take();
+                        let prior_event_attack_type = self
+                            .event_attack_type
+                            .replace(active_attack_type.unwrap_or(AttackType::Direct));
+                        let event_result: Result<(), String> = (|| {
+                            self.dispatch(BattleEvent::Hit, Some(actor), Some(action))?;
+                            if died_from_this_hit {
+                                self.resolve_death(victim, action)?;
+                            }
+                            Ok(())
+                        })();
+                        self.damage_element = active_element;
+                        self.damage_attack_type = active_attack_type;
+                        self.event_attack_type = prior_event_attack_type;
+                        event_result?;
                     }
                 }
             }
@@ -956,12 +1107,15 @@ impl<'a> State<'a> {
         // Bind once even when a nested conditional/loop is the first target use.
         self.bound_target = self.targets(actor, Target::EnemyLowestHp)?.first().copied();
         self.current_action_kind = Some(action.kind);
+        self.attack_owner = Some(actor);
+        self.attack_targets.clear();
         let side = self.side(actor);
         if !prepaid {
             self.pay(actor, &action);
         }
         self.actions += 1;
         self.dispatch(BattleEvent::ActionStart, Some(actor), Some(&action.id))?;
+        self.dispatch(BattleEvent::BeforeSkillUse, Some(actor), Some(&action.id))?;
         self.emit("action", actor, None, Some(&action.id), None, None);
         for effect in &action.effects {
             self.apply_effect(actor, &action.id, effect)?;
@@ -977,6 +1131,8 @@ impl<'a> State<'a> {
         self.emit("action_end", actor, None, Some(&action.id), None, None);
         self.bound_target = None;
         self.current_action_kind = None;
+        self.attack_owner = None;
+        self.attack_targets.clear();
         Ok(())
     }
     fn finish(

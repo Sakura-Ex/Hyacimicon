@@ -78,3 +78,26 @@ fn invalid_dynamic_arithmetic_is_not_committed() {
         "nonfinite dynamic expression result"
     );
 }
+
+#[test]
+fn pursuit_floor_and_weakness_weight_clamp_keep_boundary_behavior() {
+    for (layer, expected) in [(0.0, 0.0), (4.0, 0.0), (5.0, 1.0), (9.0, 1.0), (10.0, 2.0)] {
+        let expr = Expression::Floor {
+            value: Box::new(Expression::Divide {
+                left: Box::new(number(layer)),
+                right: Box::new(number(5.0)),
+            }),
+        };
+        close(expr.evaluate(&|_| None).unwrap(), expected);
+    }
+    for (weight, expected) in [(1000.0, 999.0), (0.0009999999, 0.0), (0.0, 0.0)] {
+        let expr = Expression::Maximum {
+            left: Box::new(Expression::Subtract {
+                left: Box::new(number(weight)),
+                right: Box::new(number(1.0)),
+            }),
+            right: Box::new(number(0.0)),
+        };
+        close(expr.evaluate(&|_| None).unwrap(), expected);
+    }
+}
