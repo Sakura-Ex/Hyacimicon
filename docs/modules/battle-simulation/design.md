@@ -11,17 +11,16 @@
 ```mermaid
 flowchart TD
     subgraph DiagnosticsLayer["诊断与接入层 (feature = 'diagnostics')"]
-        RawJSON["JSON 场景输入"] --> Deserialize["Serde 反序列化与校验"]
-        Deserialize --> Validate["model::validate 结构与边界校验"]
-        Validate --> Validated["ValidatedScenario + SHA256 指纹"]
+        RawJSON["JSON 场景输入"] --> ParseFile["ScenarioFile::from_slice 解析与指纹提取"]
+        ParseFile --> ScenarioFile["ScenarioFile (包含 battle, provenance, settlement, fingerprint)"]
         DiagSettlement["diagnostics::settlement (整局血量结算诊断)"]
         CLI["hcwa-battle CLI 工具"]
     end
 
-    subgraph CoreRuntime["纯内存核心运行时 (Default Feature: 无序列化依赖)"]
+    subgraph CoreRuntime["纯内存核心运行时 (Default Feature: 无外部序列化依赖)"]
         subgraph InputTypes["输入与接口抽象"]
-            ScenarioModel["Scenario / ValidatedScenario"]
-            SessionAPI["BattleSession (分步外部会话)"]
+            ScenarioModel["Scenario (纯内存对局配置)"]
+            SessionAPI["BattleSession (分步外部交互会话)"]
             DecisionModel["Decision / Observation / Operation"]
         end
 
@@ -33,7 +32,7 @@ flowchart TD
         end
 
         subgraph Mechanics["底层规则机制层 (Mechanics)"]
-            Math["math (多乘区伤害/治疗/护盾公式与边界防守)"]
+            Math["math (多乘区伤害/治疗/护盾公式与安全防守)"]
             Modifiers["modifiers (状态叠层与计时)"]
             Elements["elements (七元素面板与抗性)"]
             Scope["dynamic_scope (调用帧栈与局部变量)"]
@@ -44,7 +43,8 @@ flowchart TD
         end
     end
 
-    Validated --> State
+    ScenarioFile -->|解构获得 .battle| ScenarioModel
+    ScenarioModel --> State
     SessionAPI <--> State
     State --> Timeline
     State --> Operations
@@ -54,7 +54,7 @@ flowchart TD
     Effects --> Elements
     Effects --> Scope
     State --> NativeResult
-    NativeResult -.-> DiagSettlement
+    NativeResult -.->|report 方法组合包装| DiagSettlement
 ```
 
 ### 1.1 双层解耦设计优势
@@ -62,28 +62,28 @@ flowchart TD
 - **Core Runtime（默认轻量依赖）**：
   默认无需引入外部序列化库，所有数据结构在纯内存中直接构造、更新与交互。专为后续大规模强化学习采样、MCTS 树搜索及高性能批次评估设计，避免高频调用中反复序列化与反序列化的 CPU 开销。
 - **Diagnostics（`feature = ["diagnostics"]`）**：
-  按需启用 `serde` 与 `serde_json` 依赖，提供文件 IO、JSON 场景校验、人类可读诊断事件导出以及整局血量（Run HP）结算诊断。命令行工具 `hcwa-battle` 默认启用该特性。
+  按需启用 `serde` 与 `serde_json` 依赖，提供文件 IO、JSON 场景解析、人类可读诊断事件导出以及整局血量（Run HP）结算诊断。命令行工具 `hcwa-battle` 与示例 `step_battle` 均基于此特性构建。
 
 ### 1.2 模块职责划分
 
-| 模块目录 | 命名空间 | 核心职责 |
+| 模块目录 | 相对路径 / 命名空间 | 核心职责 |
 | --- | --- | --- |
-| `src/model/` | [`battle_core::model`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/mod.rs) | 纯数据结构定义。包含场景配置、单位、动作定义、事件类型及结果模型。在 `diagnostics` 特性下提供校验与序列化能力。 |
-| `src/engine/` | [`battle_core::engine`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/mod.rs) | 战斗执行主循环与状态维护。包含会话状态机、单位队列管理、行动时序推进、动作派发与目标选择。 |
-| `src/mechanics/` | [`battle_core::mechanics`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/mechanics/mod.rs) | 无状态或局部状态的通用数学计算与规则子系统。包含多乘区伤害算式、属性状态叠层、七元素属性与表达式求值。 |
-| `src/decision.rs` | [`battle_core::decision`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs) | 外部决策与策略抽象。提供局面观测快照、合法动作空间定义及策略 Trait。 |
-| `src/batch.rs` | [`battle_core::batch`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/batch.rs) | 蒙特卡洛多局批次运行器，管理独立随机种子派生与胜率统计评估。 |
-| `src/diagnostics/` | `battle_core::diagnostics` | （可选特性）提供整局血量结算诊断（`settlement`）与场景校验审计功能。 |
+| `src/model/` | [`battle_core::model`](../../../core/battle/src/model/mod.rs) | 纯数据结构定义。包含对局场景配置、单位、动作定义、事件类型及原生结果模型。在 `diagnostics` 特性下提供 Serde 序列化标注。 |
+| `src/engine/` | [`battle_core::engine`](../../../core/battle/src/engine/mod.rs) | 战斗执行主循环与状态维护。包含会话状态机、单位队列管理、行动时序推进、动作派发与目标选择。 |
+| `src/mechanics/` | [`battle_core::mechanics`](../../../core/battle/src/mechanics/mod.rs) | 无状态或局部状态的通用数学计算与规则子系统。包含多乘区伤害算式、属性状态叠层、七元素属性与表达式求值。 |
+| `src/decision.rs` | [`battle_core::decision`](../../../core/battle/src/decision.rs) | 外部决策与策略抽象。提供局面观测快照、合法动作空间定义及策略 Trait。 |
+| `src/batch.rs` | [`battle_core::batch`](../../../core/battle/src/batch.rs) | 蒙特卡洛多局批次运行器，管理独立随机种子派生与胜率统计评估。 |
+| `src/diagnostics/` | [`battle_core::diagnostics`](../../../core/battle/src/diagnostics/mod.rs) | （可选特性）提供场景文件读取（`ScenarioFile`）、诊断报告包装（`BattleReport`）与整局血量结算诊断（`settlement`）。 |
 
 ---
 
 ## 2. 核心执行流程与时序调度
 
-单场战斗由 [`BattleSession`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) 驱动。引擎主循环执行以下关键阶段：
+单场战斗由 [`BattleSession`](../../../core/battle/src/engine/session.rs) 驱动。引擎主循环执行以下关键阶段：
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Ready: 校验通过并初始化 State
+    [*] --> Ready: 读取 Scenario 并初始化 State
     Ready --> CheckTerminal: 检查终局淘汰与波次切换
     CheckTerminal --> ProcessInsert: 优先处理排队中的插入动作 (终结技/额外回合/追击)
     ProcessInsert --> AdvanceTurn: 无插入，推进常规时钟至最近单位
@@ -130,7 +130,7 @@ stateDiagram-v2
 ```mermaid
 flowchart LR
     Base[基础数值 Scaling] --> Multipliers[乘区展开: 增伤/易伤/防御/抗性/虚弱]
-    Multipliers --> SafetyCheck[动态属性防守检查: 拒绝负值属性]
+    Multipliers --> SafetyCheck[动态属性防守检查]
     SafetyCheck --> AllyFactor[我方伤害系数 ally_damage_factor]
     AllyFactor --> CritRNG[逐命中独立暴击判定]
     CritRNG --> Shield[护盾优先吸收]
@@ -146,7 +146,7 @@ $$\text{Damage} = \text{Base} \times (1 + \text{DmgBonus}) \times (1 + \text{Vul
 
 1. **基础数值 (Base)**：由攻击者面板（攻击力、防御力或生命上限比例）结合动作配置确定。
 2. **增伤乘区 (DmgBonus)**：全局增伤与当前命中对应元素的属性增伤之和，加上实时活动的 Modifier 增益。
-   - **防守性校验**：动态增益应用后，综合伤害增益不得小于 0，抗性/防御削减计算严格防止非法的下溢行为。
+   - **安全性防守**：综合增伤乘率不得小于零（即要求 `damage_bonus >= -1.0`）；暴击伤害加成不得为负数（`crit_damage >= 0.0`）。
 3. **易伤乘区 (Vulnerability)**：受击者身上的易伤状态总和。
 4. **防御乘区 (DefMult)**：
    $$\text{DefMult} = \frac{\text{attacker\_level} \times 10 + 200}{(\text{attacker\_level} \times 10 + 200) + \text{defender\_def} \times (1 - \text{def\_ignore})}$$
@@ -164,27 +164,33 @@ $$\text{Damage} = \text{Base} \times (1 + \text{DmgBonus}) \times (1 + \text{Vul
 
 ## 4. 核心类型规约
 
-### 4.1 输入配置模型 ([`model`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/mod.rs))
+### 4.1 输入配置模型 ([`model`](../../../core/battle/src/model/mod.rs))
 
-- [`Scenario`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/scenario.rs)：战斗输入的根结构体。包含版本号、来源声明（`provenance`）、双方队伍列表、波次定义、AV 预算及底层机制配置（`mechanics`）。
-- [`ValidatedScenario`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/scenario.rs)：经过结构与边界校验后的场景不可变容器，附带全输入的 SHA-256 指纹。
-- [`Unit`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/unit.rs)：单位基础定义，包含静态面板 [`Stats`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/unit.rs)、初始能量/生命、复活配置及技能动作列表。
-- [`Action`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/action.rs)：动作单元，包含动作类型（普攻/战技/终结技/追击）、费用与能量收益、以及树状嵌套的有序效果列表（`Vec<Effect>`）。
-- [`Effect`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/action.rs)：具体效果枚举，包含伤害、治疗、加盾、修改变量、拉条、施加状态、条件分支（`Conditional`）与循环（`Repeat`）。
+- [`Scenario`](../../../core/battle/src/model/scenario.rs)：运行时战斗配置结构体。包含队伍列表、波次定义、AV 预算、行动步数上限及底层机制配置（`mechanics`）。
+- [`Unit`](../../../core/battle/src/model/unit.rs)：单位基础定义，包含静态面板 [`Stats`](../../../core/battle/src/model/unit.rs)、初始能量/生命、复活配置及技能动作列表。
+- [`Action`](../../../core/battle/src/model/action.rs)：动作单元，包含动作类型（普攻/战技/终结技/追击）、费用与能量收益、以及树状嵌套的有序效果列表（`Vec<Effect>`）。
+- [`Effect`](../../../core/battle/src/model/action.rs)：具体效果枚举，包含伤害、治疗、加盾、修改变量、拉条、施加状态、条件分支（`Conditional`）与循环（`Repeat`）。
+- [`ScenarioFile`](../../../core/battle/src/diagnostics/mod.rs)：（仅 `diagnostics` 特性）承载外围 JSON 文件的容器，包含来源描述 `provenance`、场景指纹 `fingerprint`、近似假设 `assumptions`、可选整局血量结算 `settlement` 及内部对局配置 `battle: Scenario`。
 
-### 4.2 运行时状态模型 ([`engine::state`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/state.rs))
+### 4.2 运行时状态模型 ([`engine::state`](../../../core/battle/src/engine/state.rs))
 
-- [`State`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/state.rs)：单场战斗的活跃状态机。维护存活单位表、行动队列、共享战技点、时钟、监听器及分离的随机数生成流（RNG）。
-- [`CombatUnit`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/state.rs)：单位在局内的活跃实例。维护动态生命值、护盾、能量、韧性、实时速度、剩余行动距离及持有的 Modifier 状态集合。
-- [`Timeline`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/timeline.rs)：负责时间步计算、Cycle 额度管理及复活罚时结算。
+- [`State`](../../../core/battle/src/engine/state.rs)：单场战斗的活跃状态机。维护存活单位表、行动队列、共享战技点、时钟、监听器及分离的随机数生成流（RNG）。
+- [`CombatUnit`](../../../core/battle/src/engine/state.rs)：单位在局内的活跃实例。维护动态生命值、护盾、能量、韧性、实时速度、剩余行动距离及持有的 Modifier 状态集合。
+- [`Timeline`](../../../core/battle/src/engine/timeline.rs)：负责时间步计算、Cycle 额度管理及复活罚时结算。
 
-### 4.3 决策与交互模型 ([`decision`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs))
+### 4.3 决策与交互模型 ([`decision`](../../../core/battle/src/decision.rs))
 
-- [`Decision`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs)：代表一个暂停待决的决策点，包含局内单调递增的 `id`、决策类型、当前完整观测及合法操作列表。
-- [`Observation`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs)：提供给外部策略的局面只读快照，包含当前 AV、各轮次余量、双方战技点、排序后的行动轴及所有在场单位的属性快照。
-- [`Operation`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs)：合法操作载体，标明所选单位索引与动作索引。
+- [`Decision`](../../../core/battle/src/decision.rs)：代表一个暂停待决的决策点，包含局内单调递增的 `id`、决策类型、当前完整观测及合法操作列表。
+- [`Observation`](../../../core/battle/src/decision.rs)：提供给外部策略的局面只读快照，包含当前 AV、各轮次余量、双方战技点、排序后的行动轴及所有在场单位的属性快照。
+- [`Operation`](../../../core/battle/src/decision.rs)：合法操作载体，标明所选单位索引与动作索引。
 
-### 4.4 结果与统计模型 ([`model::result`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/result.rs))
+### 4.4 结果与统计模型
 
-- [`BattleResult`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/model/result.rs)：单场战斗输出。包含输入指纹、随机种子、终局结果（`Outcome`）、终止原因（`Termination`）、结算耗时、单位最终状态快照及可选的重放事件记录（`Event`）。
-- [`BatchResult`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/batch.rs)：蒙特卡洛评估输出。包含胜负统计、未完成场次、95% Wilson 置信区间及逐场明细账本（Ledger）。
+- [`BattleResult`](../../../core/battle/src/model/result.rs)：运行时原生输出。包含：
+  - `outcome`: 胜负状态（`Outcome::Victory` 胜利、`Outcome::Defeat` 失败、`Outcome::Incomplete` 未完成）。
+  - `termination`: 终止原因（`Termination::EnemiesDefeated` 敌方全灭、`Termination::AlliesDefeated` 我方全灭、`Termination::AvBudgetExhausted` 轮次耗尽、`Termination::ActionLimit` 步数超限、`Termination::Cancelled` 主动取消）。
+  - `elapsed_av` 与 `remaining_av`: 实际消耗与剩余总 AV。
+  - `actions`: 完成动作数。
+  - `units`: 单位终态快照。
+- [`BattleReport`](../../../core/battle/src/diagnostics/mod.rs)：（仅 `diagnostics` 特性）CLI 导出的完整审计报告，包装了 `BattleResult`，并补充了种子字符串、场景指纹、`provenance`、`settlement` 结果及详细回放事件列表（`Event`）。
+- [`BatchResult`](../../../core/battle/src/batch.rs)：蒙特卡洛多局评估输出，包含胜败频次、未完成场次、95% Wilson 置信区间及逐场明细账本（Ledger）。

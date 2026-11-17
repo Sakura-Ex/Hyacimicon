@@ -10,7 +10,7 @@
 
 ```mermaid
 flowchart TD
-    Init["BattleSession::new(input, seed, trace)"] --> Advance["session.advance() / advance_cancellable()"]
+    Init["BattleSession::new(scenario, seed)"] --> Advance["session.advance() / advance_cancellable()"]
     Advance --> Check{"返回结果判定"}
     Check -- "BattleStep::Decision(decision)" --> Policy["外部策略/模型读取 Observation 并计算合法操作"]
     Policy --> Submit["session.submit(decision.id, chosen_operation)"]
@@ -22,17 +22,17 @@ flowchart TD
 
 | 方法签名 | 说明与前置条件 |
 | --- | --- |
-| [`BattleSession::new(input, seed, trace)`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 根据已校验的场景配置和随机种子构建独立战斗会话。完成战前初始化并分派 `BattleStart` 与首波事件。 |
-| [`advance(&mut self) -> Result<BattleStep, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 驱动状态机推进至下一个需要外部决策的点，或直到战斗结束。若当前已存在待答复决策，多次调用将安全返回相同决策。 |
-| [`advance_cancellable(&mut self, cancel) -> Result<BattleStep, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 支持外部取消标记的分步推进。在行动边界与外部等待恢复时主动检查取消，若取消触发则输出 `Incomplete/Cancelled` 状态快照。 |
-| [`submit(&mut self, id, choice) -> Result<(), String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 提交决策操作。核对 `id` 是否与当前决策匹配并校验 `choice` 是否合法。非法操作或过期 ID 不会污染当前状态，允许调用方更正重试。 |
-| [`into_result(self) -> Result<BattleResult, String>`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/engine/session.rs) | 消费已完成的会话并获取最终的战斗结果。 |
+| [`BattleSession::new(input, seed)`](../../../core/battle/src/engine/session.rs) | 根据纯内存场景配置和随机种子构建独立战斗会话。完成战前初始化并分派 `BattleStart` 与首波事件。 |
+| [`BattleSession::with_trace(input, seed, trace)`](../../../core/battle/src/engine/session.rs) | （仅 `diagnostics` 特性）创建支持记录逐事件回放轨迹（trace）的开发会话。 |
+| [`advance(&mut self) -> Result<BattleStep, String>`](../../../core/battle/src/engine/session.rs) | 驱动状态机推进至下一个需要外部决策的点，或直到战斗结束。若当前已存在待答复决策，多次调用将安全返回相同决策。 |
+| [`advance_cancellable(&mut self, cancel) -> Result<BattleStep, String>`](../../../core/battle/src/engine/session.rs) | 支持外部取消标记的分步推进。在行动边界与外部等待恢复时主动检查取消，若取消触发则输出 `Incomplete/Cancelled` 状态快照。 |
+| [`submit(&mut self, id, choice) -> Result<(), String>`](../../../core/battle/src/engine/session.rs) | 提交决策操作。核对 `id` 是否与当前决策匹配并校验 `choice` 是否合法。非法操作或过期 ID 不会污染当前状态，允许调用方更正重试。 |
 
 ---
 
 ## 2. 决策类型与观测结构
 
-### 2.1 决策点类型 ([`DecisionPoint`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs))
+### 2.1 决策点类型 ([`DecisionPoint`](../../../core/battle/src/decision.rs))
 
 引擎在以下三个时机产出决策点：
 
@@ -40,13 +40,13 @@ flowchart TD
 2. **`DecisionPoint::ExtraTurn`**：由机制赋予的额外行动回合。同样必须选取一个合法动作，执行后不消耗自然 AV 时间。
 3. **`DecisionPoint::Insert`**：行动间隙的终结技插入窗口。调用方可从就绪的终结技列表中提交预插队请求，或提交 `None` 放弃本次插入机会。
 
-### 2.2 局面观测 ([`Observation`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs))
+### 2.2 局面观测 ([`Observation`](../../../core/battle/src/decision.rs))
 
 决策发生时，调用方可通过不可变借用获取当前环境的完整观测数据，构造神经网络特征或策略树节点：
 
 - **时钟与轮次**：当前已流逝 AV (`now`)、当前 Cycle 索引、本轮剩余 AV 及对局总剩余 AV 预算。
 - **战技点**：我方与敌方当前持有的共享战技点（Skill Points）。
-- **行动轴排序**：所有存活单位按行动顺序排列的 [`AxisPosition`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/src/decision.rs) 列表（包含单位 ID、剩余行动距离、实时速度与等待 AV）。
+- **行动轴排序**：所有存活单位按行动顺序排列的 [`AxisPosition`](../../../core/battle/src/decision.rs) 列表（包含单位 ID、剩余行动距离、实时速度与等待 AV）。
 - **单位快照**：当前所有已入场单位的实时数值快照（生命、护盾、能量、韧性、动态变量、持有的 Modifier 状态及自然/附加弱点）。
 
 ---
@@ -82,31 +82,37 @@ flowchart TD
 
 ```rust
 use battle_core::engine::session::{BattleSession, BattleStep};
-use battle_core::model::ValidatedScenario;
+use battle_core::model::{BattleResult, Scenario};
 use battle_core::decision::{Decision, Operation};
 
 fn run_session_with_custom_policy(
-    scenario: &ValidatedScenario,
+    scenario: &Scenario,
     seed: u64,
-) -> Result<battle_core::model::BattleResult, String> {
-    // 1. 初始化会话
-    let mut battle = BattleSession::new(scenario, seed, true)?;
+) -> Result<BattleResult, String> {
+    // 1. 初始化纯内存会话
+    let mut battle = BattleSession::new(scenario, seed)?;
 
     // 2. 分步循环推进
-    while let BattleStep::Decision(decision) = battle.advance()? {
-        let (id, choice) = (decision.id, evaluate_policy(&decision));
-        // 3. 提交决策选择
+    loop {
+        let (id, choice) = match battle.advance()? {
+            BattleStep::Decision(decision) => {
+                let choice = evaluate_policy(decision);
+                (decision.id, choice)
+            }
+            BattleStep::Finished(result) => {
+                // 3. 对局已完成，克隆或消费结果
+                return Ok(result.clone());
+            }
+        };
+        // 4. 提交决策选择
         battle.submit(id, choice)?;
     }
-
-    // 4. 获取对局结果
-    battle.into_result()
 }
 
 fn evaluate_policy(decision: &Decision) -> Option<Operation> {
-    // 示例简单选择第一个合法操作；对于 Insert 点可返回 None 放弃
+    // 示例简单选择第一个合法操作；对于 Insert 点可返回 None 放弃本次插入
     decision.legal.first().copied()
 }
 ```
 
-更多可运行的完整示例参见仓库中的 [`step_battle.rs`](file:///d:/Github%20Projects/hsr-currency-wars-ai/core/battle/examples/step_battle.rs)。
+更多可运行的完整示例参见仓库中的 [`step_battle.rs`](../../../core/battle/examples/step_battle.rs)。

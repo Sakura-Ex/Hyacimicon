@@ -13,14 +13,14 @@
 从仓库根目录执行以下命令：
 
 ```powershell
-# 1. 校验场景格式与数据有效性
-cargo run -p battle-core --release --locked -- validate core/battle/examples/anaxa-s2-full-battle.json
+# 1. 检查场景输入格式并获取场景指纹
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- inspect core/battle/examples/anaxa-s2-full-battle.json
 
 # 2. 单局模拟（使用固定参考种子 42）
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
 
 # 3. 蒙特卡洛批次模拟（8 场，主种子 42）
-cargo run -p battle-core --release --locked -- batch core/battle/examples/anaxa-s2-full-battle.json 8 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- batch core/battle/examples/anaxa-s2-full-battle.json 8 42
 ```
 
 ### 1.2 重新构建场景配置

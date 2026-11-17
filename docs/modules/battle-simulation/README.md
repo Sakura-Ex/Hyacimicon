@@ -61,17 +61,17 @@ cargo test -p battle-core --locked
 # 2. 运行包含 JSON 诊断与完整回归的全部测试
 cargo test -p battle-core --all-features --locked
 
-# 3. 校验场景输入格式与有效性（CLI 自动启用 diagnostics 特性）
-cargo run -p battle-core --release --locked -- validate core/battle/examples/duel.json
+# 3. 检查场景输入格式、合法性并输出场景指纹（需开启 diagnostics 特性）
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- inspect core/battle/examples/duel.json
 
 # 4. 单局模拟（参数：场景文件 随机种子）
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/team-waves.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/team-waves.json 42
 
 # 5. 批次模拟（参数：场景文件 运行场次 主随机种子）
-cargo run -p battle-core --release --locked -- batch core/battle/examples/duel.json 10000 20261114
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- batch core/battle/examples/duel.json 10000 20261114
 
 # 6. 分步交互示例（展示外部决策循环）
-cargo run -p battle-core --example step_battle --locked -- core/battle/examples/duel.json 42
+cargo run -p battle-core --features diagnostics --example step_battle --locked -- core/battle/examples/duel.json 42
 ```
 
 内置样例说明：

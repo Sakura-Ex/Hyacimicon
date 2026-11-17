@@ -72,13 +72,16 @@ flowchart TD
 在仓库根目录下运行：
 
 ```powershell
-# 1. 运行工作区全部测试
+# 1. 运行 Core Runtime 轻量核心测试
 cargo test -p battle-core --locked
 
-# 2. 执行严格静态代码检查（禁止任何 Warning）
-cargo clippy -p battle-core --all-targets --locked -- -D warnings
+# 2. 运行包含 diagnostics 序列化与全部用例的完整测试
+cargo test -p battle-core --all-features --locked
 
-# 3. 检查代码格式
+# 3. 执行严格静态代码检查（禁止任何 Warning）
+cargo clippy -p battle-core --all-targets --all-features --locked -- -D warnings
+
+# 4. 检查代码格式
 cargo fmt --all -- --check
 ```
 
@@ -92,13 +95,13 @@ python -m unittest discover -s tools/tests -t . -p "test_*.py"
 
 ### 3.3 示例场景对照与冒烟测试
 
-使用内建的四个基础场景运行单局与批次模拟，确认无 Panic 与非正常退出：
+使用内建的四个基础场景运行单局与批次模拟（需开启 `diagnostics` 特性），确认无 Panic 与非正常退出：
 
 ```powershell
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/duel.json 42
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/team-waves.json 42
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/revival-budget.json 42
-cargo run -p battle-core --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/duel.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/team-waves.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/revival-budget.json 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate core/battle/examples/anaxa-s2-full-battle.json 42
 
-cargo run -p battle-core --release --locked -- batch core/battle/examples/duel.json 100 42
+cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- batch core/battle/examples/duel.json 100 42
 ```

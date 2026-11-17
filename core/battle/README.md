@@ -22,14 +22,14 @@ Crate 内置命令行工具 `hcwa-battle`（位于 `src/main.rs`），要求 `di
 从仓库根目录执行（统一使用锁定工具链）：
 
 ```powershell
-# 1. 校验场景输入语法、数值合法性及内部引用
-cargo run -p battle-core --release --locked -- validate <SCENARIO.json>
+# 1. 检查并校验场景输入语法、数值合法性及计算场景指纹
+cargo run -p battle-core --features diagnostics --bin hcwa-battle -- inspect <SCENARIO.json>
 
 # 2. 单局确定性模拟（参数：场景文件 随机种子）
-cargo run -p battle-core --release --locked -- simulate <SCENARIO.json> <SEED_U64>
+cargo run -p battle-core --features diagnostics --bin hcwa-battle -- simulate <SCENARIO.json> <SEED_U64>
 
 # 3. 蒙特卡洛批次评估（参数：场景文件 试验场次 主随机种子）
-cargo run -p battle-core --release --locked -- batch <SCENARIO.json> <TRIALS> <MASTER_SEED_U64>
+cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCENARIO.json> <TRIALS> <MASTER_SEED_U64>
 ```
 
 ### 1.2 退出码与错误输出
@@ -104,40 +104,57 @@ cargo run -p battle-core --release --locked -- batch <SCENARIO.json> <TRIALS> <M
 - `settlement`: 可选整局血量结算配置（如 `weighted_kills_flat_penalty_v1`），声明每个敌人实例的击杀权重、通关进度门槛、失败扣血量与战后生命恢复量。
 - `triggers`: 战局全局或单位级事件监听器（`BattleStart`、`WaveStart`、`Hit`、`Break`、`Death`、`TurnEnd` 等）。
 
-### 2.3 输出结果结构 (`BattleResult`)
+### 2.3 输出结果结构 (`BattleResult` 与 `BattleReport`)
 
-单局模拟输出包含完整战况审计信息：
+- **运行时原生结果 (`BattleResult`)**：
+  纯内存核心直接产出的对局结果，包含：
+  - `outcome`: 战斗胜负状态（`Outcome::Victory` 胜利、`Outcome::Defeat` 失败、`Outcome::Incomplete` 安全保护或取消停机）。
+  - `termination`: 具体终止原因（`Termination::EnemiesDefeated` 敌方全灭、`Termination::AlliesDefeated` 我方全灭、`Termination::AvBudgetExhausted` 轮次耗尽、`Termination::ActionLimit` 步数超限、`Termination::Cancelled` 主动取消）。
+  - `elapsed_av` 与 `remaining_av`: 实际消耗 AV 与剩余总预算。
+  - `actions`: 本场已完成的完整动作总数。
+  - `units`: 战斗结束时各在场单位的终态快照（包含实时 HP、护盾、能量、已行动距离、速度与持有的 Modifier 状态）。
 
-- `provenance` 与 `fingerprint`: 输入来源与全配置 SHA-256 校验指纹。
-- `outcome`: 战斗胜负分类（`Win` 胜利、`Loss` 失败、`Draw` 平局、`Incomplete` 未完成）。
-- `termination`: 具体终止原因（`Annihilation` 全灭清场、`BudgetExhausted` 轮次耗尽、`ActionLimit` 步数超限、`Cancelled` 主动取消）。
-- `elapsed_av` 与 `remaining_av`: 实际消耗 AV 与剩余总预算。
-- `units`: 战斗结束时各单位的终态快照（实时生命值、护盾、能量、已行动距离及活动状态）。
-- `settlement`: 整局血量结算详情（击杀进度比率、达标状态、扣血与恢复、结算后整局血量）。
-- `events`: 有序事件轨迹列表（包含每次行动、命中数值、暴击标记与受击单位，可通过参数截断或完整保留）。
+- **CLI 诊断报告 (`BattleReport`，需 `diagnostics` 特性)**：
+  CLI 工具 `hcwa-battle` 导出的 JSON 诊断包装，在 `BattleResult` 的基础上增加审计字段：
+  - `provenance` 与 `scenario_sha256`: 输入来源说明与 JSON 全配置的 SHA-256 指纹。
+  - `seed`: 64 位无符号整型种子的十进制无损字符串。
+  - `settlement`: 可选整局血量结算详情（击杀权重进度、达标状态、扣血与恢复、结算后整局血量）。
+  - `events`: （若开启回放）有序事件轨迹列表，详细记录每次伤害跳字、暴击、护盾吸收与生命值变动。
 
 ---
 
 ## 3. Rust 库调用示例
 
-### 3.1 同步快速模拟（启用 `diagnostics` 特性时支持 JSON 解析）
+### 3.1 同步快速模拟
+
+在默认核心下（纯内存结构，零反序列化开销）：
 
 ```rust
-use battle_core::model::validate;
 use battle_core::engine::simulate;
+use battle_core::model::Scenario;
 
-fn run_single_battle(scenario_json: &str, seed: u64) -> Result<(), String> {
-    // 1. 反序列化场景（需 features = ["diagnostics"]）
-    let raw_scenario = serde_json::from_str(scenario_json).map_err(|e| e.to_string())?;
+fn run_single_battle(scenario: &Scenario, seed: u64) -> Result<(), String> {
+    // 纯内存核心直接执行单局模拟
+    let result = simulate(scenario, seed)?;
 
-    // 2. 结构与参数校验
-    let validated = validate(raw_scenario)?;
+    println!("对局结果: {:?}, 动作数: {}", result.outcome, result.actions);
+    println!("消耗 AV: {:.2}", result.elapsed_av);
+    Ok(())
+}
+```
 
-    // 3. 执行单局确定性模拟（trace = true 记录事件流）
-    let result = simulate(&validated, seed, true)?;
+启用 `diagnostics` 特性时，支持从 JSON 文件读取并记录逐事件回放（trace）：
 
-    println!("对局结果: {:?}, 终止原因: {:?}", result.outcome, result.termination);
-    println!("消耗 AV: {:.2}, 剩余 AV: {:.2}", result.elapsed_av, result.remaining_av);
+```rust
+use battle_core::diagnostics::{simulate as diag_simulate, ScenarioFile};
+
+fn run_diagnostic_battle(scenario_json: &str, seed: u64) -> Result<(), String> {
+    let file = ScenarioFile::from_slice(scenario_json.as_bytes())?;
+    // trace = true 记录详细事件流
+    let result = diag_simulate(&file.battle, seed, true)?;
+    let report = file.report(result, seed);
+
+    println!("对局结果: {:?}, 终止原因: {:?}", report.result.outcome, report.result.termination);
     Ok(())
 }
 ```
@@ -148,22 +165,30 @@ fn run_single_battle(scenario_json: &str, seed: u64) -> Result<(), String> {
 
 ```rust
 use battle_core::engine::session::{BattleSession, BattleStep};
+use battle_core::model::Scenario;
 
-fn run_interactive_battle(validated: &battle_core::model::ValidatedScenario, seed: u64) -> Result<(), String> {
-    let mut session = BattleSession::new(validated, seed, true)?;
+fn run_interactive_battle(scenario: &Scenario, seed: u64) -> Result<(), String> {
+    // 初始化会话（默认纯内存模式只需传入场景引用与种子）
+    let mut session = BattleSession::new(scenario, seed)?;
 
-    while let BattleStep::Decision(decision) = session.advance()? {
-        // 读取 observation 观察当前战况
-        let obs = &decision.observation;
-        println!("当前 AV: {:.1}, 存活单位数: {}", obs.now, obs.units.len());
+    loop {
+        let (id, choice) = match session.advance()? {
+            BattleStep::Decision(decision) => {
+                // 读取 observation 观察当前战况
+                let obs = &decision.observation;
+                println!("当前 AV: {:.1}, 存活单位数: {}", obs.now, obs.units.len());
 
-        // 从合法操作中做出选择并提交
-        let choice = decision.legal.first().copied();
-        session.submit(decision.id, choice)?;
+                // 从合法操作中做出选择（示例选取第一个合法动作）
+                (decision.id, decision.legal.first().copied())
+            }
+            BattleStep::Finished(result) => {
+                println!("战斗结束，胜负状态: {:?}", result.outcome);
+                break;
+            }
+        };
+        session.submit(id, choice)?;
     }
 
-    let final_result = session.into_result()?;
-    println!("战斗结束，胜负状态: {:?}", final_result.outcome);
     Ok(())
 }
 ```
