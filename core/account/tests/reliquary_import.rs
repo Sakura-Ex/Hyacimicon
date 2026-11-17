@@ -267,6 +267,31 @@ fn rejects_duplicate_substats_and_main_substat_overlap() {
 }
 
 #[test]
+fn rejects_only_percentage_substats_that_underflow_to_zero() {
+    for tiny in [1e-323, f64::from_bits(1)] {
+        let mut value = fixture();
+        value["relics"][0]["substats"][1]["value"] = json!(tiny);
+        assert_field_error(
+            value,
+            "relics[0].substats[1].value",
+            "换算后的数值应为有限正数",
+        );
+    }
+    let mut value = fixture();
+    value["relics"][0]["substats"][1]["value"] = json!(1e-320);
+    value["relics"][0]["substats"][0]["value"] = json!(f64::from_bits(1));
+    let imported = import_reliquary_archive(&value.to_string(), "fixture").unwrap();
+    assert_eq!(
+        imported.account.relics[0].substats[&RelicSubStat::DefPercent],
+        1e-322
+    );
+    assert_eq!(
+        imported.account.relics[0].substats[&RelicSubStat::Spd],
+        f64::from_bits(1)
+    );
+}
+
+#[test]
 fn reports_malformed_json_and_missing_required_fields() {
     let error = import_reliquary_archive("{", "fixture").unwrap_err();
     assert!(matches!(error, ImportError::Json(_)));

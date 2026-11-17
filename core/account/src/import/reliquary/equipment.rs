@@ -144,7 +144,7 @@ fn mainstat(
     Ok((stat, key))
 }
 
-/// 转换当前副词条，预览和重掷字段由来源记录保留。
+/// 转换当前副词条并检查换算后的数值。
 fn substats(
     relic: &source::Relic,
     main_key: &str,
@@ -161,14 +161,17 @@ fn substats(
         if stat.key == main_key {
             return Err(invalid(format!("{field}.key"), "副词条与主词条重复"));
         }
-        if !stat.value.is_finite() || stat.value <= 0.0 {
-            return Err(invalid(format!("{field}.value"), "副词条数值应为有限正数"));
-        }
         let value = if stat.key.ends_with('_') {
             stat.value / 100.0
         } else {
             stat.value
         };
+        if !value.is_finite() || value <= 0.0 {
+            return Err(invalid(
+                format!("{field}.value"),
+                "副词条换算后的数值应为有限正数",
+            ));
+        }
         if stats.insert(key, value).is_some() {
             return Err(invalid(format!("{field}.key"), "当前副词条属性重复"));
         }
