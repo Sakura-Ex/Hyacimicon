@@ -8,7 +8,6 @@
 - [系统架构与逻辑设计](../../docs/modules/battle-simulation/design.md)
 - [外部选招与分步会话接口](../../docs/modules/battle-simulation/stepping.md)
 - [测试与回归验证指南](../../docs/modules/battle-simulation/validation.md)
-- [装备效果与 Buff 设计草案](../../docs/modules/battle-simulation/equipment-effects.md)
 
 ---
 
