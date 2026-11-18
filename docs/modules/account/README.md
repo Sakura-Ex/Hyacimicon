@@ -38,7 +38,7 @@ core/account/
     └── fixtures/       # 人工构造的最小样例
 ```
 
-所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，当前成员包含 `core/account` 与 `core/battle`。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
+所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，成员见[项目目录说明](../../development/project-layout.md)。[战斗输入组装](../run/README.md)读取生效账号面板。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
 
 原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
 

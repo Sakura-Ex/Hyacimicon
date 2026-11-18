@@ -104,6 +104,17 @@ fn drive(mut session: BattleSession<'_>) -> BattleResult {
 }
 
 #[test]
+fn rejects_an_encounter_without_an_enemy_wave() {
+    let mut encounter = encounter();
+    encounter.waves.clear();
+    let account = account(&imported_account(), &PlayableData::bundled().unwrap());
+    assert_eq!(
+        assemble_battle(encounter, &account, &ROSTER, &RULE).unwrap_err(),
+        "encounter must include at least one enemy wave"
+    );
+}
+
+#[test]
 fn effective_panel_to_session_matches_diagnostics() {
     let mut data = PlayableData::bundled().unwrap();
     let trial = data

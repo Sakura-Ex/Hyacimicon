@@ -3,7 +3,7 @@
 `run-core` prepares a single `battle_core::model::Scenario` from an effective account and a caller-provided encounter. The account owns precomputed static panel values and resolved equipment. The encounter owns unit instance IDs, actions, starting resources, enemy waves, and combat rules. One `AllyBinding` connects each encounter ally to its effective account character.
 
 1. Obtain a `PlayableAccount` through [account conversion](../account/README.md).
-2. Provide the encounter, ally bindings, and an explicit `OpeningPlanarCritDamage` rule to `run_core::assemble_battle`. Initial allied HP must fit the account-derived maximum. When using elemental attacks, provide encounter resistance profiles. Assembly fills the ally profiles' elemental damage bonuses from the account.
+2. Provide the encounter, ally bindings, and an explicit `OpeningPlanarCritDamage` rule to `run_core::assemble_battle`. Include at least one enemy wave. Initial allied HP must fit the account-derived maximum. When using elemental attacks, provide encounter resistance profiles. Assembly fills the ally profiles' elemental damage bonuses from the account.
 3. Pass the prepared scenario and a seed to `BattleSession::new`. For diagnostics, serialize the same prepared scenario and load it through `ScenarioFile::from_slice` as described in the [battle module](../battle-simulation/README.md).
 
 ## Equipment contract

@@ -22,7 +22,8 @@ pub struct AllyBinding<'a> {
 
 /// Copies account-owned panel values and attaches one supported opening equipment rule.
 ///
-/// The encounter supplies actions, starting resources, enemy data, and fight rules.
+/// The encounter supplies actions, starting resources, at least one enemy wave,
+/// and fight rules.
 /// If an ally has an element profile, its resistance stays encounter-owned and its
 /// elemental damage bonus comes from the account. The opening rule uses only the
 /// eligible wearer's resolved equipment and effective effect resistance.
@@ -34,6 +35,9 @@ pub fn assemble_battle(
 ) -> Result<Scenario, String> {
     if account.schema_version != PLAYABLE_ACCOUNT_SCHEMA_VERSION {
         return Err("unsupported playable account schema version".into());
+    }
+    if encounter.waves.is_empty() {
+        return Err("encounter must include at least one enemy wave".into());
     }
     opening.validate()?;
     if roster.is_empty() || roster.len() != encounter.allies.len() {
