@@ -1,0 +1,16 @@
+[package]
+name = "run-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Assembly of account-backed battle inputs"
+
+[dependencies]
+account-core = { path = "../account" }
+battle-core = { path = "../battle" }
+
+[dev-dependencies]
+battle-core = { path = "../battle", features = ["diagnostics"] }
+serde_json.workspace = true
