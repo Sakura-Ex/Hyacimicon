@@ -3,6 +3,8 @@ use crate::model::{AttackType, BattleResult, Scenario};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+mod scenario_json;
+
 #[derive(Clone, Debug, Serialize)]
 /// 诊断构建中按顺序保存的观察记录。
 pub struct Event {
@@ -58,8 +60,7 @@ impl ScenarioFile {
     /// Parses UTF-8 JSON and checks explicit file metadata and provisional settlement.
     /// The caller assembling combat data remains responsible for static battle rules and references.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, String> {
-        let mut value: serde_json::Value =
-            serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let mut value = scenario_json::parse(bytes).map_err(|e| e.to_string())?;
         let fingerprint = format!(
             "{:x}",
             Sha256::digest(serde_json::to_vec(&value).map_err(|e| e.to_string())?)

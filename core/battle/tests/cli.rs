@@ -114,3 +114,47 @@ fn diagnostic_settlement_requires_complete_positive_weights_and_valid_parameters
     let error = ScenarioFile::from_slice(&serde_json::to_vec(&source).unwrap()).unwrap_err();
     assert!(error.contains("duplicate enemy ID"), "{error}");
 }
+
+#[test]
+fn diagnostic_parse_rejects_conflicting_keys_before_map_insertion() {
+    let source = include_str!("../examples/anaxa-s2-full-battle.json");
+    for (key, previous, path) in [
+        ("schema_version", r#""schema_version": 2"#, "$"),
+        ("ruleset", r#""rule\u0073et": "other""#, "$"),
+        (
+            "unsupported_mechanics",
+            r#""unsupported_mechanics": ["unknown"]"#,
+            "$",
+        ),
+        ("mechanics", r#""mechanics": {}"#, "$"),
+        ("settlement", r#""settlement": {}"#, "$.mechanics"),
+        (
+            "failure_loss",
+            r#""failure_loss": -50"#,
+            "$.mechanics.settlement",
+        ),
+        (
+            "enemy_1",
+            r#""enemy_1": 0"#,
+            "$.mechanics.settlement.enemy_weights",
+        ),
+    ] {
+        let marker = format!("{key:?}:");
+        let start = if key == "enemy_1" {
+            source.find(r#""enemy_weights":"#).unwrap()
+        } else {
+            0
+        };
+        let (prefix, object) = source.split_at(start);
+        let edited = object.replacen(&marker, &format!("{previous}, {marker}"), 1);
+        let invalid = format!("{prefix}{edited}");
+        assert_ne!(invalid, source, "missing fixture key {key}");
+        let error = ScenarioFile::from_slice(invalid.as_bytes())
+            .err()
+            .unwrap_or_else(|| panic!("accepted duplicate key {key} at {path}"));
+        assert!(
+            error.contains(&format!("duplicate field {key:?} at {path}")),
+            "{error}"
+        );
+    }
+}
