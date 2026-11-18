@@ -82,6 +82,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     permissions:
+      contents: read
       pull-requests: write
     steps:
       - name: Update the pull request review summary
@@ -129,6 +130,20 @@ jobs:
             const previous = comments.find((comment) =>
               comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
             );
+            const previousBase = previous?.body.startsWith(headMarker)
+              ? previous.body.slice(headMarker.length).match(/^([0-9a-f]{40}) -->/)?.[1]
+              : undefined;
+            if (previousBase && previousBase !== eventPr.base.sha) {
+              const { data: comparison } = await github.request('GET /repos/{owner}/{repo}/compare/{basehead}', {
+                ...context.repo,
+                basehead: `${previousBase}...${eventPr.base.sha}`,
+                per_page: 1,
+              });
+              if (comparison.status !== 'ahead') {
+                core.notice('The existing review uses a newer or divergent target snapshot.');
+                return;
+              }
+            }
             const { data: currentPr } = await github.rest.pulls.get({
               ...context.repo,
               pull_number: eventPr.number,
@@ -136,10 +151,6 @@ jobs:
             if (currentPr.state !== 'open' || currentPr.head.sha !== eventPr.head.sha ||
                 currentPr.base.ref !== eventPr.base.ref) {
               core.notice('The PR changed while the review was running.');
-              return;
-            }
-            if (currentPr.base.sha !== eventPr.base.sha && previous?.body.startsWith(headMarker)) {
-              core.notice('A review for this head is already published and the target advanced.');
               return;
             }
             if (previous) {
