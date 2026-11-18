@@ -38,7 +38,7 @@ let (piece, score) = generate_relic(&spec, &weights, [1.0; 3], 10_000, &mut rng)
 
 ## 计分与错误
 
-`score_relic(&piece, &weights)` 将每条副词条数值除以该属性的单次中档值，再乘对应权重求和。百分比属性使用实际比例值，例如 3.24% 保存为 `0.0324`。
+`score_relic(&piece, &weights)` 将每条副词条数值除以该属性的单次中档值，再乘对应权重求和。百分比属性使用实际比例值，例如 3.24% 保存为 `0.0324`。自动分配实例 ID 的入口见[完整角色配置生成](character-generation.md)。
 
 ### 评分单位与数值限制
 

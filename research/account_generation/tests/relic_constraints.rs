@@ -658,6 +658,111 @@ fn rounded_piece_limits_still_allow_the_requested_set_total() {
 }
 
 #[test]
+fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
+    let spec = CharacterSpec {
+        relics: Some(RelicRequest {
+            pieces: vec![RelicSpec {
+                mainstat: vec![Main::BreakEffect],
+                required_substats: vec![Sub::BreakEffect],
+                ..RelicSpec::new(Slot::LinkRope)
+            }],
+            effective_stat_weights: BTreeMap::from([(Sub::Spd, 1.0)]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert!(matches!(
+        generate_character(
+            "rope",
+            "1310",
+            &spec,
+            &AccountReference::bundled().unwrap(),
+            3,
+            &mut ChaCha8Rng::seed_from_u64(42)
+        ),
+        Err(GenerationError::NoSolution)
+    ));
+}
+
+#[test]
+fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
+    let per_piece = 3.0 * 0.0648 / 0.058320003;
+    let request = RelicRequest {
+        pieces: (1..=6)
+            .map(|n| RelicSpec {
+                initial_substat_count: Some(4),
+                required_substats: vec![Sub::Def, Sub::EffectRes, Sub::BreakEffect, Sub::CritDmg],
+                min_effective_rolls: Some(per_piece),
+                max_effective_rolls: Some(per_piece),
+                ..RelicSpec::new(Slot::try_from(n).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: BTreeMap::from([(Sub::CritDmg, 1.0)]),
+        tier_weights: [0.0, 0.0, 1.0],
+        ..Default::default()
+    };
+    let reference = AccountReference::bundled().unwrap();
+    let generate = |tier| {
+        generate_character(
+            "half",
+            "1310",
+            &CharacterSpec {
+                relic_quality_tier: Some(tier),
+                relics: Some(request.clone()),
+                ..Default::default()
+            },
+            &reference,
+            1000,
+            &mut ChaCha8Rng::seed_from_u64(42),
+        )
+    };
+    assert!(matches!(generate(2), Err(GenerationError::NoSolution)));
+    let account = generate(3).unwrap();
+    let investment = &account.investments["1310"];
+    assert_eq!(
+        investment.piece_scores.iter().sum::<f64>(),
+        investment.relic_score_upper * 0.5
+    );
+}
+
+#[test]
+fn graduation_tier_can_reach_the_high_roll_maximum() {
+    let reference = AccountReference::bundled().unwrap();
+    for stat in [Sub::CritRate, Sub::Spd] {
+        let mut request = RelicRequest {
+            pieces: (1..=6)
+                .map(|slot| RelicSpec {
+                    required_substats: vec![Sub::Def, Sub::EffectRes, Sub::BreakEffect, stat],
+                    initial_substat_count: Some(4),
+                    ..RelicSpec::new(Slot::try_from(slot).unwrap())
+                })
+                .collect(),
+            effective_stat_weights: BTreeMap::from([(stat, 1.0)]),
+            tier_weights: [0.0, 0.0, 1.0],
+            ..Default::default()
+        };
+        let upper = account_generator::maximum_character_relic_score(&request).unwrap();
+        request.min_total_effective_rolls = Some(upper);
+        let spec = CharacterSpec {
+            relic_quality_tier: Some(5),
+            relics: Some(request),
+            ..Default::default()
+        };
+        let account = generate_character(
+            "max",
+            "1310",
+            &spec,
+            &reference,
+            1000,
+            &mut ChaCha8Rng::seed_from_u64(42),
+        )
+        .unwrap();
+        let score: f64 = account.investments["1310"].piece_scores.iter().sum();
+        assert!((score - upper).abs() < 1e-10, "{stat:?}: {score} / {upper}");
+    }
+}
+
+#[test]
 fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     let spec = CharacterSpec {
         relics: Some(RelicRequest {

@@ -129,8 +129,7 @@ pub(super) fn maximum_score(
         STATS,
         &request.effective_stat_weights,
     );
-    let bounds = legal_bounds(&recipes, &roll_counts(spec), extremes(request.tier_weights));
-    feasible(bounds)?;
+    let bounds = legal_bounds(&recipes, &roll_counts(spec), extremes(request.tier_weights))?;
     Ok(bounds.1)
 }
 
@@ -156,14 +155,16 @@ fn extremes(tier_weights: [f64; 3]) -> (usize, usize) {
     (first, enabled.next_back().unwrap_or(first))
 }
 
-fn legal_bounds(recipes: &[Recipe], counts: &[u8], tiers: (usize, usize)) -> Bounds {
+fn legal_bounds(
+    recipes: &[Recipe],
+    counts: &[u8],
+    tiers: (usize, usize),
+) -> Result<Bounds, GenerationError> {
     recipes
         .iter()
         .flat_map(|recipe| counts.iter().map(move |&count| recipe.bounds(count, tiers)))
-        .fold(
-            (f64::INFINITY, f64::NEG_INFINITY),
-            |(lo, hi), (min, max)| (lo.min(min), hi.max(max)),
-        )
+        .reduce(|(lo, hi), (min, max)| (lo.min(min), hi.max(max)))
+        .ok_or(GenerationError::NoSolution)
 }
 
 fn recipes(
@@ -251,7 +252,7 @@ impl PieceSearch {
         if counts.len() == 2 && search.index(7) >= 5 {
             counts.swap(0, 1);
         }
-        let legal = legal_bounds(&recipes, &counts, extremes(request.tier_weights));
+        let legal = legal_bounds(&recipes, &counts, extremes(request.tier_weights))?;
         let bounds = intersect(
             super::with_roundoff(legal),
             super::score_bounds(spec.min_effective_rolls, spec.max_effective_rolls),

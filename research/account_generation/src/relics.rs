@@ -535,21 +535,21 @@ impl<'a> GearSearch<'a, '_, '_> {
             return None;
         }
         let group = &self.groups[position.group];
-        let tail = self.suffix[position.group + 1];
         let group_bounds = intersect(
             group.bounds,
-            (
-                self.overall.0 - position.earlier_score - tail.1,
-                self.overall.1 - position.earlier_score - tail.0,
+            remaining_bounds(
+                self.overall,
+                position.earlier_score,
+                self.suffix[position.group + 1],
             ),
         );
         let piece = &group.pieces[position.piece];
-        let tail = group.suffix[position.piece + 1];
         let local = intersect(
             piece.bounds,
-            (
-                group_bounds.0 - position.group_score - tail.1,
-                group_bounds.1 - position.group_score - tail.0,
+            remaining_bounds(
+                group_bounds,
+                position.group_score,
+                group.suffix[position.piece + 1],
             ),
         );
         if group_bounds.0 > group_bounds.1 + EPSILON || local.0 > local.1 + EPSILON {
@@ -646,6 +646,14 @@ fn intersect(a: Bounds, b: Bounds) -> Bounds {
     (a.0.max(b.0), a.1.min(b.1))
 }
 
+// 剪枝时为减法预留舍入空间，完成后再用原始区间检查总分。
+fn remaining_bounds(bounds: Bounds, used: f64, tail: Bounds) -> Bounds {
+    (
+        bounds.0 - used - tail.1 - EPSILON,
+        bounds.1 - used - tail.0 + EPSILON,
+    )
+}
+
 fn contains(bounds: Bounds, score: f64) -> bool {
     (bounds.0..=bounds.1).contains(&score)
 }
@@ -674,7 +682,12 @@ fn quality_bounds(tier: u8, upper: f64) -> Result<Bounds, GenerationError> {
     let end = QUALITY_RATIOS[index] * upper;
     Ok((
         QUALITY_RATIOS[index - 1] * upper,
-        if tier == 5 { end } else { end.next_down() },
+        // 第五档的上限已由各部位的合法成品限制。
+        if tier == 5 {
+            f64::INFINITY
+        } else {
+            end.next_down()
+        },
     ))
 }
 
