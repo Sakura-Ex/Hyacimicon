@@ -2,7 +2,13 @@
 
 状态：已实现。输入角色参考资料、原始练度和随机源，输出账号持有角色、光锥实例、六件遗器实例及装备引用。遗器支持推荐配装、自定义条件和五档练度。批量持有角色、金数分配、统一五星配装和集中程度通过[账号生成接口](account-generation.md)控制。
 
+## Rust 接口
+
+调用 `account_generator::generate_character(config_id, character_id, &spec, &reference, max_attempts, &mut rng)`。用 `CharacterSpec::default()` 取得满级原始练度与默认推荐配装，按需覆盖等级、星魂、光锥或遗器条件。函数返回仅持有该角色的 `GeneratedAccount`，其中的 `account` 可直接转换为游玩配置。
+
 ## 在 IDE 中调用
+
+以下示例使用兼容的 Python 入口。
 
 按[单件接口页](relic-generation.md#在-ide-中调用)配置项目解释器，打开 [character.py](../../../examples/account_generation/character.py)，设置角色 ID 和请求参数，在 `result` 处查看结果。
 

@@ -1,6 +1,6 @@
 # 账号数据流与模块职责
 
-持有角色的原始配置及遗器生成、账号级资源分配、reliquary-archiver v4 导入和实际配置转换已实现。Python 生成结果接入 Rust 待实现。本文用于对接账号生成、模型输入和战斗模拟。
+Rust 账号生成器和 reliquary-archiver v4 导入均已接入统一的原始账号类型，可直接执行实际配置转换。本文用于对接账号生成、模型输入和战斗模拟。
 
 ## 处理流程
 
@@ -40,9 +40,9 @@ flowchart LR
 | 战斗输入组装 | 账号静态配置、实际局面和游戏资料 | 双方开战属性、固定系数、动作与效果参数 |
 | 战斗引擎 | 已组装的战斗输入 | 战斗过程、实时 buff 与效果结算、战斗结果 |
 
-账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。完整角色和遗器生成通过 Python 参数调用，当前入口见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
+账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。运行方式见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
 
-程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。[实际游玩配置](../account/playable-configuration.md)的完整入口 `convert_playable_account` 将 `RawAccount` 转换为统一配置，包含补齐、映射、技能加级和静态面板。Python 生成结果接入待实现。原始账号保存完整库存和可缺省的装备关系；导入报告与生成统计由各自入口单独保存。
+程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。用 `generate_account` 返回的 `GeneratedAccount.account` 直接调用 [`convert_playable_account`](../account/playable-configuration.md)，即可完成试用补齐、练度与装备映射、技能加级和静态面板计算。原始账号保存持有库存及装备引用。生成统计保存在 `GeneratedAccount`，导入报告保存在导入结果。
 
 ## 生成与实际配置的分工
 

@@ -2,7 +2,13 @@
 
 状态：已实现。按角色配装需求生成六件五星 +15 遗器，同时满足单件和整套的有效词条上下限。单件接口见[单件遗器生成与评分](relic-generation.md)，属性与套装 ID 见[五星遗器数据](../../game-data/relic-data.md)。
 
+## Rust 接口
+
+用 `account_generator::RelicRequest` 指定部位、计分权重、数值档位和合计分数范围。`generate_character_relics(&request, max_attempts, &mut rng)` 返回六件遗器及对应得分，按输入顺序排列已指定部位，再按部位顺序补齐其余位置。`maximum_character_relic_score(&request)` 计算施加分数目标之前的理论上限。单独生成的遗器在组装进账号库存时由调用方分配实例 ID。
+
 ## 在 IDE 中调用
+
+以下示例使用兼容的 Python 入口。
 
 按单件接口页初始化 Python 环境后，打开 [character_relics.py](../../../examples/account_generation/character_relics.py)，修改部位配置和角色权重，在 `result` 处查看结果。
 

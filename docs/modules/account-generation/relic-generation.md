@@ -2,7 +2,13 @@
 
 状态：已实现。生成器固定输出五星 +15 遗器，供[角色六件套](character-relics.md)和账号生成调用。代码位于 `research/account_generation/`，数据流见[账号数据流与模块职责](data-flow.md)。
 
+## Rust 接口
+
+用 `account_generator::RelicSpec::new(slot)` 从指定部位的合法候选出发，按需覆盖套装、主词条、起始条数、必含副词条和分数范围。`generate_relic(&spec, &weights, tier_weights, max_attempts, &mut rng)` 返回遗器及得分。`score_relic(&relic, &weights)` 可按新的属性权重重算。组装进账号库存时由调用方分配实例 ID。
+
 ## 在 IDE 中调用
+
+以下示例使用兼容的 Python 入口。
 
 使用 Python 3.12 或更高版本，在项目根目录执行 `uv sync --locked`，然后在 IDE 中选择项目 `.venv` 解释器。打开 [single_relic.py](../../../examples/account_generation/single_relic.py)，修改请求参数并运行，在 `result` 处查看结果。
 

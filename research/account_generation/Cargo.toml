@@ -1,0 +1,12 @@
+[package]
+name = "account-generator"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+account-core = { path = "../../core/account" }
+rand_chacha.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -1,0 +1,303 @@
+use std::collections::BTreeMap;
+
+use account_core::{
+    RawAccount, RelicMainStat, RelicSlot, RelicSubStat,
+    playable::{
+        CharacterOrigin,
+        conversion::{ConversionRequest, convert_playable_account},
+    },
+    reference::PlayableData,
+};
+use account_generator::{
+    AccountReference, AccountRequest, ChaCha8Rng, CharacterSpec, GenerationError, LightConeSpec,
+    RelicRequest, RelicSpec, SeedableRng, generate_account, generate_character, generate_relic,
+    score_relic,
+};
+
+#[test]
+fn sample_has_exact_gold_and_converts_with_shared_account_core() {
+    let reference = AccountReference::bundled().unwrap();
+    let request = AccountRequest {
+        gold_count: Some(20.0),
+        core_character_ids: vec!["1310".to_owned(), "1225".to_owned()],
+        resource_concentration: 0.7,
+        min_mean_effective_rolls: Some(2.99),
+        max_mean_effective_rolls: Some(3.01),
+        ..AccountRequest::new("sample", 12)
+    };
+    let generated =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert_eq!(generated.gold_count(), 20.0);
+    assert!((2.99..=3.01).contains(&generated.mean_effective_rolls()));
+    assert_eq!(generated.account.characters.len(), 12);
+    assert_eq!(generated.account.light_cones.len(), 12);
+    assert_eq!(generated.account.relics.len(), 72);
+    assert!(
+        generated
+            .account
+            .relics
+            .iter()
+            .all(|relic| relic.substats.len() == 4)
+    );
+    assert_eq!(
+        generated,
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap()
+    );
+    let serialized = serde_json::to_string(&generated.account).unwrap();
+    let account: RawAccount = serde_json::from_str(&serialized).unwrap();
+    let playable = convert_playable_account(
+        &account,
+        &PlayableData::bundled().unwrap(),
+        &ConversionRequest {
+            config_id: "playable".to_owned(),
+            character_aliases: BTreeMap::new(),
+        },
+    )
+    .unwrap();
+    assert!(
+        playable
+            .characters
+            .iter()
+            .any(|character| character.character_id == "1310"
+                && matches!(character.origin, CharacterOrigin::Owned { .. }))
+    );
+    assert!(
+        playable
+            .characters
+            .iter()
+            .any(|character| character.origin == CharacterOrigin::Trial)
+    );
+}
+
+#[test]
+fn fixed_light_cones_conflict_and_budget_exhaustion_are_reported() {
+    let reference = AccountReference::bundled().unwrap();
+    let spec = CharacterSpec {
+        light_cone: LightConeSpec {
+            light_cone_id: Some("24000".to_owned()),
+            ..LightConeSpec::default()
+        },
+        ..CharacterSpec::default()
+    };
+    let request = AccountRequest {
+        character_overrides: BTreeMap::from([
+            ("1310".to_owned(), spec.clone()),
+            ("1225".to_owned(), spec),
+        ]),
+        ..AccountRequest::new("unique", 2)
+    };
+    let mut rng = ChaCha8Rng::seed_from_u64(2);
+    assert!(matches!(
+        generate_account(&request, &reference, &mut rng),
+        Err(GenerationError::NoSolution)
+    ));
+    let request = AccountRequest {
+        max_attempts: 0,
+        ..AccountRequest::new("budget", 1)
+    };
+    assert!(matches!(
+        generate_account(&request, &reference, &mut rng),
+        Err(GenerationError::BudgetExhausted { attempts: 0 })
+    ));
+}
+
+#[test]
+fn single_piece_respects_explicit_roll_tiers_and_required_stats() {
+    let spec = RelicSpec {
+        required_substats: vec![RelicSubStat::CritDmg],
+        initial_substat_count: Some(4),
+        min_effective_rolls: Some(6.6),
+        ..RelicSpec::new(RelicSlot::Head)
+    };
+    let weights = BTreeMap::from([(RelicSubStat::CritDmg, 1.0)]);
+    let (piece, score) = generate_relic(
+        &spec,
+        &weights,
+        [0.0, 0.0, 1.0],
+        10_000,
+        &mut ChaCha8Rng::seed_from_u64(7),
+    )
+    .unwrap();
+    assert_eq!(piece.mainstat, RelicMainStat::Hp);
+    assert_eq!(piece.substats.len(), 4);
+    assert!(!piece.substats.contains_key(&RelicSubStat::Hp));
+    assert!((piece.substats[&RelicSubStat::CritDmg] - 6.0 * 0.0648).abs() < 1e-12);
+    assert!((score - score_relic(&piece, &weights)).abs() < 1e-12);
+}
+
+#[test]
+fn full_roster_meets_an_exact_score_and_converts() {
+    let reference = AccountReference::bundled().unwrap();
+    let request = AccountRequest {
+        gold_count: Some(400.0),
+        min_mean_effective_rolls: Some(6.5),
+        max_mean_effective_rolls: Some(6.5),
+        max_attempts: 3_000,
+        ..AccountRequest::new("full", 60)
+    };
+    let result =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert_eq!(result.gold_count(), 400.0);
+    assert_eq!(result.account.relics.len(), 360);
+    assert!((result.mean_effective_rolls() - 6.5).abs() <= 1e-9);
+    assert!(result.attempts <= request.max_attempts);
+    convert_playable_account(
+        &result.account,
+        &PlayableData::bundled().unwrap(),
+        &ConversionRequest {
+            config_id: "full-playable".to_owned(),
+            character_aliases: BTreeMap::new(),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
+    let mut pieces: Vec<_> = (1..=4)
+        .map(|slot| RelicSpec {
+            min_effective_rolls: Some(0.0),
+            max_effective_rolls: Some(0.0),
+            ..RelicSpec::new(RelicSlot::try_from(slot).unwrap())
+        })
+        .collect();
+    for (slot, speed) in [(RelicSlot::PlanarSphere, 2.0), (RelicSlot::LinkRope, 2.6)] {
+        pieces.push(RelicSpec {
+            required_substats: vec![RelicSubStat::Spd],
+            min_effective_rolls: Some(speed / 2.3 - 0.01),
+            max_effective_rolls: Some(speed / 2.3 + 0.01),
+            ..RelicSpec::new(slot)
+        });
+    }
+    let request = AccountRequest {
+        gold_count: Some(0.5),
+        character_pool: Some(vec!["1004".to_owned()]),
+        core_character_ids: vec!["1004".to_owned()],
+        character_overrides: BTreeMap::from([(
+            "1004".to_owned(),
+            CharacterSpec {
+                relics: Some(RelicRequest {
+                    pieces,
+                    effective_stat_weights: BTreeMap::from([(RelicSubStat::Spd, 1.0)]),
+                    ..RelicRequest::default()
+                }),
+                ..CharacterSpec::default()
+            },
+        )]),
+        min_mean_effective_rolls: Some(2.0 / 6.0),
+        max_mean_effective_rolls: Some(2.0 / 6.0),
+        max_attempts: 100,
+        ..AccountRequest::new("mixed-tiers", 1)
+    };
+    let reference = AccountReference::bundled().unwrap();
+    let result =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert_eq!(result.account.relics[4].substats[&RelicSubStat::Spd], 2.0);
+    assert_eq!(result.account.relics[5].substats[&RelicSubStat::Spd], 2.6);
+}
+
+#[test]
+fn empty_and_fixed_build_requests_preserve_resource_constraints() {
+    let reference = AccountReference::bundled().unwrap();
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    let empty = generate_account(&AccountRequest::new("empty", 0), &reference, &mut rng).unwrap();
+    assert!(empty.account.characters.is_empty());
+    assert_eq!(empty.gold_count(), 0.0);
+    for eidolons in [0, 2] {
+        let request = AccountRequest {
+            character_pool: Some(vec!["1004".to_owned(), "1310".to_owned()]),
+            five_star_build: Some((eidolons, 1)),
+            relic_quality_tier: Some(3),
+            ..AccountRequest::new("fixed", 2)
+        };
+        let result = generate_account(&request, &reference, &mut rng).unwrap();
+        assert!(
+            result
+                .account
+                .characters
+                .iter()
+                .all(|character| character.eidolons == eidolons)
+        );
+        assert!(
+            result
+                .account
+                .light_cones
+                .iter()
+                .all(|cone| cone.superimposition == 1)
+        );
+        let score: f64 = result
+            .investments
+            .values()
+            .flat_map(|i| i.piece_scores)
+            .sum();
+        let upper: f64 = result
+            .investments
+            .values()
+            .map(|i| i.relic_score_upper)
+            .sum();
+        assert!((0.5..0.65).contains(&(score / upper)));
+    }
+}
+
+#[test]
+fn individual_character_keeps_explicit_equipment_and_early_traces() {
+    let reference = AccountReference::bundled().unwrap();
+    let spec = CharacterSpec {
+        level: 20,
+        promotion: 0,
+        light_cone: LightConeSpec {
+            light_cone_id: Some("24000".to_owned()),
+            level: 20,
+            promotion: 0,
+            superimposition: 3,
+        },
+        ..CharacterSpec::default()
+    };
+    let generated = generate_character(
+        "early",
+        "1310",
+        &spec,
+        &reference,
+        10_000,
+        &mut ChaCha8Rng::seed_from_u64(42),
+    )
+    .unwrap();
+    let character = &generated.account.characters[0];
+    assert_eq!(character.ability_version, Some(0));
+    assert_eq!(character.traces.skill_levels["1310001"], 1);
+    assert!(!character.traces.node_unlocks["1310101"]);
+    assert_eq!(generated.account.light_cones[0].light_cone_id, "24000");
+    assert_eq!(generated.account.light_cones[0].superimposition, 3);
+    convert_playable_account(
+        &generated.account,
+        &PlayableData::bundled().unwrap(),
+        &ConversionRequest {
+            config_id: "early-playable".to_owned(),
+            character_aliases: BTreeMap::new(),
+        },
+    )
+    .unwrap();
+}
+
+#[test]
+fn zero_weight_relics_fit_exactly_one_attempt_per_piece() {
+    let reference = AccountReference::bundled().unwrap();
+    let request = AccountRequest {
+        gold_count: Some(0.5),
+        character_pool: Some(vec!["1004".to_owned()]),
+        core_character_ids: vec!["1004".to_owned()],
+        character_overrides: BTreeMap::from([(
+            "1004".to_owned(),
+            CharacterSpec {
+                relics: Some(RelicRequest::default()),
+                ..CharacterSpec::default()
+            },
+        )]),
+        max_attempts: 7,
+        ..AccountRequest::new("zero", 1)
+    };
+    let generated =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert_eq!(generated.mean_effective_rolls(), 0.0);
+    assert_eq!(generated.attempts, 7);
+}
