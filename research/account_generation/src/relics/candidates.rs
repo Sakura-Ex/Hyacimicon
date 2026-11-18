@@ -298,12 +298,15 @@ impl PieceSearch {
             }
         }
         next_first(&mut pending, desired.is_some());
-        // 同分成品保留首个候选，等权词条的强化次数按种子打乱考察顺序。
-        let mut count_order = [1, 2, 3, 4, 5, 6];
-        search.shuffle(&mut count_order);
+        // 同分成品保留首个候选。独立抽取每种副词条的顺序，让同分分配也有机会入选。
+        let count_orders = std::array::from_fn(|_| {
+            let mut counts = [1, 2, 3, 4, 5, 6];
+            search.shuffle(&mut counts);
+            counts
+        });
         Candidates {
             pending,
-            count_order,
+            count_orders,
             bounds,
             extremes,
             desired,
@@ -405,7 +408,7 @@ impl PieceSearch {
 /// 逐件产生候选。待考察的分配保存在向量中，调用方可以暂停以检查后续部位。
 pub(super) struct Candidates<'a> {
     pending: Vec<Assignment<'a>>,
-    count_order: [u8; 6],
+    count_orders: [[u8; 6]; 4],
     bounds: Bounds,
     extremes: (usize, usize),
     desired: Option<f64>,
@@ -475,13 +478,11 @@ impl<'a> Candidates<'a> {
         let rolls = rolls(recipe.stats[position]);
         let start = self.pending.len();
 
-        let counts = if weight != 0.0 && recipe.weights[position + 1..].contains(&weight) {
-            self.count_order
-        } else {
-            [1, 2, 3, 4, 5, 6]
-        };
         let range = minimum..=if equivalent_zero { minimum } else { maximum };
-        for count in counts.into_iter().filter(|count| range.contains(count)) {
+        for count in self.count_orders[position]
+            .into_iter()
+            .filter(|count| range.contains(count))
+        {
             let distributions = &self.distributions[usize::from(count)];
             let distributions = if weight == 0.0 {
                 &distributions[..1]

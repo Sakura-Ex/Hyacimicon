@@ -524,3 +524,40 @@ fn an_exact_speed_piece_can_roll_its_three_other_substats_at_different_tiers() {
     }
     assert!(mixed);
 }
+
+#[test]
+fn welt_crit_upgrades_vary_independently_of_speed_and_hit_rate_upgrades() {
+    let spec = RelicSpec {
+        required_substats: vec![Sub::CritRate, Sub::CritDmg, Sub::Spd, Sub::EffectHitRate],
+        initial_substat_count: Some(4),
+        min_effective_rolls: Some(5.5),
+        max_effective_rolls: Some(5.5),
+        ..RelicSpec::new(Slot::Head)
+    };
+    let weights = BTreeMap::from([
+        (Sub::CritRate, 1.0),
+        (Sub::CritDmg, 1.0),
+        (Sub::Spd, 0.3),
+        (Sub::EffectHitRate, 0.3),
+    ]);
+    // 四条各出现一次。余下五次中双暴分两次，速度和命中分三次。
+    let expected: BTreeSet<_> = (0..=2)
+        .flat_map(|crit| (0..=3).map(move |spd| (crit, spd)))
+        .collect();
+    let mut observed = BTreeSet::new();
+    for seed in 0..256 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &weights,
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        assert!((score_relic(&piece, &weights) - 5.5).abs() < 1e-9);
+        let crit = (piece.substats[&Sub::CritRate] / 0.029160001).round() as u8 - 1;
+        let speed = (piece.substats[&Sub::Spd] / 2.3).round() as u8 - 1;
+        observed.insert((crit, speed));
+    }
+    assert_eq!(observed, expected);
+}
