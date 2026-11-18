@@ -4,6 +4,10 @@ on:
   pull_request_target:
     branches: [main]
     types: [opened, reopened, synchronize]
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+    paths: [.github/workflows/maintenance-review.yml]
 
 permissions: {}
 
@@ -13,7 +17,10 @@ concurrency:
 
 jobs:
   review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event_name == 'pull_request_target' ||
+        (github.event.pull_request.number == 14 && github.actor == 'Sakura-Ex'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: codex-review
@@ -57,6 +64,19 @@ jobs:
           merge_base="$(git merge-base HEAD "$PR_HEAD")"
           echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
 
+      - name: Prepare the isolated PR 14 trial
+        id: trial
+        if: github.event_name == 'pull_request' && steps.comparison.outputs.merge_base != ''
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          review_dir="$RUNNER_TEMP/maintenance-review-trial"
+          mkdir -p "$review_dir"
+          for file in maintenance-review.mjs maintenance-review.md maintenance-review.schema.json; do
+            git show "$PR_HEAD:.github/codex/$file" > "$review_dir/$file"
+          done
+          echo "entrypoint=$review_dir/maintenance-review.mjs" >> "$GITHUB_OUTPUT"
+
       - name: Review with the Responses API
         id: responses
         if: steps.comparison.outputs.merge_base != ''
@@ -65,7 +85,8 @@ jobs:
           PR_BASE: ${{ github.event.pull_request.base.sha }}
           PR_MERGE_BASE: ${{ steps.comparison.outputs.merge_base }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: node .github/codex/maintenance-review.mjs
+          REVIEW_ENTRYPOINT: ${{ steps.trial.outputs.entrypoint || '.github/codex/maintenance-review.mjs' }}
+        run: node "$REVIEW_ENTRYPOINT"
 
   publish:
     needs: review
