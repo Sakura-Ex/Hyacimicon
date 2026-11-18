@@ -115,6 +115,74 @@ fn exact_crit_score_samples_the_five_upgrades_by_roll_probability() {
     assert!((27..=103).contains(&on_one), "{on_one}");
 }
 
+#[test]
+fn a_set_score_range_samples_compensating_low_and_high_rolls() {
+    // 头部的攻击百分比与效果抵抗共得约两分，其余五件得零分。
+    // 两条各有一次数值，允许低+高、中+中、高+低三种等概率搭配。
+    let request = RelicRequest {
+        pieces: (1..=6)
+            .map(|slot| RelicSpec {
+                required_substats: if slot == 1 {
+                    vec![Sub::AtkPercent, Sub::EffectRes, Sub::Spd, Sub::Def]
+                } else {
+                    vec![]
+                },
+                max_effective_rolls: (slot != 1).then_some(0.0),
+                ..RelicSpec::new(Slot::try_from(slot).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: BTreeMap::from([(Sub::AtkPercent, 1.0), (Sub::EffectRes, 1.0)]),
+        min_total_effective_rolls: Some(1.999),
+        max_total_effective_rolls: Some(2.001),
+        ..Default::default()
+    };
+    let mut mid = 0;
+    for seed in 0..384 {
+        let pieces =
+            generate_character_relics(&request, 6, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        let score: f64 = pieces.iter().map(|(_, value)| value).sum();
+        assert!((1.999..=2.001).contains(&score));
+        mid += usize::from((pieces[0].0.substats[&Sub::AtkPercent] - 0.038880002).abs() < 1e-10);
+    }
+    assert!((82..=175).contains(&mid), "{mid} middle rolls");
+}
+
+#[test]
+fn a_set_score_target_keeps_substats_that_need_a_low_roll() {
+    let mut pieces: Vec<_> = (1..=6)
+        .map(|slot| RelicSpec {
+            required_substats: vec![Sub::Def, Sub::EffectRes, Sub::BreakEffect],
+            initial_substat_count: Some(4),
+            ..RelicSpec::new(Slot::try_from(slot).unwrap())
+        })
+        .collect();
+    pieces[0].min_effective_rolls = Some(0.8);
+    pieces[0].max_effective_rolls = Some(0.8);
+    for spec in &mut pieces[2..] {
+        spec.required_substats.push(Sub::AtkPercent);
+    }
+    let request = RelicRequest {
+        pieces,
+        effective_stat_weights: BTreeMap::from([(Sub::Spd, 0.92), (Sub::CritRate, 0.8)]),
+        min_total_effective_rolls: Some(1.6),
+        max_total_effective_rolls: Some(1.6),
+        ..Default::default()
+    };
+    let mut with_speed = 0;
+    for seed in 0..512 {
+        let pieces =
+            generate_character_relics(&request, 6, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        assert!((pieces.iter().map(|(_, s)| s).sum::<f64>() - 1.6).abs() < 1e-9);
+        assert!((score_relic(&pieces[0].0, &request.effective_stat_weights) - 0.8).abs() < 1e-9);
+        with_speed += usize::from(pieces[0].0.substats.contains_key(&Sub::Spd));
+    }
+    // 只有一次低档速度或一次中档暴击率恰好得 0.8 分，两种出现概率相同。
+    assert!(
+        (197..=315).contains(&with_speed),
+        "{with_speed} heads with speed"
+    );
+}
+
 fn valid_roll_counts(piece: &RelicInstance, tiers: [f64; 3]) -> BTreeSet<u8> {
     assert_eq!(
         (piece.rarity, piece.level, piece.substats.len()),

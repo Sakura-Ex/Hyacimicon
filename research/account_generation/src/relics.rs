@@ -9,7 +9,7 @@ use account_core::{RelicInstance, RelicMainStat, RelicSlot, RelicSubStat};
 use serde::Deserialize;
 
 use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invalid};
-use candidates::{Candidate, Candidates, PieceSearch};
+use candidates::{Candidates, PieceSearch};
 
 pub(super) const EPSILON: f64 = 1e-6;
 pub(super) const SLOTS: [RelicSlot; 6] = [
@@ -330,7 +330,13 @@ pub(super) fn generate(
         &bounds,
         &weights,
     );
-    solve(&groups, overall, &desired, search)
+    solve(
+        &groups,
+        overall,
+        &desired,
+        strength > 0.0 && groups.len() > 1,
+        search,
+    )
 }
 
 struct Group {
@@ -372,7 +378,7 @@ fn sample_group(group: &Group, search: &mut Search<'_>) -> Result<Gear, Generati
     if group.bounds == group.suffix[0] {
         let mut pieces = Vec::with_capacity(group.pieces.len());
         for piece in &group.pieces {
-            let candidate = piece.sample(piece.bounds, piece.tiers, search)?;
+            let candidate = piece.sample(piece.bounds, search)?;
             search.consider()?;
             pieces.push((piece.materialize(candidate), candidate.score));
         }
@@ -387,6 +393,7 @@ fn sample_group(group: &Group, search: &mut Search<'_>) -> Result<Gear, Generati
         std::slice::from_ref(group),
         group.bounds,
         &[desired],
+        false,
         search,
     )?
     .pop()
@@ -397,6 +404,7 @@ fn solve(
     groups: &[Group],
     overall: Bounds,
     desired: &[f64],
+    preserve_allocation: bool,
     search: &mut Search<'_>,
 ) -> Result<Vec<Gear>, GenerationError> {
     let can_use_middle = groups
@@ -408,9 +416,7 @@ fn solve(
         && search.limit - search.attempts >= count
         && let Some(scores) = middle_grid::find(groups, overall, desired, search)?
     {
-        let mut result = sample_allocated_scores(groups, scores, true, search)?;
-        sample_middle_tiers(groups, &mut result, overall, search);
-        return Ok(materialize(groups, result));
+        return sample_allocated_scores(groups, scores, overall, preserve_allocation, search);
     }
     let suffix = suffix_bounds(groups.iter().map(|group| group.bounds));
     let mut solver = GearSearch {
@@ -423,94 +429,64 @@ fn solve(
         failed: BTreeSet::new(),
     };
     if solver.solve()? {
-        let result = sample_allocated_scores(groups, solver.output, false, search)?;
-        Ok(materialize(groups, result))
+        sample_allocated_scores(groups, solver.output, overall, preserve_allocation, search)
     } else {
         Err(GenerationError::NoSolution)
     }
 }
 
+// 分配器给出一组同时达标的分数。依次替换各件时，保留其他件已占用的分数，按真实允许档位抽取成品。
 fn sample_allocated_scores(
     groups: &[Group],
     scores: Vec<Vec<f64>>,
-    middle: bool,
-    search: &mut Search<'_>,
-) -> Result<Vec<Vec<Candidate>>, GenerationError> {
-    groups
-        .iter()
-        .zip(scores)
-        .map(|(group, targets)| {
-            group
-                .pieces
-                .iter()
-                .zip(targets)
-                .map(|(piece, score)| {
-                    let tiers = if middle { [0.0, 1.0, 0.0] } else { piece.tiers };
-                    piece.sample(intersect(piece.bounds, (score, score)), tiers, search)
-                })
-                .collect()
-        })
-        .collect()
-}
-
-fn sample_middle_tiers(
-    groups: &[Group],
-    choices: &mut [Vec<Candidate>],
     overall: Bounds,
+    preserve_allocation: bool,
     search: &mut Search<'_>,
-) {
-    let mut scores: Vec<f64> = choices
-        .iter()
-        .map(|pieces| pieces.iter().map(|piece| piece.score).sum())
-        .collect();
-    let mut total: f64 = scores.iter().sum();
-    // 从已满足约束的中档组合出发。打乱部位次序，避免固定由靠前的角色使用分数余量。
+) -> Result<Vec<Gear>, GenerationError> {
+    let mut totals: Vec<f64> = scores.iter().map(|group| group.iter().sum()).collect();
+    let mut total: f64 = totals.iter().sum();
     let mut order: Vec<_> = groups
         .iter()
         .enumerate()
-        .flat_map(|(group, entry)| {
-            entry
-                .pieces
-                .iter()
-                .enumerate()
-                .filter(|(_, piece)| !piece.is_middle_only())
-                .map(move |(index, _)| (group, index))
-        })
+        .flat_map(|(group_idx, group)| (0..group.pieces.len()).map(move |slot| (group_idx, slot)))
         .collect();
     search.shuffle(&mut order);
-    for (group, index) in order {
-        let piece = &groups[group].pieces[index];
-        let choice = &mut choices[group][index];
-        let group_rest = scores[group] - choice.score;
-        let total_rest = total - choice.score;
-        let bounds = groups[group].bounds;
-        let feasible = intersect(
+    let mut output = vec![Vec::new(); groups.len()];
+    for (group_idx, slot) in order {
+        let group = &groups[group_idx];
+        let piece = &group.pieces[slot];
+        let planned = scores[group_idx][slot];
+        let group_rest = totals[group_idx] - planned;
+        let rest = total - planned;
+        let bounds = intersect(
             piece.bounds,
             intersect(
-                (bounds.0 - group_rest, bounds.1 - group_rest),
-                (overall.0 - total_rest, overall.1 - total_rest),
+                (group.bounds.0 - group_rest, group.bounds.1 - group_rest),
+                (overall.0 - rest, overall.1 - rest),
             ),
         );
-        *choice = piece.sample_tiers(*choice, feasible, search);
-        scores[group] = group_rest + choice.score;
-        total = total_rest + choice.score;
+        // 集中投入时保留分配目标；精确总分不把舍入容差逐件累积。
+        let bounds = if preserve_allocation || bounds.1 - bounds.0 <= 2.0 * EPSILON + 1e-12 {
+            intersect(piece.bounds, (planned, planned))
+        } else {
+            bounds
+        };
+        let candidate = piece.sample(bounds, search)?;
+        totals[group_idx] = group_rest + candidate.score;
+        total = rest + candidate.score;
+        output[group_idx].push((slot, (piece.materialize(candidate), candidate.score)));
     }
-}
-
-fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
-    groups
+    Ok(groups
         .iter()
-        .zip(choices)
-        .map(|(group, candidates)| Gear {
-            pieces: group
-                .pieces
-                .iter()
-                .zip(candidates)
-                .map(|(piece, candidate)| (piece.materialize(candidate), candidate.score))
-                .collect(),
-            upper: group.upper,
+        .zip(output)
+        .map(|(group, mut choices)| {
+            choices.sort_unstable_by_key(|(slot, _)| *slot);
+            Gear {
+                upper: group.upper,
+                pieces: choices.into_iter().map(|(_, piece)| piece).collect(),
+            }
         })
-        .collect()
+        .collect())
 }
 
 struct GearSearch<'a, 'b, 'rng> {

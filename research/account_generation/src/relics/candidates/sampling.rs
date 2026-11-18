@@ -44,7 +44,6 @@ impl<'a> Prefix<'a> {
         Candidate {
             main: self.recipe.main,
             stats: self.recipe.stats,
-            weights: self.recipe.weights,
             values: self.values,
             score: self.score,
         }
@@ -233,7 +232,6 @@ impl PieceSearch {
     pub(in crate::relics) fn sample(
         &self,
         bounds: Bounds,
-        tiers: [f64; 3],
         search: &mut Search<'_>,
     ) -> Result<Candidate, GenerationError> {
         let last = self.recipes.last().ok_or(GenerationError::NoSolution)?;
@@ -254,11 +252,11 @@ impl PieceSearch {
         } else {
             9
         };
-        let candidate = Prefix::new(recipe, count).finish(tiers, search);
+        let candidate = Prefix::new(recipe, count).finish(self.tiers, search);
         if contains(bounds, candidate.score) {
             return Ok(candidate);
         }
 
-        ConditionalDraw::new(bounds, tiers).draw(self, search)
+        ConditionalDraw::new(bounds, self.tiers).draw(self, search)
     }
 }

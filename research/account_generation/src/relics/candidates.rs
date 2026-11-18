@@ -80,7 +80,6 @@ pub(super) struct Candidate {
     main: Main,
     stats: [Sub; 4],
     values: [f64; 4],
-    weights: [f64; 4],
     pub(super) score: f64,
 }
 
@@ -278,10 +277,6 @@ impl PieceSearch {
         self.tiers[1] > 0.0
     }
 
-    pub(super) fn is_middle_only(&self) -> bool {
-        self.has_middle() && self.tiers[0] == 0.0 && self.tiers[2] == 0.0
-    }
-
     pub(super) fn candidates(
         &self,
         bounds: Bounds,
@@ -351,50 +346,6 @@ impl PieceSearch {
                 }
             })
             .sum()
-    }
-
-    /// 用允许的档位重抽中档候选的强化数值，保留每个副词条的强化次数。
-    pub(super) fn sample_tiers(
-        &self,
-        mut candidate: Candidate,
-        bounds: Bounds,
-        search: &mut Search<'_>,
-    ) -> Candidate {
-        let original_score = candidate.score;
-        let accepts = |score: f64| {
-            if bounds.1 - bounds.0 <= 2.0 * EPSILON + 1e-12 {
-                // 精确目标保留已选分数，舍入误差不作为可分配的分数余量。
-                let rounding = 8.0 * f64::EPSILON * original_score.abs().max(1.0);
-                (score - original_score).abs() <= rounding
-            } else {
-                contains(bounds, score)
-            }
-        };
-        let mut proposed = candidate;
-        let mut changes = [0.0; 4];
-        for (index, change) in changes.iter_mut().enumerate() {
-            let middle_value = rolls(candidate.stats[index])[1];
-            let count = (candidate.values[index] / middle_value).round();
-            let value = Self::sample_rolls(self.tiers, candidate.stats[index], count as u8, search);
-            proposed.values[index] = value;
-            *change = candidate.weights[index] * (value / middle_value - count);
-        }
-        proposed.score += changes.iter().sum::<f64>();
-        if accepts(proposed.score) {
-            return proposed;
-        }
-
-        // 整件超出范围时，仍接受符合约束的单个词条数值，包括零权重词条。
-        let mut indices = [0, 1, 2, 3];
-        search.shuffle(&mut indices);
-        for index in indices {
-            let score = candidate.score + changes[index];
-            if accepts(score) {
-                candidate.values[index] = proposed.values[index];
-                candidate.score = score;
-            }
-        }
-        candidate
     }
 }
 
