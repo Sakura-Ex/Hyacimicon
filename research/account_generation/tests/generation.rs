@@ -223,6 +223,27 @@ fn middle_grid_checks_the_actual_score_against_the_original_tolerance() {
 }
 
 #[test]
+fn middle_grid_discards_scores_far_above_the_target_without_overflow() {
+    let request = RelicRequest {
+        effective_stat_weights: BTreeMap::from([
+            (RelicSubStat::Spd, 1e30),
+            (RelicSubStat::CritRate, 1.0),
+        ]),
+        tier_weights: [0.0, 1.0, 0.0],
+        min_total_effective_rolls: Some(1.0),
+        max_total_effective_rolls: Some(1.0),
+        ..RelicRequest::default()
+    };
+    let result = account_generator::generate_character_relics(
+        &request,
+        6,
+        &mut ChaCha8Rng::seed_from_u64(42),
+    )
+    .unwrap();
+    assert_eq!(result.iter().map(|(_, score)| score).sum::<f64>(), 1.0);
+}
+
+#[test]
 fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     let request = RelicRequest {
         pieces: vec![RelicSpec {

@@ -23,7 +23,10 @@ impl Scores {
     }
 
     fn extend(&self, options: &[usize], cap: usize) -> Self {
-        let maximum = cap.min(self.maximum + options.last().copied().unwrap_or_default());
+        let maximum = self
+            .maximum
+            .saturating_add(options.last().copied().unwrap_or_default())
+            .min(cap);
         let mut words = vec![0; maximum / 64 + 1];
         for &option in options {
             let shift = option / 64;
