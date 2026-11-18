@@ -679,3 +679,104 @@ pub(super) fn distribute(total: f64, bounds: &[(f64, f64)], weights: &[f64]) -> 
     }
     values
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ChaCha8Rng, LightConeSpec, SeedableRng, generate_account};
+
+    #[test]
+    fn preferred_teammates_only_fill_one_recommended_slot_per_character() {
+        let mut reference = AccountReference::bundled().unwrap();
+        reference.characters.get_mut("1004").unwrap().teams = vec![Team {
+            members: vec!["1005".into(), "1103".into()],
+            backups: [vec!["8009".into()], vec!["8009".into()], Vec::new()],
+        }];
+        reference.characters.get_mut("8009").unwrap().teams.clear();
+        let request = AccountRequest {
+            character_pool: Some(vec![
+                "1004".into(),
+                "1005".into(),
+                "1103".into(),
+                "8009".into(),
+            ]),
+            core_character_ids: vec!["1004".into(), "8009".into()],
+            teammate_bias: 1.0,
+            ..AccountRequest::new("teammates", 3)
+        };
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+        let roster: BTreeSet<_> = result
+            .account
+            .characters
+            .iter()
+            .map(|character| character.character_id.as_str())
+            .collect();
+        assert_eq!(roster, BTreeSet::from(["1004", "8009", "1103"]));
+    }
+
+    #[test]
+    fn roster_retries_when_the_first_choice_cannot_complete_equipment_or_score() {
+        let mut reference = AccountReference::bundled().unwrap();
+        reference.characters.get_mut("1004").unwrap().teams = vec![Team {
+            members: vec!["1005".into()],
+            backups: std::array::from_fn(|_| Vec::new()),
+        }];
+        let request = AccountRequest {
+            character_pool: Some(vec!["1004".into(), "1005".into(), "1103".into()]),
+            core_character_ids: vec!["1004".into()],
+            teammate_bias: 1.0,
+            light_cone_pool: Some(vec!["24003".into(), "21006".into()]),
+            character_overrides: BTreeMap::from([(
+                "1004".into(),
+                CharacterSpec {
+                    light_cone: LightConeSpec {
+                        light_cone_id: Some("24003".into()),
+                        ..LightConeSpec::default()
+                    },
+                    ..CharacterSpec::default()
+                },
+            )]),
+            ..AccountRequest::new("unique-retry", 2)
+        };
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+        let roster: BTreeSet<_> = result
+            .account
+            .characters
+            .iter()
+            .map(|character| character.character_id.as_str())
+            .collect();
+        assert_eq!(roster, BTreeSet::from(["1004", "1103"]));
+
+        reference
+            .characters
+            .get_mut("1004")
+            .unwrap()
+            .relics
+            .weights
+            .clear();
+        let request = AccountRequest {
+            character_pool: Some(vec!["1004".into(), "1005".into()]),
+            core_count: 0,
+            min_mean_effective_rolls: Some(1.0),
+            ..AccountRequest::new("score-retry", 1)
+        };
+        let seed = (0..16)
+            .find(|&seed| {
+                let mut rng = ChaCha8Rng::seed_from_u64(seed);
+                let mut search = Search {
+                    rng: &mut rng,
+                    attempts: 0,
+                    limit: 1,
+                };
+                search.index(2) == 0
+            })
+            .unwrap();
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(seed)).unwrap();
+        assert_eq!(result.account.characters[0].character_id, "1005");
+        assert!(result.mean_effective_rolls() >= 1.0);
+        assert_eq!(result.attempts, 10);
+    }
+}

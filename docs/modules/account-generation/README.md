@@ -2,7 +2,7 @@
 
 Rust 账号生成器支持账号级金数、统一五星配装、推荐队友关联、资源集中分配，以及单角色与遗器生成。生成账号和 [reliquary-archiver v4 导入](../account/reliquary-import.md)共用 [Rust 原始账号模型](../account/README.md)及静态配置转换。
 
-生成器位于 `research/account_generation/`。新接入使用 `account-generator` crate 或 Rust 示例程序。现有 Python 调用可继续使用 `research.account_generation`。
+生成器位于 `research/account_generation/`。通过 `account-generator` crate 或[命令行样例](account-generation.md#运行样例)调用。账号生成所需的 4.7 JSON 资料随 Rust 构建嵌入。
 
 | 阅读入口 | 主要内容 |
 | --- | --- |

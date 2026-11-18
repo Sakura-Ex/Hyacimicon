@@ -313,6 +313,26 @@ fn full_roster_meets_an_exact_score_and_converts() {
 }
 
 #[test]
+fn full_catalog_can_meet_exact_and_narrow_lower_score_targets_within_the_budget() {
+    let reference = AccountReference::bundled().unwrap();
+    for (min, max, attempts) in [(3.0, 3.0, 3_000), (2.99, 3.01, 10_000)] {
+        let request = AccountRequest {
+            gold_count: Some(120.0),
+            min_mean_effective_rolls: Some(min),
+            max_mean_effective_rolls: Some(max),
+            max_attempts: attempts,
+            ..AccountRequest::new("full-low", 60)
+        };
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+        assert!((min - 1e-6..=max + 1e-6).contains(&result.mean_effective_rolls()));
+        assert_eq!(result.account.relics.len(), 360);
+        assert_eq!(result.gold_count(), 120.0);
+        assert!(result.attempts <= attempts);
+    }
+}
+
+#[test]
 fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
     let mut pieces: Vec<_> = (1..=4)
         .map(|slot| RelicSpec {

@@ -127,9 +127,9 @@ impl RelicRequest {
         if self
             .effective_stat_weights
             .values()
-            .any(|&weight| !weight.is_finite() || weight < 0.0 || weight > f64::MAX / 128.0)
+            .any(|&weight| !weight.is_finite() || weight.abs() > f64::MAX / 128.0)
         {
-            return Err(invalid("副词条评分权重需要为可计算的非负数"));
+            return Err(invalid("副词条评分权重需要为可计算的有限数"));
         }
         if self
             .tier_weights
@@ -244,6 +244,7 @@ pub(super) fn generate(
 ) -> Result<Vec<Gear>, GenerationError> {
     if choices.is_empty() {
         if request.min_mean_effective_rolls.unwrap_or_default() > 0.0
+            || request.max_mean_effective_rolls.unwrap_or_default() < 0.0
             || request.relic_quality_tier.is_some()
         {
             return Err(GenerationError::NoSolution);
@@ -287,7 +288,7 @@ pub(super) fn generate(
         (
             request
                 .min_mean_effective_rolls
-                .map_or(0.0, |score| score * count),
+                .map_or(f64::NEG_INFINITY, |score| score * count),
             request
                 .max_mean_effective_rolls
                 .map_or(f64::INFINITY, |score| score * count),
@@ -334,7 +335,9 @@ impl Group {
         let mut bounds = intersect(
             suffix[0],
             (
-                request.min_total_effective_rolls.unwrap_or_default(),
+                request
+                    .min_total_effective_rolls
+                    .unwrap_or(f64::NEG_INFINITY),
                 request.max_total_effective_rolls.unwrap_or(f64::INFINITY),
             ),
         );
@@ -627,10 +630,10 @@ pub(super) fn validate_range(min: Option<f64>, max: Option<f64>) -> Result<(), G
     if [min, max]
         .into_iter()
         .flatten()
-        .any(|score| !score.is_finite() || score < 0.0)
+        .any(|score| !score.is_finite())
         || min.zip(max).is_some_and(|(min, max)| min > max)
     {
-        return Err(invalid("有效词条区间需要非负、有限且上下限有序"));
+        return Err(invalid("有效词条区间需要有限数值且上下限有序"));
     }
     Ok(())
 }

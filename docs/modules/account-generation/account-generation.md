@@ -48,7 +48,7 @@ let mut rng = ChaCha8Rng::seed_from_u64(42);
 let result = generate_account(&request, &reference, &mut rng)?;
 ```
 
-参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。复现时记录请求、随机源与种子、生成器版本和资料版本。Rust 与 Python 各自以所属实现和随机源复现样本。
+参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。复现时记录请求、随机源与种子、生成器版本和资料版本。
 
 ## 生成条件
 
@@ -147,7 +147,7 @@ request.character_overrides.insert("1310".into(), CharacterSpec {
 
 每名持有角色生成六件五星 +15 遗器。平均得分按全部遗器计算，各件按对应角色权重评分。单件、角色和账号的分数约束共同生效。五档条件按各角色理论上限之和换算，再与显式平均范围和角色级条件取交集。
 
-中档得分可用有界整数网格表示时，生成器先合并各件和各角色的可达总分，取得满足条件的中档组合。之后按允许档位的权重重抽强化数值，保持各词条的强化次数。重抽结果还要满足单件、角色与账号的分数约束。精确目标也允许零权重词条变化。其余目标通过允许档位内的回溯搜索求解，搜索每尝试一件成品扣一次预算。三条或四条起始条件按 5∶2 抽取优先候选。搜索完毕且无可用分配时返回 `NoSolution`，下一件候选需要超出考察上限时返回 `BudgetExhausted`。
+中档得分可用非负有界整数网格表示时，生成器先合并各件和各角色的可达总分，取得满足条件的中档组合。之后按允许档位的权重重抽强化数值，保持各词条的强化次数。重抽结果还要满足单件、角色与账号的分数约束。精确目标也允许零权重词条变化。其余目标通过允许档位内的回溯搜索求解，搜索每尝试一件成品扣一次预算。三条或四条起始条件按 5∶2 抽取优先候选。搜索完毕且无可用分配时返回 `NoSolution`，下一件候选需要超出考察上限时返回 `BudgetExhausted`。
 
 `GeneratedAccount` 保存统一原始账号、实际核心名单、逐角色投入统计、统计口径、生成器版本和搜索次数。用 `gold_count()`、`gold_by_category()`、`copies_by_category()`、`mean_effective_rolls()`、`core_gold_share()` 和 `core_relic_share()` 读取汇总值。五星份数按限定、常驻和免费三个类别汇总。原始账号记录游戏版本及外部资料提供的快照标识。空账号的金数和平均词条均为零。
 
@@ -158,5 +158,3 @@ cargo test --locked -p account-generator
 ```
 
 集成测试覆盖固定种子、全 01／全 21 配装、唯一光锥冲突、原始练度、宽区间三档抽样、精确分数与零权重词条的数值变化，以及考察上限。12 人窄区间样例与 60 人、400 金、平均词条 6.5 的精确样例均调用实际配置转换。
-
-现有 Python 调用保留原接口，见 [`account.py`](../../../examples/account_generation/account.py)。

@@ -79,7 +79,7 @@ pub(super) fn find(
             overall.1 * scale <= 50_000.0
                 && candidates.iter().flatten().flatten().all(|candidate| {
                     let score = candidate.score * scale;
-                    (score - score.round()).abs() <= 1e-10
+                    score >= 0.0 && (score - score.round()).abs() <= 1e-10
                 })
         })
     else {

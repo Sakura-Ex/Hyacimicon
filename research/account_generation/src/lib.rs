@@ -20,7 +20,7 @@ pub use relics::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const GENERATOR_VERSION: &str = "account-rust-v3";
+pub const GENERATOR_VERSION: &str = "account-rust-v4";
 
 /// 五星角色和光锥的投入类别，计数单位为一份本体、星魂或叠影。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]

@@ -52,7 +52,7 @@ Rust crate 通过根 `Cargo.toml` 的 workspace 管理。`research/account_gener
 | `LightConeInstance` | 实例 ID、光锥种类 ID、原始等级、突破和叠影 |
 | `RelicInstance` | 实例 ID、套装、部位、实际品质、强化等级、主词条与当前副词条 |
 | `RelicSlot` | 头、手、躯干、脚、球、绳，序列化为数字 1～6 |
-| `RelicMainStat`、`RelicSubStat` | 与现有 Python 生成器一致的属性键 |
+| `RelicMainStat`、`RelicSubStat` | 项目统一的主副词条属性键 |
 
 `schema_version` 当前为 `RAW_ACCOUNT_SCHEMA_VERSION = 1`，表示项目统一格式。来源的导出格式版本由后续适配器单独记录。`config_id` 由调用方分配；游戏版本和快照未知时保存 `None`，序列化为 `null`。
 

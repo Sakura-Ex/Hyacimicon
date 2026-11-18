@@ -496,6 +496,7 @@ fn error(message: impl Into<String>) -> GenerationError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{AccountRequest, ChaCha8Rng, SeedableRng, generate_account};
     use serde_json::{Value, json};
 
     #[test]
@@ -529,5 +530,40 @@ mod tests {
                 matches!(result, Err(GenerationError::Reference(text)) if text.contains(message))
             );
         }
+    }
+
+    #[test]
+    fn external_snapshot_retains_its_id_and_can_provide_a_missing_signature() {
+        let mut profile: Value =
+            serde_json::from_str(include_str!("../data/character/1004.json")).unwrap();
+        profile["lightcones"] = json!([]);
+        let load = |overrides: &ReferenceOverrides| {
+            AccountReference::load(
+                r#"{"version":"4.7","catalog_snapshot":"test-snapshot"}"#,
+                r#"{"1004":null}"#,
+                include_str!("../data/lightcone.json"),
+                |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                overrides,
+            )
+        };
+        assert!(
+            matches!(load(&ReferenceOverrides::default()), Err(GenerationError::Reference(message)) if message.contains("1004"))
+        );
+        let reference = load(&ReferenceOverrides {
+            signature_light_cones: BTreeMap::from([("1004".into(), "23004".into())]),
+            ..ReferenceOverrides::default()
+        })
+        .unwrap();
+        let request = AccountRequest {
+            five_star_build: Some((0, 1)),
+            ..AccountRequest::new("snapshot", 1)
+        };
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+        assert_eq!(
+            result.account.data_snapshot.as_deref(),
+            Some("test-snapshot")
+        );
+        assert_eq!(result.account.light_cones[0].light_cone_id, "23004");
     }
 }

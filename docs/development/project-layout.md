@@ -24,7 +24,7 @@ hsr-currency-wars-ai/
 
 | 目录 | 职责与依赖 |
 | --- | --- |
-| `research/account_generation/` | Rust crate `account-generator` 根据生成条件和随机源产出 `account-core` 的原始账号配置。同目录保留 Python 兼容入口。详见[账号与遗器数据](../modules/account-generation/README.md)。 |
+| `research/account_generation/` | Rust crate `account-generator` 根据生成条件和随机源产出 `account-core` 的原始账号配置。详见[账号与遗器数据](../modules/account-generation/README.md)。 |
 | `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
 | `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后通过战斗输入组装步骤准备参数，调用 `core/battle/`，并在满足条件时结算结果。 |
@@ -48,7 +48,7 @@ hsr-currency-wars-ai/
 
 Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。
 
-Python 研究项目在根目录维护 `pyproject.toml` 和 `uv.lock`。Python 模拟扩展的构建配置由 `research/sim_native/pyproject.toml` 维护。各模块在使用说明中提供安装、运行和验证命令。
+Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 
 ## 配套目录
 

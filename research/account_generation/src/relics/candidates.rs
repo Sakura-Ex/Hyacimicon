@@ -95,10 +95,12 @@ impl Recipe {
     }
 
     fn tail_bounds(&self, start: usize, extras: u8, tiers: (usize, usize)) -> Bounds {
-        let scores = |tier: usize, combine: fn(f64, f64) -> f64| {
+        let scores = |tier: usize, opposite: usize, combine: fn(f64, f64) -> f64| {
             let mut values = (start..4).map(|index| {
                 let roll = rolls(self.stats[index]);
-                roll[tier] / roll[1] * self.weights[index]
+                let weight = self.weights[index];
+                let tier = if weight < 0.0 { opposite } else { tier };
+                roll[tier] / roll[1] * weight
             });
             let Some(first) = values.next() else {
                 return 0.0;
@@ -108,7 +110,10 @@ impl Recipe {
             });
             sum + f64::from(extras) * extreme
         };
-        (scores(tiers.0, f64::min), scores(tiers.1, f64::max))
+        (
+            scores(tiers.0, tiers.1, f64::min),
+            scores(tiers.1, tiers.0, f64::max),
+        )
     }
 }
 
@@ -190,7 +195,7 @@ fn recipes(
                         let effective: Vec<_> = stats
                             .iter()
                             .copied()
-                            .filter(|&stat| weight(stat) > 0.0)
+                            .filter(|&stat| weight(stat) != 0.0)
                             .collect();
                         if examined.insert(effective) {
                             recipes.push(Recipe {
@@ -236,7 +241,7 @@ impl PieceSearch {
         let bounds = intersect(
             legal,
             (
-                spec.min_effective_rolls.unwrap_or_default(),
+                spec.min_effective_rolls.unwrap_or(f64::NEG_INFINITY),
                 spec.max_effective_rolls.unwrap_or(f64::INFINITY),
             ),
         );
