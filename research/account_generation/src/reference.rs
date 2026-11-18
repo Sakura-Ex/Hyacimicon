@@ -369,7 +369,7 @@ impl Recommendations {
 
         let parse_main = |keys: Vec<String>| {
             keys.iter()
-                .map(|key| parse_property(key))
+                .map(|key| parse_property(key, character_id))
                 .collect::<Result<Vec<RelicMainStat>, _>>()
         };
         let mains = [
@@ -384,7 +384,12 @@ impl Recommendations {
             .sub_affix_property_list
             .iter()
             .enumerate()
-            .map(|(i, key)| Ok((parse_property(key)?, [1.0, 1.0, 0.5, 0.3][i.min(3)])))
+            .map(|(i, key)| {
+                Ok((
+                    parse_property(key, character_id)?,
+                    [1.0, 1.0, 0.5, 0.3][i.min(3)],
+                ))
+            })
             .collect::<Result<_, GenerationError>>()?;
         let outer = ids(source.set4_id_list);
         let planar = ids(source.set2_id_list);
@@ -418,7 +423,10 @@ impl Recommendations {
     }
 }
 
-fn parse_property<T: DeserializeOwned>(key: &str) -> Result<T, GenerationError> {
+fn parse_property<T: DeserializeOwned>(
+    key: &str,
+    character_id: &str,
+) -> Result<T, GenerationError> {
     let name = match key {
         "HPDelta" => "HP",
         "AttackDelta" => "ATK",
@@ -441,10 +449,10 @@ fn parse_property<T: DeserializeOwned>(key: &str) -> Result<T, GenerationError> 
         "WindAddedRatio" => "Wind DMG Boost_",
         "QuantumAddedRatio" => "Quantum DMG Boost_",
         "ImaginaryAddedRatio" => "Imaginary DMG Boost_",
-        _ => return Err(error(format!("未知配装属性 {key}"))),
+        _ => return Err(error(format!("角色 {character_id} 的配装属性 {key} 未知"))),
     };
     T::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(name))
-        .map_err(|cause| error(format!("属性 {key}: {cause}")))
+        .map_err(|cause| error(format!("角色 {character_id} 的配装属性 {key}: {cause}")))
 }
 
 fn ids(values: Vec<u32>) -> Vec<String> {
@@ -501,6 +509,11 @@ mod tests {
                 "property_list3",
                 json!(["AttackAddedRatio", "SpeedDelta"]),
                 "1310 的部位 3",
+            ),
+            (
+                "property_list3",
+                json!(["UnknownStat"]),
+                "1310 的配装属性 UnknownStat",
             ),
         ] {
             let mut profile = original.clone();

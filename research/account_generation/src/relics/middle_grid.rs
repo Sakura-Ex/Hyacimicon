@@ -66,10 +66,7 @@ pub(super) fn find(
             group
                 .pieces
                 .iter()
-                .map(|piece| {
-                    let distributions = piece.distributions(true, search);
-                    piece.middle_candidates(piece.bounds, 0.0, &distributions)
-                })
+                .map(|piece| piece.middle_candidates(search))
                 .collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();

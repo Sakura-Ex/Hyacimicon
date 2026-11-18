@@ -83,7 +83,6 @@ pub(super) struct Candidate {
     values: [f64; 4],
     weights: [f64; 4],
     pub(super) score: f64,
-    preferred_initial: bool,
 }
 
 /// 四种互异副词条及每种词条的生成参数。
@@ -269,32 +268,22 @@ impl PieceSearch {
         self.has_middle() && self.tiers[0] == 0.0 && self.tiers[2] == 0.0
     }
 
-    pub(super) fn distributions(&self, middle: bool, search: &mut Search<'_>) -> DistributionTable {
-        distributions(if middle { [0.0, 1.0, 0.0] } else { self.tiers }, search)
+    pub(super) fn full_distributions(&self, search: &mut Search<'_>) -> DistributionTable {
+        distributions(self.tiers, search)
     }
 
-    pub(super) fn middle_candidates(
-        &self,
-        bounds: Bounds,
-        desired: f64,
-        distributions: &DistributionTable,
-    ) -> Vec<Candidate> {
+    pub(super) fn middle_candidates(&self, search: &mut Search<'_>) -> Vec<Candidate> {
+        let distributions = distributions([0.0, 1.0, 0.0], search);
         let mut result = BTreeMap::new();
-        let _: ControlFlow<()> = self.visit_candidates(bounds, None, distributions, |candidate| {
-            let score = candidate.score;
-            let snapped = (score * 1e12).round() / 1e12;
-            let key = if snapped.is_finite() { snapped } else { score };
-            result.entry(key.to_bits()).or_insert(candidate);
-            ControlFlow::Continue(())
-        });
-        let mut candidates: Vec<_> = result.into_values().collect();
-        candidates.sort_by(|a, b| {
-            (a.score - desired)
-                .abs()
-                .total_cmp(&(b.score - desired).abs())
-                .then_with(|| b.preferred_initial.cmp(&a.preferred_initial))
-        });
-        candidates
+        let _: ControlFlow<()> =
+            self.visit_candidates(self.bounds, None, &distributions, |candidate| {
+                let score = candidate.score;
+                let snapped = (score * 1e12).round() / 1e12;
+                let key = if snapped.is_finite() { snapped } else { score };
+                result.entry(key.to_bits()).or_insert(candidate);
+                ControlFlow::Continue(())
+            });
+        result.into_values().collect()
     }
 
     pub(super) fn visit_full_candidates<B>(
@@ -323,8 +312,7 @@ impl PieceSearch {
     ) -> ControlFlow<B> {
         let extremes = desired.map_or((1, 1), |_| extremes(self.tiers));
         let mut options = Vec::new();
-        for (position, &count) in self.counts.iter().enumerate() {
-            let preferred_initial = position == 0;
+        for &count in &self.counts {
             for recipe in &self.recipes {
                 let recipe_bounds = recipe.bounds(count, extremes);
                 if recipe_bounds.0 > bounds.1 + EPSILON || recipe_bounds.1 < bounds.0 - EPSILON {
@@ -335,7 +323,6 @@ impl PieceSearch {
                     distributions,
                     bounds,
                     extremes,
-                    preferred_initial,
                     desired,
                 };
                 if let Some(goal) = desired {
@@ -432,7 +419,6 @@ struct CandidateSearch<'a> {
     distributions: &'a DistributionTable,
     bounds: Bounds,
     extremes: (usize, usize),
-    preferred_initial: bool,
     desired: Option<f64>,
 }
 
@@ -453,7 +439,6 @@ impl CandidateSearch<'_> {
                     values,
                     weights: self.recipe.weights,
                     score,
-                    preferred_initial: self.preferred_initial,
                 });
             }
             return ControlFlow::Continue(());

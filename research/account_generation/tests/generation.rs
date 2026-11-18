@@ -164,6 +164,40 @@ fn full_tier_search_can_use_the_last_attempt_to_finish() {
 }
 
 #[test]
+fn mixed_tier_fallback_keeps_the_budget_after_an_unreachable_middle_score() {
+    let target = 5.0 + 2.6 / 2.3;
+    let request = RelicRequest {
+        pieces: (1..=6)
+            .map(|slot| RelicSpec {
+                initial_substat_count: Some(3),
+                required_substats: vec![
+                    RelicSubStat::Spd,
+                    RelicSubStat::Def,
+                    RelicSubStat::EffectRes,
+                    RelicSubStat::EffectHitRate,
+                ],
+                min_effective_rolls: (slot < 6).then_some(1.0),
+                max_effective_rolls: (slot < 6).then_some(1.0),
+                ..RelicSpec::new(RelicSlot::try_from(slot).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: BTreeMap::from([(RelicSubStat::Spd, 1.0)]),
+        tier_weights: [0.0, 1.0, 1.0],
+        min_total_effective_rolls: Some(target),
+        max_total_effective_rolls: Some(target),
+    };
+    let result = account_generator::generate_character_relics(
+        &request,
+        6,
+        &mut ChaCha8Rng::seed_from_u64(42),
+    )
+    .unwrap();
+    assert_eq!(result.len(), 6);
+    assert_eq!(result[5].0.substats[&RelicSubStat::Spd], 2.6);
+    assert!((result.iter().map(|(_, score)| score).sum::<f64>() - target).abs() <= 1e-12);
+}
+
+#[test]
 fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     let request = RelicRequest {
         pieces: vec![RelicSpec {

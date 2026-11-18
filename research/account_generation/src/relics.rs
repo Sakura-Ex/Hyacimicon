@@ -360,21 +360,10 @@ fn solve(
     desired: &[f64],
     search: &mut Search<'_>,
 ) -> Result<Vec<Gear>, GenerationError> {
-    let suffix = suffix_bounds(groups.iter().map(|group| group.bounds));
-    let preferred: Vec<_> = groups
-        .iter()
-        .zip(desired)
-        .map(|(group, &score)| intersect(group.bounds, (score - 0.5, score + 0.5)))
-        .collect();
-    let hard: Vec<_> = groups.iter().map(|group| group.bounds).collect();
     let can_use_middle = groups
         .iter()
         .flat_map(|group| &group.pieces)
         .all(PieceSearch::has_middle);
-    let middle_only = groups
-        .iter()
-        .flat_map(|group| &group.pieces)
-        .all(PieceSearch::is_middle_only);
     let count: usize = groups.iter().map(|group| group.pieces.len()).sum();
     if can_use_middle
         && search.limit - search.attempts >= count
@@ -383,38 +372,21 @@ fn solve(
         sample_middle_tiers(groups, &mut result, overall, search);
         return Ok(materialize(groups, result));
     }
-    let original_limit = search.limit;
-    if can_use_middle {
-        if !middle_only {
-            search.limit = search.attempts + (original_limit - search.attempts) / 2;
-        }
-        let middle = [
-            (preferred != hard).then_some(preferred.as_slice()),
-            Some(hard.as_slice()),
-        ]
-        .into_iter()
-        .flatten()
-        .try_fold(None, |result, bounds| {
-            if result.is_some() {
-                return Ok(result);
-            }
-            find(groups, overall, desired, &suffix, bounds, true, search)
-        });
-        search.limit = original_limit;
-        match middle {
-            Ok(Some(mut result)) => {
-                sample_middle_tiers(groups, &mut result, overall, search);
-                return Ok(materialize(groups, result));
-            }
-            Err(GenerationError::BudgetExhausted { .. }) if !middle_only => {}
-            Err(error) => return Err(error),
-            Ok(None) if middle_only => return Err(GenerationError::NoSolution),
-            Ok(None) => {}
-        }
+    let suffix = suffix_bounds(groups.iter().map(|group| group.bounds));
+    let mut solver = GearSearch {
+        groups,
+        overall,
+        desired,
+        suffix: &suffix,
+        search,
+        output: Vec::new(),
+        failed: BTreeSet::new(),
+    };
+    if solver.group(0, 0.0)? {
+        Ok(materialize(groups, solver.output))
+    } else {
+        Err(GenerationError::NoSolution)
     }
-    find(groups, overall, desired, &suffix, &hard, false, search)?
-        .map(|result| materialize(groups, result))
-        .ok_or(GenerationError::NoSolution)
 }
 
 fn sample_middle_tiers(
@@ -477,40 +449,11 @@ fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
         .collect()
 }
 
-fn find(
-    groups: &[Group],
-    overall: Bounds,
-    desired: &[f64],
-    suffix: &[Bounds],
-    group_bounds: &[Bounds],
-    middle: bool,
-    search: &mut Search<'_>,
-) -> Result<Option<Vec<Vec<Candidate>>>, GenerationError> {
-    let mut solver = GearSearch {
-        groups,
-        overall,
-        desired,
-        suffix,
-        group_bounds,
-        middle,
-        search,
-        output: Vec::new(),
-        failed: BTreeSet::new(),
-    };
-    if solver.group(0, 0.0)? {
-        Ok(Some(solver.output))
-    } else {
-        Ok(None)
-    }
-}
-
 struct GearSearch<'a, 'b, 'rng> {
     groups: &'a [Group],
     overall: Bounds,
     desired: &'a [f64],
     suffix: &'a [Bounds],
-    group_bounds: &'a [Bounds],
-    middle: bool,
     search: &'b mut Search<'rng>,
     output: Vec<Vec<Candidate>>,
     failed: BTreeSet<(usize, usize, u64, u64)>,
@@ -523,7 +466,7 @@ impl GearSearch<'_, '_, '_> {
         }
         let tail = self.suffix[position + 1];
         let bounds = intersect(
-            self.group_bounds[position],
+            self.groups[position].bounds,
             (
                 self.overall.0 - total - tail.1,
                 self.overall.1 - total - tail.0,
@@ -573,9 +516,8 @@ impl GearSearch<'_, '_, '_> {
         }
         let remaining = group.pieces.len() - index;
         let wanted = (preferred - score) / remaining as f64;
-        let middle = self.middle;
-        let distributions = piece.distributions(middle, self.search);
-        let mut try_candidate = |candidate: Candidate| {
+        let distributions = piece.full_distributions(self.search);
+        let outcome = piece.visit_full_candidates(local, wanted, &distributions, |candidate| {
             let result = (|| {
                 self.search.consider()?;
                 self.output[position].push(candidate);
@@ -590,15 +532,7 @@ impl GearSearch<'_, '_, '_> {
                 Ok(false) => ControlFlow::Continue(()),
                 result => ControlFlow::Break(result),
             }
-        };
-        let outcome = if middle {
-            piece
-                .middle_candidates(local, wanted, &distributions)
-                .into_iter()
-                .try_for_each(&mut try_candidate)
-        } else {
-            piece.visit_full_candidates(local, wanted, &distributions, try_candidate)
-        };
+        });
         if let ControlFlow::Break(result) = outcome {
             return result;
         }
