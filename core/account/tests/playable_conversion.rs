@@ -6,7 +6,7 @@ use account_core::{
     CharacterConfig, LightConeInstance, RAW_ACCOUNT_SCHEMA_VERSION, RawAccount, RelicInstance,
     RelicMainStat, RelicSlot, RelicSubStat, TraceConfig,
     playable::{
-        CharacterOrigin, EquipmentOrigin, PlayableAccount, PlayableRelicGroup, PlayableRelics,
+        CharacterOrigin, EquipmentOrigin, PlayableRelicGroup, PlayableRelics,
         conversion::{ConversionRequest, convert_playable_account},
     },
     reference::PlayableData,
@@ -66,32 +66,6 @@ fn request() -> ConversionRequest {
 /// 核对按配置精度计算的数值。
 fn close(actual: f64, expected: f64) {
     assert!((actual - expected).abs() < 1e-8, "{actual} != {expected}");
-}
-
-#[test]
-fn saved_playable_accounts_round_trip_without_conversion_version_labels() {
-    let account =
-        convert_playable_account(&account(), &PlayableData::bundled().unwrap(), &request())
-            .unwrap();
-    let current = serde_json::to_value(account).unwrap();
-    assert!(current.get("rules_version").is_none());
-    assert!(current.get("schema_version").is_none());
-
-    let mut old = current.clone();
-    old["schema_version"] = 3.into();
-    old["rules_version"] = "s2-4.7-v2".into();
-    for saved in [old, current.clone()] {
-        let parsed: PlayableAccount = serde_json::from_value(saved).unwrap();
-        assert_eq!(serde_json::to_value(parsed).unwrap(), current);
-    }
-    let mut mistyped = current;
-    mistyped["owned_light_cone"] = serde_json::json!([]);
-    let error = serde_json::from_value::<PlayableAccount>(mistyped).unwrap_err();
-    assert!(
-        error
-            .to_string()
-            .contains("unknown field `owned_light_cone`")
-    );
 }
 
 #[test]

@@ -35,7 +35,7 @@ hsr-currency-wars-ai/
 
 候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
 
-## Python 模拟绑定规划
+## Python 模拟绑定
 
 计划在 `research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
 
@@ -46,7 +46,7 @@ hsr-currency-wars-ai/
 
 ## 构建配置
 
-Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。项目版本在根清单的 `[workspace.package].version` 统一维护，各 crate 用 `version.workspace = true` 继承。共用包配置和依赖版本也在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。
+Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
 
 Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 
