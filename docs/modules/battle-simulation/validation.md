@@ -120,4 +120,4 @@ For a complete list of inputs, recording details, and unresolved rules, see the 
 
 ## Reference attribution
 
-The damage, healing, and shield reference formulas are adapted from [HSR_Nous at `f8935dd`](https://github.com/pzc2004/HSR_Nous/tree/f8935ddb407b297732fbd3c624d55897e3e648b9). The [upstream MIT notice](../../../core/battle/HSR_NOUS_LICENSE) is retained alongside the battle core.
+The damage, healing, and shield formulas are adapted from the [HSR_Nous rulebook](https://github.com/pzc2004/HSR_Nous/blob/f8935ddb407b297732fbd3c624d55897e3e648b9/src/hsr_nous/sim_schema/rulebook.yaml), and the remaining-distance scheduling semantics are adapted from its [scheduler](https://github.com/pzc2004/HSR_Nous/blob/f8935ddb407b297732fbd3c624d55897e3e648b9/src/hsr_nous/sim/scheduler.py). The [upstream MIT notice](../../../core/battle/HSR_NOUS_LICENSE) is retained alongside the battle core.
