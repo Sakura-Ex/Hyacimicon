@@ -1,4 +1,4 @@
-name: Codex maintenance review
+name: Maintenance review
 
 on:
   pull_request_target:
@@ -21,7 +21,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      result: ${{ steps.codex.outputs['final-message'] }}
+      result: ${{ steps.responses.outputs.result }}
     steps:
       - name: Check review configuration
         id: config
@@ -55,25 +55,17 @@ jobs:
             exit 0
           fi
           merge_base="$(git merge-base HEAD "$PR_HEAD")"
-          prompt_file="$RUNNER_TEMP/maintenance-review.md"
-          cp .github/codex/maintenance-review.md "$prompt_file"
-          printf '\n## 本次提交范围\n\n- 目标提交 `%s`\n- 共同祖先 `%s`\n- PR 提交 `%s`\n' \
-            "$(git rev-parse HEAD)" "$merge_base" "$PR_HEAD" >> "$prompt_file"
-          echo "prompt_file=$prompt_file" >> "$GITHUB_OUTPUT"
+          echo "merge_base=$merge_base" >> "$GITHUB_OUTPUT"
 
-      - name: Review with Codex
-        id: codex
-        if: steps.comparison.outputs.prompt_file != ''
-        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1.12
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: ${{ steps.comparison.outputs.prompt_file }}
-          output-schema-file: .github/codex/maintenance-review.schema.json
-          model: gpt-6.2-sol
-          effort: medium
-          permission-profile: ":read-only"
-          safety-strategy: drop-sudo
-          codex-args: '["--ephemeral"]'
+      - name: Review with the Responses API
+        id: responses
+        if: steps.comparison.outputs.merge_base != ''
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_MERGE_BASE: ${{ steps.comparison.outputs.merge_base }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node .github/codex/maintenance-review.mjs
 
   publish:
     needs: review
@@ -118,7 +110,7 @@ jobs:
             );
             const body = [
               `${headMarker}${eventPr.base.sha} -->`,
-              '### Codex 代码结构审查',
+              '### 代码结构审查',
               '',
               `提交 \`${eventPr.head.sha.slice(0, 12)}\` · 目标快照 \`${eventPr.base.sha.slice(0, 12)}\` · 审查${coverage}`,
               '',
@@ -126,7 +118,7 @@ jobs:
               '',
               ...(findings.length ? findings : ['已检查的范围内未发现结构问题。']),
               '',
-              '<p align="right">回复由 Codex 总结</p>',
+              '<p align="right">回复由 GPT‑6.2 Sol 总结</p>',
             ].join('\n');
 
             const comments = await github.paginate(github.rest.issues.listComments, issue);
