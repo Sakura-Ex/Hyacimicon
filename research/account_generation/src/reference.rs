@@ -44,6 +44,7 @@ pub(crate) struct Profile {
 
 #[derive(Debug)]
 pub(crate) struct Cone {
+    rarity: u8,
     pub id: String,
     pub path: String,
     pub category: GoldCategory,
@@ -182,6 +183,7 @@ impl AccountReference {
             light_cones.insert(
                 id.clone(),
                 Cone {
+                    rarity,
                     unique: id.starts_with("22") || id.starts_with("24"),
                     id,
                     path: source.path,
@@ -250,15 +252,20 @@ impl AccountReference {
                 .signature_light_cones
                 .get(&id)
                 .cloned()
-                .or_else(|| recommended.first().cloned());
+                .or_else(|| {
+                    recommended
+                        .iter()
+                        .find(|id| light_cones[*id].rarity == 5)
+                        .cloned()
+                });
             if rarity == 5
                 && !signature
                     .as_ref()
                     .and_then(|id| light_cones.get(id))
-                    .is_some_and(|cone| cone.path == source.base_type)
+                    .is_some_and(|cone| cone.rarity == 5 && cone.path == source.base_type)
             {
                 return Err(error(format!(
-                    "五星角色 {id} 需要同命途专锥，当前为 {signature:?}"
+                    "五星角色 {id} 需要同命途五星专锥，当前为 {signature:?}"
                 )));
             }
             let teams = source
@@ -625,6 +632,38 @@ mod tests {
                 "{expected}"
             );
         }
+    }
+
+    #[test]
+    fn uniform_welt_build_uses_a_five_star_cone_when_a_four_star_is_recommended_first() {
+        let mut profile: Value =
+            serde_json::from_str(include_str!("../data/character/1004.json")).unwrap();
+        profile["lightcones"] = json!([21001, 23004]);
+        let load = |overrides: &ReferenceOverrides| {
+            AccountReference::load(
+                include_str!("../data/source-manifest.json"),
+                r#"{"1004":null}"#,
+                include_str!("../data/lightcone.json"),
+                |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                overrides,
+            )
+        };
+        let request = AccountRequest {
+            five_star_build: Some((0, 1)),
+            ..AccountRequest::new("welt", 1)
+        };
+        let reference = load(&ReferenceOverrides::default()).unwrap();
+        let result =
+            generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+        assert_eq!(result.account.light_cones[0].light_cone_id, "23004");
+        assert_eq!(result.gold_count(), 1.0);
+        let overrides = ReferenceOverrides {
+            signature_light_cones: BTreeMap::from([("1004".into(), "21001".into())]),
+            ..Default::default()
+        };
+        assert!(
+            matches!(load(&overrides), Err(GenerationError::Reference(text)) if text.contains("21001"))
+        );
     }
 
     #[test]

@@ -48,7 +48,7 @@ let mut rng = ChaCha8Rng::seed_from_u64(42);
 let result = generate_account(&request, &reference, &mut rng)?;
 ```
 
-参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。覆盖的五星类别须与条目稀有度相符，统一配装的专锥须与角色命途匹配。加载时检查行迹前置节点及循环。复现时保存请求、随机源与种子、生成器版本、实际使用的参考文件及完整的覆盖设置。文件也可用唯一快照 ID 或内容哈希标识。
+参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。覆盖的五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。加载时检查行迹前置节点及循环。复现时保存请求、随机源与种子、生成器版本、实际使用的参考文件及完整的覆盖设置。文件也可用唯一快照 ID 或内容哈希标识。
 
 ## 生成条件
 
@@ -100,7 +100,7 @@ let all_01 = AccountRequest { gold_count: None, five_star_build: Some((0, 1)), .
 let all_21 = AccountRequest { gold_count: None, five_star_build: Some((2, 1)), ..request.clone() };
 ```
 
-四星角色按自身条件生成。统一配装优先使用加载资料时指定的 `ReferenceOverrides.signature_light_cones`，默认取角色的同命途推荐光锥首项。缺少覆盖和同命途推荐时，加载报错并给出角色 ID。
+四星角色按自身条件生成。统一配装优先使用加载资料时指定的 `ReferenceOverrides.signature_light_cones`，默认取推荐列表中第一件同命途五星光锥。缺少这类推荐时，应通过覆盖设置指定同命途五星光锥。
 
 统一配装固定的投入先得到满足，集中程度再控制其他可分配投入。金数与统一配装冲突时，生成器报告条件无法同时满足。
 
