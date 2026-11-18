@@ -115,3 +115,9 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 当前验证覆盖人工场景和参考公式。那刻夏样例的资料版本、近似规则和覆盖范围见场景的 `provenance` 与 `mechanics.assumptions`，技能链、队列补位和轮次同刻顺序待按实机样本核对。
 
 以一场连续录像为单位，记录游戏版本、赛季、关卡和难度。保留实际阵容、装备、战前有效面板、初始能量和战技点、各轮 AV、敌人入场顺序及操作序列。将击中、回能、追击、补位、复活罚时和终止时点与模拟事件逐项对照。节点结算按[项目验证计划](../../project/roadmap.md#战斗与节点结算核对)采样。
+
+For a complete list of inputs, recording details, and unresolved rules, see the [battle evidence checklist](https://github.com/Sakura-Ex/hsr-currency-wars-ai/blob/7f59decc95b04a716d58d0841e9bf0cb806723d6/core/battle/DATA_REQUIREMENTS.md). Use the current module guide for the simulation interface.
+
+## Reference attribution
+
+The damage, healing, and shield reference formulas are adapted from [HSR_Nous at `f8935dd`](https://github.com/pzc2004/HSR_Nous/tree/f8935ddb407b297732fbd3c624d55897e3e648b9). The [upstream MIT notice](../../../core/battle/HSR_NOUS_LICENSE) is retained alongside the battle core.
