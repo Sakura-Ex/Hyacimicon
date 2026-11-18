@@ -527,6 +527,70 @@ fn empty_and_fixed_build_requests_preserve_resource_constraints() {
 }
 
 #[test]
+fn account_tier_uses_the_scores_reported_in_character_id_order() {
+    use RelicSubStat::{AtkPercent, BreakEffect, CritDmg, CritRate, Def, EffectRes, Spd};
+    let mut request = AccountRequest::new("mixed-high-rolls", 5);
+    let profiles = [
+        ("1004", CritRate, 0.0324, 0.029160001),
+        ("1005", AtkPercent, 0.0432, 0.038880002),
+        ("1103", CritDmg, 0.0648, 0.058320003),
+        ("1105", Spd, 2.6, 2.3),
+        ("1310", AtkPercent, 0.0432, 0.038880002),
+    ];
+    request.character_pool = Some(profiles.iter().map(|(id, ..)| id.to_string()).collect());
+    for (id, stat, high, middle) in profiles {
+        let score = 3.0 * high / middle;
+        let pieces = (1..=6)
+            .map(|n| RelicSpec {
+                mainstat: vec![match n {
+                    1 => RelicMainStat::Hp,
+                    2 => RelicMainStat::Atk,
+                    _ => RelicMainStat::HpPercent,
+                }],
+                initial_substat_count: Some(4),
+                required_substats: vec![Def, EffectRes, BreakEffect, stat],
+                min_effective_rolls: Some(score),
+                max_effective_rolls: Some(score),
+                ..RelicSpec::new(RelicSlot::try_from(n).unwrap())
+            })
+            .collect();
+        request.character_overrides.insert(
+            id.into(),
+            CharacterSpec {
+                relics: Some(RelicRequest {
+                    pieces,
+                    effective_stat_weights: BTreeMap::from([(stat, 1.0)]),
+                    tier_weights: [0.0, 0.0, 1.0],
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        );
+    }
+    let reference = AccountReference::bundled().unwrap();
+    request.relic_quality_tier = Some(2);
+    let result =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    let total: f64 = result
+        .investments
+        .values()
+        .map(|i| i.piece_scores.iter().sum::<f64>())
+        .sum();
+    let upper: f64 = result
+        .investments
+        .values()
+        .map(|i| i.relic_score_upper)
+        .sum();
+    assert!(total < 0.5 * upper);
+    assert_eq!(result.mean_effective_rolls(), total / 30.0);
+    request.relic_quality_tier = Some(3);
+    assert!(matches!(
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)),
+        Err(GenerationError::NoSolution)
+    ));
+}
+
+#[test]
 fn individual_character_keeps_explicit_equipment_and_early_traces() {
     let reference = AccountReference::bundled().unwrap();
     let spec = CharacterSpec {

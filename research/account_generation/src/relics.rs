@@ -248,8 +248,12 @@ pub(super) fn generate(
         }
         return Ok(Vec::new());
     }
-    let mut groups = Vec::new();
-    for choice in choices {
+    // 与 GeneratedAccount::investments 使用相同的角色 ID 顺序累计总分和上限。
+    let mut order: Vec<_> = (0..choices.len()).collect();
+    order.sort_unstable_by_key(|&index| &choices[index].profile.id);
+    let mut groups = Vec::with_capacity(choices.len());
+    for &index in &order {
+        let choice = &choices[index];
         let recommended = &choice.profile.relics;
         let outer = &recommended.outer[search.index(recommended.outer.len())];
         let planar = &recommended.planar[search.index(recommended.planar.len())];
@@ -305,29 +309,38 @@ pub(super) fn generate(
     let strength = request
         .relic_concentration
         .unwrap_or(request.resource_concentration);
-    if (strength == 0.0 || groups.len() == 1) && overall == sum_bounds(bounds.iter().copied()) {
-        return groups
+    let gear = if (strength == 0.0 || groups.len() == 1)
+        && overall == sum_bounds(bounds.iter().copied())
+    {
+        groups
             .iter()
             .map(|group| sample_group(group, search))
-            .collect();
-    }
-    let weights = allocation::weights(
-        choices.iter().map(|choice| choice.profile.id.as_str()),
-        cores,
-        strength,
-    );
-    let desired = allocation::distribute(
-        overall.0 + search.unit() * (overall.1 - overall.0),
-        &bounds,
-        &weights,
-    );
-    solve(
-        &groups,
-        overall,
-        &desired,
-        strength > 0.0 && groups.len() > 1,
-        search,
-    )
+            .collect::<Result<Vec<_>, _>>()?
+    } else {
+        let weights = allocation::weights(
+            order
+                .iter()
+                .map(|&index| choices[index].profile.id.as_str()),
+            cores,
+            strength,
+        );
+        let desired = allocation::distribute(
+            overall.0 + search.unit() * (overall.1 - overall.0),
+            &bounds,
+            &weights,
+        );
+        solve(
+            &groups,
+            overall,
+            &desired,
+            strength > 0.0 && groups.len() > 1,
+            search,
+        )?
+    };
+    // 装备按原名单顺序交还给账号组装。
+    let mut loadouts: Vec<_> = order.into_iter().zip(gear).collect();
+    loadouts.sort_unstable_by_key(|(index, _)| *index);
+    Ok(loadouts.into_iter().map(|(_, gear)| gear).collect())
 }
 
 struct Group {
