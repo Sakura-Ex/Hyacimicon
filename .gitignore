@@ -28,7 +28,6 @@ Desktop.ini
 
 # Common build and dependency outputs
 /target/
-/rust/operations/target/
 /dist/
 /build/
 node_modules/

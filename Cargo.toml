@@ -1,5 +1,5 @@
 [workspace]
-members = ["core/account", "rust/operations"]
+members = ["core/account", "core/run", "apps/player/operations"]
 resolver = "3"
 
 [workspace.package]

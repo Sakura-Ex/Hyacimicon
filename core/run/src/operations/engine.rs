@@ -1,8 +1,8 @@
-use crate::models::{
-    EnvironmentDefinition, InvestmentDefinition, NodeDefinition, NodeType, OperationRules,
-    Position, RulePack, UnitInstance,
+use super::models::{
+    AffixDefinition, EnvironmentDefinition, InvestmentDefinition, NodeDefinition, NodeType,
+    OperationRules, Position, RulePack, UnitInstance,
 };
-use crate::rng::Rng;
+use super::rng::Rng;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
@@ -20,7 +20,7 @@ pub struct Market {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct PendingGold {
+struct PendingGold {
     node_index: usize,
     amount: i32,
 }
@@ -42,7 +42,7 @@ pub struct NodeResult {
 #[derive(Clone, Debug)]
 pub struct OperationEnvironment {
     pub pack: RulePack,
-    pub rng: Rng,
+    rng: Rng,
     pub difficulty_id: String,
     pub enemy_difficulty: i32,
     pub affix_count: i32,
@@ -53,7 +53,7 @@ pub struct OperationEnvironment {
     pub node_index: usize,
     pub plane: u8,
     pub streak: i32,
-    pub affixes: Vec<crate::models::AffixDefinition>,
+    pub affixes: Vec<AffixDefinition>,
     pub interest_cap: i32,
     pub market: Market,
     pub front_slots: Vec<Option<UnitInstance>>,
@@ -61,7 +61,7 @@ pub struct OperationEnvironment {
     pub bench_slots: Vec<Option<UnitInstance>>,
     pub selected_investments: Vec<InvestmentDefinition>,
     pub investment_offers: Vec<InvestmentDefinition>,
-    pub pending_gold: Vec<PendingGold>,
+    pending_gold: Vec<PendingGold>,
     pub results: Vec<NodeResult>,
     pub ended: bool,
     pub won: bool,
@@ -1372,9 +1372,8 @@ fn remove_last_occurrence(slots: &mut [Option<UnitInstance>], key: &(String, i32
 
 #[cfg(test)]
 mod tests {
+    use super::super::data::{discover_data_root, load_rule_pack};
     use super::*;
-    use crate::data::discover_data_root;
-    use crate::data::load_rule_pack;
 
     fn environment(seed: u64) -> OperationEnvironment {
         let pack = load_rule_pack(&discover_data_root().unwrap()).unwrap();

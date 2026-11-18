@@ -13,7 +13,9 @@ from .session import (
     SessionNotFoundError,
 )
 
-WEB_ROOT = Path(__file__).with_name("web")
+WEB_ROOT = Path(__file__).resolve().parents[2] / "apps/player/operations/web"
+if not (WEB_ROOT / "index.html").is_file():
+    WEB_ROOT = Path(__file__).with_name("web")
 STATIC_FILES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/static/app.js": ("app.js", "text/javascript; charset=utf-8"),

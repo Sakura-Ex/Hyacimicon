@@ -1,4 +1,4 @@
-use crate::models::{
+use super::models::{
     AffixDefinition, AffixEffect, DifficultyDefinition, EnvironmentDefinition,
     InvestmentDefinition, NodeDefinition, NodeType, OperationRules, Position, RulePack,
     TraitDefinition, TraitTier, UnitDefinition,
@@ -97,13 +97,10 @@ pub fn load_rule_pack(data_root: &Path) -> Result<RulePack, String> {
         snapshot.insert(name, read_verified_json(data_root, &manifest, name)?);
     }
 
-    let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let base_path = crate_root.join("../../research/operations/data/default_pack.json");
-    let base_text = fs::read_to_string(&base_path)
-        .map_err(|error| format!("读取基础规则包失败 {}：{error}", base_path.display()))?;
+    let base_text = include_str!("../../data/default_pack.json");
     let base: BasePack =
-        serde_json::from_str(&base_text).map_err(|error| format!("解析基础规则包失败：{error}"))?;
-    let base_value: Value = serde_json::from_str(&base_text).map_err(|error| error.to_string())?;
+        serde_json::from_str(base_text).map_err(|error| format!("解析基础规则包失败：{error}"))?;
+    let base_value: Value = serde_json::from_str(base_text).map_err(|error| error.to_string())?;
 
     let affix_rows: Vec<AffixRow> = serde_json::from_value(snapshot["affixes"].clone())
         .map_err(|error| format!("解析最新词缀失败：{error}"))?;

@@ -1,6 +1,6 @@
 # 运营模拟
 
-状态：Rust 后端已实现，接入最新角色、羁绊和节点数据。日期：2026-11-17。
+状态：Rust 运营核心和本地网页已实现，接入角色、羁绊和节点数据。日期：2026-11-18。
 
 本模块按 M3.2 的范围实现不含作战过程的整局运营环境。它负责商店、金币与经验、角色牌池和合成、投资环境、投资策略、难度词缀、节点推进和战斗结果结算。具体战斗由可替换的战斗进度提供器给出结果，本模块只处理战斗结束后的运营状态。
 
@@ -22,9 +22,15 @@
 
 网页启动时从 `hsr-currency-wars-data` 读取 `encyclopedia-4.6.54-85a54e5115f8` 快照，当前为 61 名角色和 38 个羁绊条目，并校验对应文件的 SHA256。主仓库不复制完整图鉴数据。词缀、投资环境和投资策略仍使用规则包中已实现的结构化效果。
 
+## 代码位置
+
+- `core/run/` 提供 Rust 运营规则、对局状态和基础规则包。
+- `apps/player/operations/` 提供 Rust HTTP 服务、网页资源和 PowerShell 启动脚本。
+- `research/operations/` 保留 Python 研究原型。单局和批量评估示例位于 `examples/operations/`。
+
 ## 运行
 
-网页手动操作（Rust 后端）：
+在仓库根目录启动本地运营网页。
 
 ```powershell
 cargo run -p hsr-operations-backend
@@ -51,6 +57,7 @@ uv run python -m examples.operations.simulate --enemy-difficulty 40 --affix-coun
 验证：
 
 ```powershell
+cargo test -p run-core -p hsr-operations-backend
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .

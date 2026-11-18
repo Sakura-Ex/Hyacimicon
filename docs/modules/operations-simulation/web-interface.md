@@ -8,6 +8,8 @@
 
 ## 启动
 
+从仓库根目录启动 `apps/player/operations/` 中的本地服务。
+
 ```powershell
 cargo run -p hsr-operations-backend
 ```

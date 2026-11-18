@@ -13,16 +13,15 @@ hsr-currency-wars-ai/
 │   ├── battle/
 │   ├── run/
 │   └── decision/
-├── rust/
-│   └── operations/                     # Rust 运营引擎、HTTP 后端和本地网页入口
 ├── research/
 │   ├── account_generation/
-│   ├── operations/                     # 前期 Python 原型和运营规则资料
+│   ├── operations/
 │   ├── sim_native/
 │   ├── training/
 │   └── evaluation/
 └── apps/
     └── player/
+        └── operations/
 ```
 
 | 目录 | 职责与依赖 |
@@ -30,15 +29,15 @@ hsr-currency-wars-ai/
 | `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
 | `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
-| `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后通过战斗输入组装步骤准备参数，调用 `core/battle/`，并在满足条件时结算结果。 |
+| `core/run/` | `run-core` 维护共用的商店、经济、投资、阵容和节点结算规则。提供局面和合法操作。完整对局接入后，将依据 `core/account/` 的配置维护状态，组装战斗输入并调用 `core/battle/`，在满足条件时结算结果。 |
 | `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
 | `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
 | `research/training/`、`research/evaluation/` | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
+| `research/operations/` | 运营模拟的 Python 原型，供批量评估和回归对照使用。 |
 | `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
+| `apps/player/operations/` | 提供本地运营模拟网页和 HTTP 会话，调用 `core/run/` 推进对局。 |
 
 候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
-
-运营模拟的运行时后端位于 `rust/operations/`。`research/operations/` 保留前期 Python 原型、静态网页资源和规则资料，网页默认连接 Rust 服务。
 
 ## Python 模拟绑定
 

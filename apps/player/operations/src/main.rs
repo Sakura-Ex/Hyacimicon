@@ -1,15 +1,12 @@
-mod data;
-mod engine;
-mod models;
-mod rng;
-
 use axum::extract::{Path as AxumPath, State};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use engine::{CreateOptions, OperationEnvironment};
-use models::{Position, RulePack};
+use run_core::operations::models::{Position, RulePack};
+use run_core::operations::{
+    CreateOptions, OperationEnvironment, discover_data_root, load_rule_pack,
+};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::env;
@@ -94,8 +91,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let data_root = data::discover_data_root()?;
-    let pack = Arc::new(data::load_rule_pack(&data_root)?);
+    let data_root = discover_data_root()?;
+    let pack = Arc::new(load_rule_pack(&data_root)?);
     let static_root = static_root()?;
     let state = Arc::new(AppState {
         pack: Arc::clone(&pack),
@@ -136,7 +133,7 @@ fn static_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
     if let Ok(value) = env::var("HSR_OPERATIONS_WEB_ROOT") {
         return Ok(PathBuf::from(value).canonicalize()?);
     }
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../research/operations/web");
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("web");
     Ok(path.canonicalize()?)
 }
 
