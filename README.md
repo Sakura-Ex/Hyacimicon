@@ -17,7 +17,7 @@ An open-source AI strategy research and assistance project for Currency Wars in 
 | [Account adapter and configuration conversion](docs/modules/account/README.md) | Implemented. Supports Reliquary Archiver v4 account import, trial configurations for unowned characters, progression floors, equipment mapping, and static-panel calculation. |
 | Run environment | Planned. Simulates stages, shops, investments, and resource settlement. |
 | Operations decision engine | In design. The current priority is defining observations, legal actions, and evaluation for one stage. Model training is planned. |
-| [Combat engine](docs/modules/battle-simulation/README.md) | Implemented as the Rust `battle_v2` explicit-input core and batch CLI. Executes resolved stats/actions with distance-based turns, cycle budgets, insert queues and deterministic replay; full 4.7 character kits, automatic account assembly, and run-HP settlement are not supported. |
+| [Combat engine](docs/modules/battle-simulation/README.md) | The Rust combat core consumes prepared stats and actions and supports stepwise action selection, seeded replay, and batch evaluation. The development CLI parses JSON scenarios and exports event traces. |
 | Combat planner | Planned. Compares positioning, combat actions, and retries. |
 | Team composition research | Planned. Searches team compositions and transitions. |
 | Experiment evaluation | Planned. Replays runs and compares strategy results. |

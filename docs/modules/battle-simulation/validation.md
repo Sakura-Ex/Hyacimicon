@@ -25,7 +25,7 @@ flowchart TD
     subgraph Determinism["确定性与精度保障"]
         FloatRoundtrip["浮点序列化往返精度 (float_roundtrip)"]
         SeedIsolation["三流随机数隔离 (Target / Crit / Element)"]
-        ReplayBit["固定种子全事件比特级对齐"]
+        ReplayBit["固定种子的结果与事件顺序"]
     end
 
     Formula --> Determinism
@@ -38,30 +38,30 @@ flowchart TD
 
 | 测试目录 / 文件 | 覆盖范围与验证要点 |
 | --- | --- |
-| `tests/reference_math.rs` | 采用预设的标准参考数值，手算核对七元素、基础增伤、防御抗性、易伤等 18 个不同乘区组合的单次命中伤害计算。 |
-| `tests/session.rs` | 覆盖 `BattleSession` 外部决策状态机：决策暂停点、非法 ID 提交、重复提交幂等性、终结技排队与入场扣能、取消与恢复边界。 |
+| `tests/reference_math.rs` | 用 18 组参考值核对直接伤害乘区。 |
+| `tests/session.rs` | 核对暂停期间重复读取、拒绝过期 ID 和非法操作、终结技扣能、取消及回合收尾顺序。 |
 | `tests/queue_deadline.rs` | 覆盖有限敌人队列与轮次耗尽边界：动作彻底完成后补位、超时快照保全、同刻 Cycle 结算次序。 |
-| `tests/runtime_control.rs` | 覆盖有序效果树（`Effect`）：条件分支（`Conditional`）的短路求值、循环展开（`Repeat`）的迭代次数控制、调用帧栈（`DynamicScope`）的变量隔离与遮蔽。 |
+| `tests/runtime_control.rs`、`tests/dynamic_scopes.rs` | 核对条件分支、循环次数上限、动作内目标绑定和调用帧变量隔离。 |
 | `tests/property_modifiers.rs` | 覆盖状态（Modifier）生命周期：叠层上限、按来源独立叠加、回合到期扣减、即时监听修改后续同 Action 命中数值。 |
-| `tests/batch.rs` | 覆盖批次评估：多局试验的种子派生唯一性、胜负统计、未完成场次隔离及 95% Wilson 置信区间数学正确性。 |
-| `tools/tests/` | 覆盖 Python 预处理工具链：包含配置提取、技能链降解（Lowering）、表达式 AST 转换与示例场景构建器。 |
+| `tests/batch.rs` | 核对种子派生参考值、逐场复现、已完成场次的胜负统计、取消与 95% Wilson 区间。 |
+| `tools/tests/` | 核对开发用原始配置转换、表达式解析、效果和弱点转换及那刻夏场景构建。 |
 
 ---
 
 ## 2. 确定性与回归原则
 
-为保证战斗模拟在离线训练、蒙特卡洛搜索与玩家应用重放之间的一致性，核心库遵循以下原则：
+固定场景、种子与操作序列后，可按以下规则核对模拟结果：
 
 1. **三流随机数隔离 (Three Independent RNG Streams)**：
    - 每场战斗基于单一输入种子，通过 `rand_chacha` 派生三条完全独立的伪随机数流：**目标选择流**、**暴击判定流**、**元素选择流**。
-   - 目标选择的随机扰动绝不影响暴击概率，反之亦然。这保证了在控制某一机制变量时其余随机行为保持稳定。
+   - 各类抽样各自推进随机流。同一流上的抽样次数仍取决于实际执行路径。
 2. **64 位种子无损传输**：
    - 随机种子在 Rust 内部为 `u64`。
    - 在 JSON 格式中序列化为十进制字符串（如 `"18446744073709551615"`），防止外部语言或前端运行时解析为 JavaScript Number 时发生精度截断。
 3. **浮点往返序列化一致性**：
-   - 启用 `serde_json` 的 `float_roundtrip` 特性，保证任意已校验场景在序列化后重新反序列化读入时，其浮点数值、生成的 SHA-256 场景指纹及时间步边界保持严格一致。
+   - 开发 JSON 使用 `serde_json` 的 `float_roundtrip` 特性。场景指纹基于解析后重新序列化的完整 JSON，包含开发元数据。
 4. **单局与批次对齐**：
-   - 批次评估（`batch`）中第 $N$ 局的表现，必须与将该局派生种子单独传入单局模拟（`simulate`）得到的结果与事件流完全一致。
+   - 用批次摘要里的派生种子重新运行同一场景，可比对完成场次的胜负、终止原因、AV 和动作数。逐事件回放由单局 `simulate` 输出。
 
 ---
 
@@ -72,10 +72,10 @@ flowchart TD
 在仓库根目录下运行：
 
 ```powershell
-# 1. 运行 Core Runtime 轻量核心测试
+# 1. 运行默认构建的核心流程测试
 cargo test -p battle-core --locked
 
-# 2. 运行包含 diagnostics 序列化与全部用例的完整测试
+# 2. 运行含 diagnostics 的战斗测试
 cargo test -p battle-core --all-features --locked
 
 # 3. 执行严格静态代码检查（禁止任何 Warning）
@@ -105,3 +105,13 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 
 cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- batch core/battle/examples/duel.json 100 42
 ```
+
+### 那刻夏 S2 样例
+
+[`anaxa-s2-full-battle.json`](../../../core/battle/examples/anaxa-s2-full-battle.json) 在种子 42 下返回 `victory / enemies_defeated`。场上容量为 2，最终清空 6 名敌人，执行 40 个 Action，消耗 1250 AV，剩余约 1150 AV。样例诊断 `settlement.hp_after` 为 63。
+
+## 4. 实机核对
+
+当前验证覆盖人工场景和参考公式。那刻夏样例的资料版本、近似规则和覆盖范围见场景的 `provenance` 与 `mechanics.assumptions`，技能链、队列补位和轮次同刻顺序待按实机样本核对。
+
+以一场连续录像为单位，记录游戏版本、赛季、关卡和难度。保留实际阵容、装备、战前有效面板、初始能量和战技点、各轮 AV、敌人入场顺序及操作序列。将击中、回能、追击、补位、复活罚时和终止时点与模拟事件逐项对照。节点结算按[项目验证计划](../../project/roadmap.md#战斗与节点结算核对)采样。

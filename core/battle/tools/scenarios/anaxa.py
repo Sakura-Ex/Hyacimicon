@@ -2,7 +2,7 @@
 
 Run this file with an output path. Uses only the standard library and public
 reference algorithms; no private catalog or raw-config interpreter is loaded.
-See ../../ANAXA_SCENARIO.md for pinned references, scope and omitted mechanics.
+See docs/modules/battle-simulation/anaxa-scenario.md for usage and the scenario rules.
 """
 from __future__ import annotations
 

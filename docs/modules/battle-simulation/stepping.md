@@ -2,7 +2,7 @@
 
 `BattleSession` 是战斗引擎提供给外部决策系统（如强化学习训练、蒙特卡洛树搜索 MCTS、启发式策略及前端交互界面）的核心分步推进接口。
 
-通过将会话状态推进与动作选择解耦，调用方可以在确定性战斗的关键决策点暂停执行、读取当前完整战况观测，并输入决策动作。
+调用方将会话推进到下一个决策点，读取当前观测与合法操作，再提交选择。
 
 ---
 
@@ -25,8 +25,8 @@ flowchart TD
 | [`BattleSession::new(input, seed)`](../../../core/battle/src/engine/session.rs) | 根据纯内存场景配置和随机种子构建独立战斗会话。完成战前初始化并分派 `BattleStart` 与首波事件。 |
 | [`BattleSession::with_trace(input, seed, trace)`](../../../core/battle/src/engine/session.rs) | （仅 `diagnostics` 特性）创建支持记录逐事件回放轨迹（trace）的开发会话。 |
 | [`advance(&mut self) -> Result<BattleStep, String>`](../../../core/battle/src/engine/session.rs) | 驱动状态机推进至下一个需要外部决策的点，或直到战斗结束。若当前已存在待答复决策，多次调用将安全返回相同决策。 |
-| [`advance_cancellable(&mut self, cancel) -> Result<BattleStep, String>`](../../../core/battle/src/engine/session.rs) | 支持外部取消标记的分步推进。在行动边界与外部等待恢复时主动检查取消，若取消触发则输出 `Incomplete/Cancelled` 状态快照。 |
-| [`submit(&mut self, id, choice) -> Result<(), String>`](../../../core/battle/src/engine/session.rs) | 提交决策操作。核对 `id` 是否与当前决策匹配并校验 `choice` 是否合法。非法操作或过期 ID 不会污染当前状态，允许调用方更正重试。 |
+| [`advance_cancellable(&mut self, cancel) -> Result<BattleStep, String>`](../../../core/battle/src/engine/session.rs) | 接收 `FnMut() -> bool` 取消检查。在调度边界和等待恢复时检查，取消时返回 `Incomplete/Cancelled` 快照。 |
+| [`submit(&mut self, id, choice) -> Result<(), String>`](../../../core/battle/src/engine/session.rs) | 检查决策 ID 和操作，登记插入请求或执行当前回合动作。校验失败时可更正后重试。执行中出错则结束会话，后续调用返回同一错误。 |
 
 ---
 
@@ -42,12 +42,14 @@ flowchart TD
 
 ### 2.2 局面观测 ([`Observation`](../../../core/battle/src/decision.rs))
 
-决策发生时，调用方可通过不可变借用获取当前环境的完整观测数据，构造神经网络特征或策略树节点：
+决策发生时，调用方可读取以下字段：
 
 - **时钟与轮次**：当前已流逝 AV (`now`)、当前 Cycle 索引、本轮剩余 AV 及对局总剩余 AV 预算。
 - **战技点**：我方与敌方当前持有的共享战技点（Skill Points）。
 - **行动轴排序**：所有存活单位按行动顺序排列的 [`AxisPosition`](../../../core/battle/src/decision.rs) 列表（包含单位 ID、剩余行动距离、实时速度与等待 AV）。
-- **单位快照**：当前所有已入场单位的实时数值快照（生命、护盾、能量、韧性、动态变量、持有的 Modifier 状态及自然/附加弱点）。
+- **单位快照**：已入场单位的状态，包含阵亡记录，以及生命、护盾、能量、韧性、动态变量、Modifier 和自然/附加弱点。
+
+`legal` 中的 `Operation` 由单位索引和动作索引组成，目标由动作配置和引擎规则决定。
 
 ---
 
@@ -57,7 +59,7 @@ flowchart TD
 
 - 在 `Insert` 决策点提交终结技仅表示将该操作登记入待执行队列。
 - 当该终结技真正切入 Turn 获得执行权时，引擎会**二次核对单位存活性与能量资源**，并在触发 `TurnStart` 监听器前扣除能量。
-- 若在排队后、切入前单位受击导致能量损失或陷入无法行动状态，该请求将被安全放弃，不产生异常扣费。
+- 切入时若单位已阵亡或资源不足，引擎放弃该请求。
 
 ### 3.2 轮次耗尽与回合收尾次序
 
@@ -69,10 +71,7 @@ flowchart TD
 
 ### 3.3 有限敌人队列补充时机
 
-对于启用有限敌人队列（`finite_queue_after_action_v1`）的场景：
-
-- 敌人阵亡后，其空缺槽位**不会在多段命中的攻击中间立即被顶替**，以保证单次 Action 内目标判定的稳定性。
-- 只有在一次完整的 Action（包含所有连带追击与即时监听）彻底结束、且即将进入下一调度步骤时，后备敌人队列才会按槽位序号依序填补入场。
+有限队列在当前 Action 及其即时监听执行完毕后的调度边界，按空槽顺序补入敌人。排队的追加攻击是后续 Action，可以选中新入场敌人。轮次到期且普通回合仍在收尾时，补位先于该回合的 `TurnEnd`。
 
 ---
 
@@ -81,7 +80,7 @@ flowchart TD
 以下展示通过 Rust 驱动外部选招的基础模板：
 
 ```rust
-use battle_core::engine::session::{BattleSession, BattleStep};
+use battle_core::engine::{BattleSession, BattleStep};
 use battle_core::model::{BattleResult, Scenario};
 use battle_core::decision::{Decision, Operation};
 
@@ -111,7 +110,7 @@ fn run_session_with_custom_policy(
 
 fn evaluate_policy(decision: &Decision) -> Option<Operation> {
     // 示例简单选择第一个合法操作；对于 Insert 点可返回 None 放弃本次插入
-    decision.legal.first().copied()
+    decision.legal.first().cloned()
 }
 ```
 
