@@ -1,6 +1,6 @@
 # 运营模拟网页
 
-本目录提供本地 HTTP 会话和网页资源，调用 [整局运营核心](../../../core/run/src/operations/mod.rs) 执行操作。图鉴数据从 `hsr-currency-wars-data` 读取。操作和验证见[运营模拟文档](../../../docs/modules/operations-simulation/README.md)。
+本目录提供本地 HTTP 会话和网页资源，调用 [整局运营核心](../../../core/operations/src/lib.rs) 执行操作。图鉴数据从 `hsr-currency-wars-data` 读取。操作和验证见[运营模拟文档](../../../docs/modules/operations-simulation/README.md)。
 
 ## 运行
 
@@ -35,6 +35,6 @@ cargo run -p hsr-operations-backend
 ## 验证
 
 ```powershell
-cargo test -p run-core -p hsr-operations-backend
+cargo test -p operations-core -p hsr-operations-backend
 cargo fmt --check
 ```

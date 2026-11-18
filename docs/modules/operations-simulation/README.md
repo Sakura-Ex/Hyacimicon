@@ -24,7 +24,7 @@
 
 ## 代码位置
 
-- `core/run/` 提供 Rust 运营规则、对局状态和基础规则包。
+- `core/operations/` 提供 Rust 运营规则、对局状态和基础规则包。
 - `apps/player/operations/` 提供 Rust HTTP 服务、网页资源和 PowerShell 启动脚本。
 - `research/operations/` 保留 Python 研究原型。单局和批量评估示例位于 `examples/operations/`。
 
@@ -57,7 +57,7 @@ uv run python -m examples.operations.simulate --enemy-difficulty 40 --affix-coun
 验证：
 
 ```powershell
-cargo test -p run-core -p hsr-operations-backend
+cargo test -p operations-core -p hsr-operations-backend
 uv run python -m unittest discover -s tests -v
 uv run ruff check .
 uv run ruff format --check .

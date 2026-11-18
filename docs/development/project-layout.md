@@ -11,7 +11,7 @@ hsr-currency-wars-ai/
 ├── core/
 │   ├── account/
 │   ├── battle/
-│   ├── run/
+│   ├── operations/
 │   └── decision/
 ├── research/
 │   ├── account_generation/
@@ -29,22 +29,22 @@ hsr-currency-wars-ai/
 | `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
 | `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
-| `core/run/` | `run-core` 维护共用的商店、经济、投资、阵容和节点结算规则。提供局面和合法操作。完整对局接入后，将依据 `core/account/` 的配置维护状态，组装战斗输入并调用 `core/battle/`，在满足条件时结算结果。 |
-| `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
+| `core/operations/` | `operations-core` 维护共用的商店、经济、投资、阵容和节点结算规则。提供局面和合法操作。完整对局接入后，将依据 `core/account/` 的配置维护状态，组装战斗输入并调用 `core/battle/`，在满足条件时结算结果。 |
+| `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/operations/` 评估候选操作，输出运营或战斗建议。 |
 | `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
 | `research/training/`、`research/evaluation/` | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
 | `research/operations/` | 运营模拟的 Python 原型，供批量评估和回归对照使用。 |
 | `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
-| `apps/player/operations/` | 提供本地运营模拟网页和 HTTP 会话，调用 `core/run/` 推进对局。 |
+| `apps/player/operations/` | 提供本地运营模拟网页和 HTTP 会话，调用 `core/operations/` 推进对局。 |
 
-候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
+候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/operations/` 将结果写入当前整局状态一次。
 
 ## Python 模拟绑定
 
 `research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
 
 - `sim_native.battle` 暴露战斗接口，通过 `../../core/battle` 路径依赖 `battle-core`。
-- `sim_native.run` 暴露整局接口，通过 `../../core/run` 路径依赖整局核心。局面观测、合法操作、状态推进和结果结算由 `core/run/` 提供。
+- `sim_native.operations` 暴露整局接口，通过 `../../core/operations` 路径依赖整局核心。局面观测、合法操作、状态推进和结果结算由 `core/operations/` 提供。
 
 两个 Python 接口共用一个 Maturin wheel。构建、安装和验证步骤见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
 

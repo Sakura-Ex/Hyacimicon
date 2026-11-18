@@ -97,7 +97,7 @@ pub fn load_rule_pack(data_root: &Path) -> Result<RulePack, String> {
         snapshot.insert(name, read_verified_json(data_root, &manifest, name)?);
     }
 
-    let base_text = include_str!("../../data/default_pack.json");
+    let base_text = include_str!("../data/default_pack.json");
     let base: BasePack =
         serde_json::from_str(base_text).map_err(|error| format!("解析基础规则包失败：{error}"))?;
     let base_value: Value = serde_json::from_str(base_text).map_err(|error| error.to_string())?;

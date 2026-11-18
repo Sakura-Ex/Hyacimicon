@@ -20,7 +20,7 @@ from .models import (
     UnitDefinition,
 )
 
-DEFAULT_PACK = Path(__file__).resolve().parents[2] / "core/run/data/default_pack.json"
+DEFAULT_PACK = Path(__file__).resolve().parents[2] / "core/operations/data/default_pack.json"
 if not DEFAULT_PACK.is_file():
     DEFAULT_PACK = Path(__file__).with_name("data") / "default_pack.json"
 

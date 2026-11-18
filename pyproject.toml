@@ -16,7 +16,7 @@ dev = ["ruff==0.14.0"]
 packages = ["research"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"core/run/data/default_pack.json" = "research/operations/data/default_pack.json"
+"core/operations/data/default_pack.json" = "research/operations/data/default_pack.json"
 "apps/player/operations/web" = "research/operations/web"
 
 [tool.ruff]
