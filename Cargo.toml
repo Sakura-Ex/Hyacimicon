@@ -1,5 +1,5 @@
 [workspace]
-members = ["core/account", "core/battle", "core/run"]
+members = ["core/account", "core/battle"]
 resolver = "3"
 
 [workspace.package]
