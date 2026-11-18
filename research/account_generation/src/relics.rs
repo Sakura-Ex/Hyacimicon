@@ -3,16 +3,13 @@
 mod candidates;
 mod middle_grid;
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::ControlFlow,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat, RelicSlot, RelicSubStat};
 use serde::Deserialize;
 
 use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invalid};
-use candidates::{Candidate, PieceSearch};
+use candidates::{Candidate, Candidates, PieceSearch};
 
 pub(super) const EPSILON: f64 = 1e-6;
 pub(super) const SLOTS: [RelicSlot; 6] = [
@@ -379,10 +376,10 @@ fn solve(
         desired,
         suffix: &suffix,
         search,
-        output: Vec::new(),
+        output: vec![Vec::new(); groups.len()],
         failed: BTreeSet::new(),
     };
-    if solver.group(0, 0.0)? {
+    if solver.solve()? {
         Ok(materialize(groups, solver.output))
     } else {
         Err(GenerationError::NoSolution)
@@ -459,84 +456,116 @@ struct GearSearch<'a, 'b, 'rng> {
     failed: BTreeSet<(usize, usize, u64, u64)>,
 }
 
-impl GearSearch<'_, '_, '_> {
-    fn group(&mut self, position: usize, total: f64) -> Result<bool, GenerationError> {
-        if position == self.groups.len() {
-            return Ok(contains(self.overall, total));
+#[derive(Clone, Copy, Default)]
+struct Position {
+    group: usize,
+    piece: usize,
+    earlier_score: f64,
+    group_score: f64,
+}
+
+impl Position {
+    fn key(self) -> (usize, usize, u64, u64) {
+        (
+            self.group,
+            self.piece,
+            self.earlier_score.to_bits(),
+            self.group_score.to_bits(),
+        )
+    }
+}
+
+struct Frame<'a> {
+    position: Position,
+    group_bounds: Bounds,
+    candidates: Candidates<'a>,
+}
+
+impl<'a> GearSearch<'a, '_, '_> {
+    fn frame(&mut self, position: Position) -> Option<Frame<'a>> {
+        if self.failed.contains(&position.key()) {
+            return None;
         }
-        let tail = self.suffix[position + 1];
-        let bounds = intersect(
-            self.groups[position].bounds,
+        let group = &self.groups[position.group];
+        let tail = self.suffix[position.group + 1];
+        let group_bounds = intersect(
+            group.bounds,
             (
-                self.overall.0 - total - tail.1,
-                self.overall.1 - total - tail.0,
+                self.overall.0 - position.earlier_score - tail.1,
+                self.overall.1 - position.earlier_score - tail.0,
             ),
         );
-        if bounds.0 > bounds.1 + EPSILON {
-            return Ok(false);
-        }
-        let preferred = self.desired[position].max(bounds.0).min(bounds.1);
-        self.output.push(Vec::new());
-        let found = self.piece(position, total, 0.0, bounds, preferred)?;
-        if !found {
-            self.output.pop();
-        }
-        Ok(found)
-    }
-
-    fn piece(
-        &mut self,
-        position: usize,
-        total: f64,
-        score: f64,
-        bounds: Bounds,
-        preferred: f64,
-    ) -> Result<bool, GenerationError> {
-        let index = self.output[position].len();
-        let state = (position, index, total.to_bits(), score.to_bits());
-        if self.failed.contains(&state) {
-            return Ok(false);
-        }
-        let group = &self.groups[position];
-        let Some(piece) = group.pieces.get(index) else {
-            return if contains(bounds, score) && self.group(position + 1, total + score)? {
-                Ok(true)
-            } else {
-                self.failed.insert(state);
-                Ok(false)
-            };
-        };
-        let tail = group.suffix[index + 1];
+        let piece = &group.pieces[position.piece];
+        let tail = group.suffix[position.piece + 1];
         let local = intersect(
             piece.bounds,
-            (bounds.0 - score - tail.1, bounds.1 - score - tail.0),
+            (
+                group_bounds.0 - position.group_score - tail.1,
+                group_bounds.1 - position.group_score - tail.0,
+            ),
         );
-        if local.0 > local.1 + EPSILON {
+        if group_bounds.0 > group_bounds.1 + EPSILON || local.0 > local.1 + EPSILON {
+            return None;
+        }
+        let desired = self.desired[position.group]
+            .max(group_bounds.0)
+            .min(group_bounds.1);
+        let wanted =
+            (desired - position.group_score) / (group.pieces.len() - position.piece) as f64;
+        Some(Frame {
+            position,
+            group_bounds,
+            candidates: piece.candidates(local, Some(wanted), self.search),
+        })
+    }
+
+    fn solve(&mut self) -> Result<bool, GenerationError> {
+        let Some(first) = self.frame(Position::default()) else {
             return Ok(false);
-        }
-        let remaining = group.pieces.len() - index;
-        let wanted = (preferred - score) / remaining as f64;
-        let distributions = piece.full_distributions(self.search);
-        let outcome = piece.visit_full_candidates(local, wanted, &distributions, |candidate| {
-            let result = (|| {
-                self.search.consider()?;
-                self.output[position].push(candidate);
-                let solved =
-                    self.piece(position, total, score + candidate.score, bounds, preferred)?;
-                if !solved {
-                    self.output[position].pop();
+        };
+        let mut stack = vec![first];
+        while let Some(frame) = stack.last_mut() {
+            let position = frame.position;
+            let Some(candidate) = frame.candidates.next() else {
+                self.failed.insert(position.key());
+                stack.pop();
+                if let Some(parent) = stack.last() {
+                    self.output[parent.position.group].pop();
                 }
-                Ok(solved)
-            })();
-            match result {
-                Ok(false) => ControlFlow::Continue(()),
-                result => ControlFlow::Break(result),
+                continue;
+            };
+
+            self.search.consider()?;
+            let group_score = position.group_score + candidate.score;
+            let next = if position.piece + 1 == self.groups[position.group].pieces.len() {
+                if !contains(frame.group_bounds, group_score) {
+                    continue;
+                }
+                Position {
+                    group: position.group + 1,
+                    piece: 0,
+                    earlier_score: position.earlier_score + group_score,
+                    group_score: 0.0,
+                }
+            } else {
+                Position {
+                    piece: position.piece + 1,
+                    group_score,
+                    ..position
+                }
+            };
+
+            self.output[position.group].push(candidate);
+            if next.group == self.groups.len() {
+                if contains(self.overall, next.earlier_score) {
+                    return Ok(true);
+                }
+            } else if let Some(frame) = self.frame(next) {
+                stack.push(frame);
+                continue;
             }
-        });
-        if let ControlFlow::Break(result) = outcome {
-            return result;
+            self.output[position.group].pop();
         }
-        self.failed.insert(state);
         Ok(false)
     }
 }

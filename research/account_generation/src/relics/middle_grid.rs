@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{GenerationError, Search};
 
-use super::{Bounds, EPSILON, Group, candidates::Candidate};
+use super::{Bounds, EPSILON, Group, candidates::Candidate, contains};
 
 /// 带上限的可达分数集合。第 n 位表示可取得 n 个整数分数单位。
 struct Scores {
@@ -127,6 +127,7 @@ pub(super) fn find(
         return Ok(None);
     };
     let mut output = Vec::new();
+    let mut actual_total = 0.0;
     for (i, (group, options)) in groups.iter().zip(&reachable).enumerate() {
         let goal = desired[i] * scale;
         let Some(mut score) = options
@@ -161,11 +162,22 @@ pub(super) fn find(
             else {
                 return Ok(None);
             };
-            search.consider()?;
             pieces.push(*candidate);
             score -= key;
         }
+        let actual_score: f64 = pieces.iter().map(|piece| piece.score).sum();
+        if !contains(group.bounds, actual_score) {
+            return Ok(None);
+        }
+        actual_total += actual_score;
         output.push(pieces);
+    }
+    // 网格的舍入只用于找组合，预算只记通过原始分数范围的成品。
+    if !contains(overall, actual_total) {
+        return Ok(None);
+    }
+    for _ in output.iter().flatten() {
+        search.consider()?;
     }
     Ok(Some(output))
 }

@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::ControlFlow,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat as Main, RelicSlot, RelicSubStat as Sub};
 
@@ -268,79 +265,47 @@ impl PieceSearch {
         self.has_middle() && self.tiers[0] == 0.0 && self.tiers[2] == 0.0
     }
 
-    pub(super) fn full_distributions(&self, search: &mut Search<'_>) -> DistributionTable {
-        distributions(self.tiers, search)
-    }
-
     pub(super) fn middle_candidates(&self, search: &mut Search<'_>) -> Vec<Candidate> {
-        let distributions = distributions([0.0, 1.0, 0.0], search);
-        let mut result = BTreeMap::new();
-        let _: ControlFlow<()> =
-            self.visit_candidates(self.bounds, None, &distributions, |candidate| {
-                let score = candidate.score;
-                let snapped = (score * 1e12).round() / 1e12;
-                let key = if snapped.is_finite() { snapped } else { score };
-                result.entry(key.to_bits()).or_insert(candidate);
-                ControlFlow::Continue(())
-            });
-        result.into_values().collect()
+        self.candidates(self.bounds, None, search).collect()
     }
 
-    pub(super) fn visit_full_candidates<B>(
-        &self,
-        bounds: Bounds,
-        desired: f64,
-        distributions: &DistributionTable,
-        mut visit: impl FnMut(Candidate) -> ControlFlow<B>,
-    ) -> ControlFlow<B> {
-        let mut examined = BTreeSet::new();
-        self.visit_candidates(bounds, Some(desired), distributions, |candidate| {
-            if examined.insert(candidate.score.to_bits()) {
-                visit(candidate)
-            } else {
-                ControlFlow::Continue(())
-            }
-        })
-    }
-
-    fn visit_candidates<B>(
+    pub(super) fn candidates(
         &self,
         bounds: Bounds,
         desired: Option<f64>,
-        distributions: &DistributionTable,
-        mut visit: impl FnMut(Candidate) -> ControlFlow<B>,
-    ) -> ControlFlow<B> {
-        let extremes = desired.map_or((1, 1), |_| extremes(self.tiers));
-        let mut options = Vec::new();
+        search: &mut Search<'_>,
+    ) -> Candidates<'_> {
+        let tiers = if desired.is_some() {
+            self.tiers
+        } else {
+            [0.0, 1.0, 0.0]
+        };
+        let extremes = extremes(tiers);
+        let mut pending = Vec::new();
         for &count in &self.counts {
             for recipe in &self.recipes {
-                let recipe_bounds = recipe.bounds(count, extremes);
-                if recipe_bounds.0 > bounds.1 + EPSILON || recipe_bounds.1 < bounds.0 - EPSILON {
-                    continue;
-                }
-                let search = CandidateSearch {
-                    recipe,
-                    distributions,
-                    bounds,
-                    extremes,
-                    desired,
-                };
-                if let Some(goal) = desired {
-                    options.push((
-                        distance(intersect(bounds, recipe_bounds), goal),
-                        search,
-                        count,
-                    ));
-                } else {
-                    search.enumerate(0, count, 0.0, [0.0; 4], &mut visit)?;
+                let bounds = intersect(bounds, recipe.bounds(count, extremes));
+                if bounds.0 <= bounds.1 + EPSILON {
+                    pending.push(Assignment {
+                        recipe,
+                        position: 0,
+                        remaining: count,
+                        score: 0.0,
+                        values: [0.0; 4],
+                        distance: desired.map_or(0.0, |goal| distance(bounds, goal)),
+                    });
                 }
             }
         }
-        options.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (_, search, count) in options {
-            search.enumerate(0, count, 0.0, [0.0; 4], &mut visit)?;
+        next_first(&mut pending, desired.is_some());
+        Candidates {
+            pending,
+            bounds,
+            extremes,
+            desired,
+            distributions: distributions(tiers, search),
+            examined: BTreeSet::new(),
         }
-        ControlFlow::Continue(())
     }
 
     pub(super) fn materialize(&self, candidate: &Candidate) -> RelicInstance {
@@ -414,48 +379,76 @@ impl PieceSearch {
     }
 }
 
-struct CandidateSearch<'a> {
-    recipe: &'a Recipe,
-    distributions: &'a DistributionTable,
+/// 逐件产生候选。待考察的分配保存在向量中，调用方可以暂停以检查后续部位。
+pub(super) struct Candidates<'a> {
+    pending: Vec<Assignment<'a>>,
     bounds: Bounds,
     extremes: (usize, usize),
     desired: Option<f64>,
+    distributions: DistributionTable,
+    examined: BTreeSet<u64>,
 }
 
-impl CandidateSearch<'_> {
-    fn enumerate<B>(
-        &self,
-        position: usize,
-        remaining: u8,
-        score: f64,
-        mut values: [f64; 4],
-        visit: &mut impl FnMut(Candidate) -> ControlFlow<B>,
-    ) -> ControlFlow<B> {
-        if position == 4 {
-            if contains(self.bounds, score) {
-                return visit(Candidate {
-                    main: self.recipe.main,
-                    stats: self.recipe.stats,
-                    values,
-                    weights: self.recipe.weights,
+#[derive(Clone, Copy)]
+struct Assignment<'a> {
+    recipe: &'a Recipe,
+    position: usize,
+    remaining: u8,
+    score: f64,
+    values: [f64; 4],
+    distance: f64,
+}
+
+impl Iterator for Candidates<'_> {
+    type Item = Candidate;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(assignment) = self.pending.pop() {
+            if assignment.position < 4 {
+                self.expand(assignment);
+                continue;
+            }
+            let score = assignment.score;
+            if !contains(self.bounds, score) {
+                continue;
+            }
+            let key = if self.desired.is_none() {
+                let snapped = (score * 1e12).round() / 1e12;
+                if snapped.is_finite() { snapped } else { score }
+            } else {
+                score
+            };
+            if self.examined.insert(key.to_bits()) {
+                return Some(Candidate {
+                    main: assignment.recipe.main,
+                    stats: assignment.recipe.stats,
+                    weights: assignment.recipe.weights,
+                    values: assignment.values,
                     score,
                 });
             }
-            return ControlFlow::Continue(());
         }
+        None
+    }
+}
+
+impl<'a> Candidates<'a> {
+    fn expand(&mut self, assignment: Assignment<'a>) {
+        let Assignment {
+            recipe,
+            position,
+            remaining,
+            score,
+            ..
+        } = assignment;
         let stats_left = (4 - position) as u8;
-        let extras = remaining - stats_left;
-        let tail = self.recipe.tail_bounds(position, extras, self.extremes);
-        if score + tail.0 > self.bounds.1 + EPSILON || score + tail.1 < self.bounds.0 - EPSILON {
-            return ControlFlow::Continue(());
-        }
-        let stat = self.recipe.stats[position];
-        let weight = self.recipe.weights[position];
-        let maximum = extras + 1;
+        let maximum = remaining - stats_left + 1;
         let minimum = if stats_left == 1 { maximum } else { 1 };
-        let equivalent_zero = weight == 0.0 && self.recipe.weights[position + 1..].contains(&0.0);
-        let rolls = rolls(stat);
-        let mut options = Vec::new();
+        let weight = recipe.weights[position];
+        let equivalent_zero = weight == 0.0 && recipe.weights[position + 1..].contains(&0.0);
+        let rolls = rolls(recipe.stats[position]);
+        let start = self.pending.len();
+
         for count in minimum..=if equivalent_zero { minimum } else { maximum } {
             let distributions = &self.distributions[usize::from(count)];
             let distributions = if weight == 0.0 {
@@ -463,40 +456,43 @@ impl CandidateSearch<'_> {
             } else {
                 distributions
             };
+            let (low, high) = recipe.tail_bounds(position + 1, maximum - count, self.extremes);
             for distribution in distributions {
                 let value: f64 = rolls
                     .into_iter()
                     .zip(distribution)
                     .map(|(roll, &count)| roll * f64::from(count))
                     .sum();
-                if let Some(goal) = self.desired {
-                    let next_score = score + weight * (value / rolls[1]);
-                    let (low, high) =
-                        self.recipe
-                            .tail_bounds(position + 1, maximum - count, self.extremes);
-                    let bounds = intersect(self.bounds, (next_score + low, next_score + high));
-                    if bounds.0 <= bounds.1 + EPSILON {
-                        options.push((distance(bounds, goal), count, value, next_score));
-                    }
+                let contribution = if self.desired.is_some() {
+                    weight * (value / rolls[1])
                 } else {
+                    weight * f64::from(count)
+                };
+                let score = score + contribution;
+                let bounds = intersect(self.bounds, (score + low, score + high));
+                if bounds.0 <= bounds.1 + EPSILON {
+                    let mut values = assignment.values;
                     values[position] = value;
-                    self.enumerate(
-                        position + 1,
-                        remaining - count,
-                        score + weight * f64::from(count),
+                    self.pending.push(Assignment {
+                        recipe,
+                        position: position + 1,
+                        remaining: remaining - count,
+                        score,
                         values,
-                        visit,
-                    )?;
+                        distance: self.desired.map_or(0.0, |goal| distance(bounds, goal)),
+                    });
                 }
             }
         }
-        options.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (_, count, value, next_score) in options {
-            values[position] = value;
-            self.enumerate(position + 1, remaining - count, next_score, values, visit)?;
-        }
-        ControlFlow::Continue(())
+        next_first(&mut self.pending[start..], self.desired.is_some());
     }
+}
+
+fn next_first(assignments: &mut [Assignment<'_>], ranked: bool) {
+    if ranked {
+        assignments.sort_by(|a, b| a.distance.total_cmp(&b.distance));
+    }
+    assignments.reverse();
 }
 
 fn distance((min, max): Bounds, goal: f64) -> f64 {

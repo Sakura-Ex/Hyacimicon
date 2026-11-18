@@ -198,6 +198,31 @@ fn mixed_tier_fallback_keeps_the_budget_after_an_unreachable_middle_score() {
 }
 
 #[test]
+fn middle_grid_checks_the_actual_score_against_the_original_tolerance() {
+    let target = 1.0 - 1e-6;
+    let request = RelicRequest {
+        pieces: (2..=6)
+            .map(|slot| RelicSpec {
+                max_effective_rolls: Some(0.0),
+                ..RelicSpec::new(RelicSlot::try_from(slot).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: BTreeMap::from([(RelicSubStat::Spd, 1.00000000001)]),
+        tier_weights: [0.0, 1.0, 0.0],
+        min_total_effective_rolls: Some(target),
+        max_total_effective_rolls: Some(target),
+    };
+    assert!(matches!(
+        account_generator::generate_character_relics(
+            &request,
+            6,
+            &mut ChaCha8Rng::seed_from_u64(42)
+        ),
+        Err(GenerationError::NoSolution)
+    ));
+}
+
+#[test]
 fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     let request = RelicRequest {
         pieces: vec![RelicSpec {
@@ -214,6 +239,29 @@ fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
         account_generator::maximum_character_relic_score(&request).unwrap(),
         35.0
     );
+}
+
+#[test]
+fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
+    let reference = AccountReference::bundled().unwrap();
+    let request = AccountRequest {
+        gold_count: Some(400.0),
+        character_overrides: BTreeMap::from([(
+            "1310".to_owned(),
+            CharacterSpec {
+                relics: Some(RelicRequest {
+                    tier_weights: [1.0, 0.0, 1.0],
+                    ..RelicRequest::default()
+                }),
+                ..CharacterSpec::default()
+            },
+        )]),
+        ..AccountRequest::new("full-fallback", 60)
+    };
+    let result =
+        generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert_eq!(result.account.relics.len(), 360);
+    assert_eq!(result.gold_count(), 400.0);
 }
 
 #[test]
