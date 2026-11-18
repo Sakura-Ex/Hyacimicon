@@ -69,6 +69,8 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: ${{ steps.comparison.outputs.prompt_file }}
           output-schema-file: .github/codex/maintenance-review.schema.json
+          model: gpt-6.2-sol
+          effort: medium
           permission-profile: ":read-only"
           safety-strategy: drop-sudo
           codex-args: '["--ephemeral"]'

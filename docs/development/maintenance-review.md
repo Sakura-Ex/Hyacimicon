@@ -1,6 +1,6 @@
 # Codex 代码结构审查
 
-`Codex maintenance review` 在同仓库 PR 以 `main` 为目标时运行。创建、重新打开和推送新提交都会触发审查，草稿 PR 也适用。评审按照[目录与模块职责](project-layout.md)和[开发约定](development-guide.md)，核对这次改动引入的目录、依赖、接口、诊断分离和迁移问题。可直接编辑[审查规则](../../.github/codex/maintenance-review.md)。
+`Codex maintenance review` 在同仓库 PR 以 `main` 为目标时运行。创建、重新打开和推送新提交都会触发审查，草稿 PR 也适用。审查使用 GPT‑6.2 Sol，推理力度为 `medium`。评审按照[目录与模块职责](project-layout.md)和[开发约定](development-guide.md)，核对这次改动引入的目录、依赖、接口、诊断分离和迁移问题。可直接编辑[审查规则](../../.github/codex/maintenance-review.md)。
 
 游戏规则、算法、调度、状态变换和功能验收走[独立评审与合并流程](git-workflow.md#pr-前独立评审)。结构审查结果供作者处理和维护者查看，合并由仓库 Ruleset 管理。
 
