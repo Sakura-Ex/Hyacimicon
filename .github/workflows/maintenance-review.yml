@@ -8,7 +8,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: maintenance-review-${{ github.event.pull_request.number }}
+  group: maintenance-review-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ github.event.pull_request.base.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -77,6 +77,10 @@ jobs:
     if: needs.review.outputs.result != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    concurrency:
+      group: maintenance-review-comment-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+      queue: max
     permissions:
       pull-requests: write
     steps:
@@ -89,15 +93,7 @@ jobs:
             const marker = '<!-- hsr-codex-maintenance-review -->';
             const eventPr = context.payload.pull_request;
             const issue = { ...context.repo, issue_number: eventPr.number };
-            const { data: currentPr } = await github.rest.pulls.get({
-              ...context.repo,
-              pull_number: eventPr.number,
-            });
-            if (currentPr.state !== 'open' || currentPr.head.sha !== eventPr.head.sha ||
-                currentPr.base.sha !== eventPr.base.sha || currentPr.base.ref !== eventPr.base.ref) {
-              core.notice('The PR changed while the review was running.');
-              return;
-            }
+            const headMarker = `${marker}\n<!-- head:${eventPr.head.sha} base:`;
 
             const result = JSON.parse(process.env.REVIEW_RESULT);
             if (!['complete', 'partial'].includes(result.coverage) ||
@@ -117,10 +113,10 @@ jobs:
               `- **${escape(rule)}** — ${escape(location)}\n  - ${escape(evidence)}\n  - 建议 ${escape(suggestion)}`
             );
             const body = [
-              marker,
+              `${headMarker}${eventPr.base.sha} -->`,
               '### Codex 代码结构审查',
               '',
-              `提交 \`${eventPr.head.sha.slice(0, 12)}\` · 审查${coverage}`,
+              `提交 \`${eventPr.head.sha.slice(0, 12)}\` · 目标快照 \`${eventPr.base.sha.slice(0, 12)}\` · 审查${coverage}`,
               '',
               escape(result.summary),
               '',
@@ -133,6 +129,19 @@ jobs:
             const previous = comments.find((comment) =>
               comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
             );
+            const { data: currentPr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: eventPr.number,
+            });
+            if (currentPr.state !== 'open' || currentPr.head.sha !== eventPr.head.sha ||
+                currentPr.base.ref !== eventPr.base.ref) {
+              core.notice('The PR changed while the review was running.');
+              return;
+            }
+            if (currentPr.base.sha !== eventPr.base.sha && previous?.body.startsWith(headMarker)) {
+              core.notice('A review for this head is already published and the target advanced.');
+              return;
+            }
             if (previous) {
               await github.rest.issues.updateComment({
                 ...context.repo, comment_id: previous.id, body,
