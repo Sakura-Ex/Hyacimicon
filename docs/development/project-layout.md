@@ -35,14 +35,14 @@ hsr-currency-wars-ai/
 
 候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
 
-## Python 模拟绑定
+## Python 模拟绑定规划
 
-`research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
+计划在 `research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
 
 - `sim_native.battle` 暴露战斗接口，通过 `../../core/battle` 路径依赖 `battle-core`。
 - `sim_native.run` 暴露整局接口，通过 `../../core/run` 路径依赖整局核心。局面观测、合法操作、状态推进和结果结算由 `core/run/` 提供。
 
-两个 Python 接口共用一个 Maturin wheel。构建、安装和验证步骤见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
+两个 Python 接口计划共用一个 Maturin wheel。构建设计和实施状态见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
 
 ## 构建配置
 
