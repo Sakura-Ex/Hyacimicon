@@ -3,7 +3,10 @@
 mod candidates;
 mod middle_grid;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::ControlFlow,
+};
 
 use account_core::{RelicInstance, RelicMainStat, RelicSlot, RelicSubStat};
 use serde::Deserialize;
@@ -12,7 +15,7 @@ use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invali
 use candidates::{Candidate, PieceSearch};
 
 pub(super) const EPSILON: f64 = 1e-6;
-const SLOTS: [RelicSlot; 6] = [
+pub(super) const SLOTS: [RelicSlot; 6] = [
     RelicSlot::Head,
     RelicSlot::Hands,
     RelicSlot::Body,
@@ -58,7 +61,7 @@ impl RelicSpec {
         if self
             .set_id
             .as_deref()
-            .is_some_and(|id| !set_range(self.slot).any(|set| set.to_string() == id))
+            .is_some_and(|id| !supports_set(self.slot, id))
         {
             return Err(invalid(format!(
                 "套装与部位 {} 不匹配",
@@ -143,7 +146,6 @@ impl RelicRequest {
     }
 }
 
-#[derive(Default)]
 pub(super) struct Gear {
     pub pieces: Vec<(RelicInstance, f64)>,
     pub upper: f64,
@@ -177,21 +179,10 @@ pub fn generate_character_relics(
 
 /// 计算六件的理论有效词条上限，依据配装条件和允许的档位。
 pub fn maximum_character_relic_score(request: &RelicRequest) -> Result<f64, GenerationError> {
-    use crate::{ChaCha8Rng, SeedableRng};
     request.validate()?;
-    let mut rng = ChaCha8Rng::seed_from_u64(0);
-    let mut search = Search {
-        rng: &mut rng,
-        attempts: 0,
-        limit: 0,
-    };
     complete_specs(request)
-        .into_iter()
-        .map(|mut spec| {
-            spec.min_effective_rolls = None;
-            spec.max_effective_rolls = None;
-            PieceSearch::new(&spec, request, &mut search).map(|piece| piece.upper)
-        })
+        .iter()
+        .map(|spec| candidates::maximum_score(spec, request))
         .sum()
 }
 
@@ -330,6 +321,7 @@ pub(super) fn generate(
 
 struct Group {
     pieces: Vec<PieceSearch>,
+    suffix: Vec<Bounds>,
     bounds: Bounds,
     upper: f64,
 }
@@ -341,8 +333,9 @@ impl Group {
         quality: Option<u8>,
     ) -> Result<Self, GenerationError> {
         let upper = pieces.iter().map(|piece| piece.upper).sum();
+        let suffix = suffix_bounds(pieces.iter().map(|piece| piece.bounds));
         let mut bounds = intersect(
-            sum_bounds(pieces.iter().map(|piece| piece.bounds)),
+            suffix[0],
             (
                 request.min_total_effective_rolls.unwrap_or_default(),
                 request.max_total_effective_rolls.unwrap_or(f64::INFINITY),
@@ -354,6 +347,7 @@ impl Group {
         feasible(bounds)?;
         Ok(Self {
             pieces,
+            suffix,
             bounds,
             upper,
         })
@@ -394,14 +388,18 @@ fn solve(
         if !middle_only {
             search.limit = search.attempts + (original_limit - search.attempts) / 2;
         }
-        let middle = [preferred.as_slice(), hard.as_slice()]
-            .into_iter()
-            .try_fold(None, |result, bounds| {
-                if result.is_some() {
-                    return Ok(result);
-                }
-                find(groups, overall, desired, &suffix, bounds, true, search)
-            });
+        let middle = [
+            (preferred != hard).then_some(preferred.as_slice()),
+            Some(hard.as_slice()),
+        ]
+        .into_iter()
+        .flatten()
+        .try_fold(None, |result, bounds| {
+            if result.is_some() {
+                return Ok(result);
+            }
+            find(groups, overall, desired, &suffix, bounds, true, search)
+        });
         search.limit = original_limit;
         match middle {
             Ok(Some(mut result)) => {
@@ -520,9 +518,9 @@ struct GearSearch<'a, 'b, 'rng> {
 
 impl GearSearch<'_, '_, '_> {
     fn group(&mut self, position: usize, total: f64) -> Result<bool, GenerationError> {
-        let Some(group) = self.groups.get(position) else {
+        if position == self.groups.len() {
             return Ok(contains(self.overall, total));
-        };
+        }
         let tail = self.suffix[position + 1];
         let bounds = intersect(
             self.group_bounds[position],
@@ -534,10 +532,9 @@ impl GearSearch<'_, '_, '_> {
         if bounds.0 > bounds.1 + EPSILON {
             return Ok(false);
         }
-        let suffix = suffix_bounds(group.pieces.iter().map(|piece| piece.bounds));
         let preferred = self.desired[position].max(bounds.0).min(bounds.1);
         self.output.push(Vec::new());
-        let found = self.piece(position, total, 0.0, bounds, preferred, &suffix)?;
+        let found = self.piece(position, total, 0.0, bounds, preferred)?;
         if !found {
             self.output.pop();
         }
@@ -551,14 +548,14 @@ impl GearSearch<'_, '_, '_> {
         score: f64,
         bounds: Bounds,
         preferred: f64,
-        suffix: &[Bounds],
     ) -> Result<bool, GenerationError> {
         let index = self.output[position].len();
         let state = (position, index, total.to_bits(), score.to_bits());
         if self.failed.contains(&state) {
             return Ok(false);
         }
-        let Some(piece) = self.groups[position].pieces.get(index) else {
+        let group = &self.groups[position];
+        let Some(piece) = group.pieces.get(index) else {
             return if contains(bounds, score) && self.group(position + 1, total + score)? {
                 Ok(true)
             } else {
@@ -566,7 +563,7 @@ impl GearSearch<'_, '_, '_> {
                 Ok(false)
             };
         };
-        let tail = suffix[index + 1];
+        let tail = group.suffix[index + 1];
         let local = intersect(
             piece.bounds,
             (bounds.0 - score - tail.1, bounds.1 - score - tail.0),
@@ -574,25 +571,36 @@ impl GearSearch<'_, '_, '_> {
         if local.0 > local.1 + EPSILON {
             return Ok(false);
         }
-        let remaining = self.groups[position].pieces.len() - index;
+        let remaining = group.pieces.len() - index;
         let wanted = (preferred - score) / remaining as f64;
-        let candidates = piece.candidates(local, wanted, self.middle, self.search)?;
-        for candidate in candidates {
-            if self.middle {
+        let middle = self.middle;
+        let distributions = piece.distributions(middle, self.search);
+        let mut try_candidate = |candidate: Candidate| {
+            let result = (|| {
                 self.search.consider()?;
+                self.output[position].push(candidate);
+                let solved =
+                    self.piece(position, total, score + candidate.score, bounds, preferred)?;
+                if !solved {
+                    self.output[position].pop();
+                }
+                Ok(solved)
+            })();
+            match result {
+                Ok(false) => ControlFlow::Continue(()),
+                result => ControlFlow::Break(result),
             }
-            self.output[position].push(candidate);
-            if self.piece(
-                position,
-                total,
-                score + candidate.score,
-                bounds,
-                preferred,
-                suffix,
-            )? {
-                return Ok(true);
-            }
-            self.output[position].pop();
+        };
+        let outcome = if middle {
+            piece
+                .middle_candidates(local, wanted, &distributions)
+                .into_iter()
+                .try_for_each(&mut try_candidate)
+        } else {
+            piece.visit_full_candidates(local, wanted, &distributions, try_candidate)
+        };
+        if let ControlFlow::Break(result) = outcome {
+            return result;
         }
         self.failed.insert(state);
         Ok(false)
@@ -670,4 +678,9 @@ fn set_range(slot: RelicSlot) -> std::ops::RangeInclusive<u16> {
     } else {
         301..=330
     }
+}
+
+pub(super) fn supports_set(slot: RelicSlot, id: &str) -> bool {
+    id.parse::<u16>()
+        .is_ok_and(|set| set_range(slot).contains(&set) && set.to_string() == id)
 }

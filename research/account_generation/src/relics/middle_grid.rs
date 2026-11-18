@@ -66,10 +66,13 @@ pub(super) fn find(
             group
                 .pieces
                 .iter()
-                .map(|piece| piece.candidates(piece.bounds, 0.0, true, search))
-                .collect::<Result<Vec<_>, _>>()
+                .map(|piece| {
+                    let distributions = piece.distributions(true, search);
+                    piece.middle_candidates(piece.bounds, 0.0, &distributions)
+                })
+                .collect::<Vec<_>>()
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Vec<_>>();
     let Some(scale) = [1.0, 10.0, 100.0, 1000.0, 10_000.0]
         .into_iter()
         .find(|&scale| {
@@ -171,12 +174,14 @@ pub(super) fn find(
 }
 
 fn suffix(options: impl DoubleEndedIterator<Item = Vec<usize>>, cap: usize) -> Vec<Scores> {
-    let mut result = vec![Scores::zero()];
+    let mut result = Vec::new();
+    let mut current = Scores::zero();
     for options in options.rev() {
-        if let Some(previous) = result.last() {
-            result.push(previous.extend(&options, cap));
-        }
+        let next = current.extend(&options, cap);
+        result.push(current);
+        current = next;
     }
+    result.push(current);
     result.reverse();
     result
 }

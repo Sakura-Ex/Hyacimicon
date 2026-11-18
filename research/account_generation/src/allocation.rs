@@ -498,14 +498,13 @@ fn choose_builds<'a>(
     target: Option<usize>,
     search: &mut Search<'_>,
 ) -> Result<Option<Vec<Choice<'a>>>, GenerationError> {
-    let maximum: usize = order
-        .iter()
-        .map(|&i| menu[i].costs.last().copied().unwrap_or_default())
-        .sum();
-    let cap = target.unwrap_or(maximum);
-    if cap > maximum {
-        return Ok(None);
-    }
+    // 指定总金数已由 roster_fits 检查。这里的后缀表用于剪枝光锥分配。
+    let cap = target.unwrap_or_else(|| {
+        order
+            .iter()
+            .map(|&i| menu[i].costs.last().copied().unwrap_or_default())
+            .sum()
+    });
     let mut suffix = vec![vec![false; cap + 1]; order.len() + 1];
     suffix[order.len()][0] = true;
     for (position, &index) in order.iter().enumerate().rev() {
@@ -513,9 +512,6 @@ fn choose_builds<'a>(
         extend_costs(&right[0], &menu[index].costs, &mut left[position]);
     }
     let amounts = if let Some(target) = target {
-        if !suffix[0][target] {
-            return Ok(None);
-        }
         vec![target]
     } else {
         let mut amounts: Vec<_> = (0..=cap).filter(|&amount| suffix[0][amount]).collect();

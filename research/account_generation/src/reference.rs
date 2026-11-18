@@ -278,6 +278,7 @@ impl AccountReference {
                     ],
                 })
                 .collect();
+            let relics = Recommendations::from_source(source.relics, &id)?;
             characters.insert(
                 id.clone(),
                 Profile {
@@ -289,7 +290,7 @@ impl AccountReference {
                     signature,
                     recommended,
                     teams,
-                    relics: source.relics.try_into()?,
+                    relics,
                     traces,
                 },
             );
@@ -315,10 +316,7 @@ impl Profile {
         let mut levels = BTreeMap::new();
         for (id, source) in &self.traces {
             let level = self.trace_level(id, spec, &mut levels)?;
-            if source
-                .get(&1)
-                .is_some_and(|first| !first.level_up_skill_id.is_empty())
-            {
+            if !source[&1].level_up_skill_id.is_empty() {
                 result.skill_levels.insert(id.clone(), level);
             } else {
                 result.node_unlocks.insert(id.clone(), level > 0);
@@ -364,10 +362,11 @@ impl Profile {
     }
 }
 
-impl TryFrom<RelicSource> for Recommendations {
-    type Error = GenerationError;
+impl Recommendations {
+    fn from_source(source: RelicSource, character_id: &str) -> Result<Self, GenerationError> {
+        use crate::relics::{SLOTS, supports_set};
+        use account_core::RelicSlot;
 
-    fn try_from(source: RelicSource) -> Result<Self, Self::Error> {
         let parse_main = |keys: Vec<String>| {
             keys.iter()
                 .map(|key| parse_property(key))
@@ -389,8 +388,26 @@ impl TryFrom<RelicSource> for Recommendations {
             .collect::<Result<_, GenerationError>>()?;
         let outer = ids(source.set4_id_list);
         let planar = ids(source.set2_id_list);
-        if mains.iter().any(Vec::is_empty) || outer.is_empty() || planar.is_empty() {
-            return Err(error("角色推荐配装缺少主词条或套装候选"));
+        for (slot, stats) in SLOTS.into_iter().zip(&mains).skip(2) {
+            if stats.is_empty() || stats.iter().any(|&stat| !stat.supports_slot(slot)) {
+                return Err(error(format!(
+                    "角色 {character_id} 的部位 {} 缺少合法的推荐主词条列表",
+                    u8::from(slot)
+                )));
+            }
+        }
+        for (slot, sets) in [
+            (RelicSlot::Head, &outer),
+            (RelicSlot::PlanarSphere, &planar),
+        ] {
+            if sets.is_empty() {
+                return Err(error(format!("角色 {character_id} 缺少推荐套装")));
+            }
+            if let Some(set) = sets.iter().find(|id| !supports_set(slot, id)) {
+                return Err(error(format!(
+                    "角色 {character_id} 的推荐套装 {set} 与部位不匹配"
+                )));
+            }
         }
         Ok(Self {
             mains,
@@ -466,4 +483,38 @@ fn read(path: &Path) -> Result<String, GenerationError> {
 
 fn error(message: impl Into<String>) -> GenerationError {
     GenerationError::Reference(message.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::{Value, json};
+
+    #[test]
+    fn loading_rejects_invalid_recommendations_before_random_selection() {
+        let original: Value =
+            serde_json::from_str(include_str!("../data/character/1310.json")).unwrap();
+        for (field, candidates, message) in [
+            ("set4_id_list", json!([101, 999]), "1310 的推荐套装 999"),
+            ("set2_id_list", json!([301, 101]), "1310 的推荐套装 101"),
+            (
+                "property_list3",
+                json!(["AttackAddedRatio", "SpeedDelta"]),
+                "1310 的部位 3",
+            ),
+        ] {
+            let mut profile = original.clone();
+            profile["relics"][field] = candidates;
+            let result = AccountReference::load(
+                include_str!("../data/source-manifest.json"),
+                r#"{"1310":null}"#,
+                include_str!("../data/lightcone.json"),
+                |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                &ReferenceOverrides::default(),
+            );
+            assert!(
+                matches!(result, Err(GenerationError::Reference(text)) if text.contains(message))
+            );
+        }
+    }
 }

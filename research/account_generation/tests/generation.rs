@@ -126,6 +126,63 @@ fn single_piece_respects_explicit_roll_tiers_and_required_stats() {
 }
 
 #[test]
+fn full_tier_search_can_use_the_last_attempt_to_finish() {
+    use account_generator::generate_character_relics;
+
+    let spec = RelicSpec {
+        initial_substat_count: Some(4),
+        required_substats: vec![RelicSubStat::Spd],
+        ..RelicSpec::new(RelicSlot::Head)
+    };
+    let weights = BTreeMap::from([(RelicSubStat::Spd, 1.0)]);
+    let tiers = [1.0, 0.0, 1.0];
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    assert!(matches!(
+        generate_relic(&spec, &weights, tiers, 0, &mut rng),
+        Err(GenerationError::BudgetExhausted { attempts: 0 })
+    ));
+    let (piece, score) = generate_relic(&spec, &weights, tiers, 1, &mut rng).unwrap();
+    assert!(piece.substats.contains_key(&RelicSubStat::Spd));
+    assert!((score - score_relic(&piece, &weights)).abs() <= 1e-12);
+
+    let request = RelicRequest {
+        pieces: vec![spec],
+        effective_stat_weights: weights,
+        tier_weights: tiers,
+        ..RelicRequest::default()
+    };
+    assert!(matches!(
+        generate_character_relics(&request, 5, &mut rng),
+        Err(GenerationError::BudgetExhausted { attempts: 5 })
+    ));
+    assert_eq!(
+        generate_character_relics(&request, 6, &mut rng)
+            .unwrap()
+            .len(),
+        6
+    );
+}
+
+#[test]
+fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
+    let request = RelicRequest {
+        pieces: vec![RelicSpec {
+            initial_substat_count: Some(3),
+            max_effective_rolls: Some(0.5),
+            ..RelicSpec::new(RelicSlot::Head)
+        }],
+        effective_stat_weights: BTreeMap::from([(RelicSubStat::Spd, 1.0)]),
+        tier_weights: [0.0, 1.0, 0.0],
+        max_total_effective_rolls: Some(1.0),
+        ..RelicRequest::default()
+    };
+    assert_eq!(
+        account_generator::maximum_character_relic_score(&request).unwrap(),
+        35.0
+    );
+}
+
+#[test]
 fn full_roster_meets_an_exact_score_and_converts() {
     let reference = AccountReference::bundled().unwrap();
     let request = AccountRequest {

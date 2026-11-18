@@ -20,7 +20,7 @@ pub use relics::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const GENERATOR_VERSION: &str = "account-rust-v2";
+pub const GENERATOR_VERSION: &str = "account-rust-v3";
 
 /// 五星角色和光锥的投入类别，计数单位为一份本体、星魂或叠影。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -269,11 +269,13 @@ pub struct GeneratedAccount {
 
 impl GeneratedAccount {
     pub fn copies_by_category(&self) -> BTreeMap<GoldCategory, usize> {
-        use GoldCategory::{Free, Limited, None, Standard};
-        let mut copies = BTreeMap::from([(Limited, 0), (Standard, 0), (Free, 0), (None, 0)]);
+        use GoldCategory::{Free, Limited, Standard};
+        let mut copies = BTreeMap::from([(Limited, 0), (Standard, 0), (Free, 0)]);
         for investment in self.investments.values() {
             for (&category, &quantity) in &investment.copies_by_category {
-                *copies.entry(category).or_default() += quantity;
+                if let Some(total) = copies.get_mut(&category) {
+                    *total += quantity;
+                }
             }
         }
         copies
@@ -286,7 +288,9 @@ impl GeneratedAccount {
             .map(|&category| {
                 (
                     category,
-                    (copies[&category] * category.half_units()) as f64 / 2.0,
+                    (copies.get(&category).copied().unwrap_or_default() * category.half_units())
+                        as f64
+                        / 2.0,
                 )
             })
             .collect()
@@ -462,7 +466,6 @@ pub fn generate_character(
             Some(profile.recommended[search.index(profile.recommended.len())].clone());
     }
     request.character_pool = Some(vec![character_id.to_owned()]);
-    request.core_character_ids.push(character_id.to_owned());
     request
         .character_overrides
         .insert(character_id.to_owned(), spec);
