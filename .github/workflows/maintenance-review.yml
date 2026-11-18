@@ -16,6 +16,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    environment: codex-review
     permissions:
       contents: read
       pull-requests: read
@@ -29,7 +30,7 @@ jobs:
         run: |
           echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
           if [[ "$CONFIGURED" != "true" ]]; then
-            echo "::notice::Set the OPENAI_API_KEY repository secret to enable maintenance reviews."
+            echo "::notice::Set OPENAI_API_KEY in the codex-review environment to enable maintenance reviews."
           fi
 
       # Keep the workflow, prompt and project instructions on the trusted base.
