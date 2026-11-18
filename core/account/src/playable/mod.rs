@@ -18,9 +18,6 @@ use crate::{
     reference::{Element, RelicGroupTemplate, TrialRelics},
 };
 
-/// 实际游玩配置的序列化格式版本。
-pub const PLAYABLE_ACCOUNT_SCHEMA_VERSION: u32 = 3;
-
 /// 玩法中角色与光锥的统一等级。
 pub const PLAYABLE_LEVEL: u8 = 80;
 /// 玩法中角色与光锥的统一进阶。
@@ -200,8 +197,6 @@ pub struct PlayableCharacter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PlayableAccount {
-    /// 实际游玩配置格式版本，使用 `PLAYABLE_ACCOUNT_SCHEMA_VERSION`。
-    pub schema_version: u32,
     /// 生效配置标识。
     pub config_id: String,
     /// 对应原始账号配置标识。
@@ -212,12 +207,15 @@ pub struct PlayableAccount {
     pub season: String,
     /// 数据快照。
     pub data_snapshot: String,
-    /// 转换规则版本。
-    pub rules_version: String,
     /// 玩法角色范围内的生效配置。
     pub characters: Vec<PlayableCharacter>,
     /// 使用统一等级与进阶的持有光锥库存。
     pub owned_light_cones: Vec<PlayableLightCone>,
     /// 确认持有的原始遗器库存。
     pub owned_relics: Vec<RelicInstance>,
+    // 旧版导出含有这两个键。读取时跳过它们，其他未知字段仍报错。
+    #[serde(rename = "schema_version", default, skip_serializing)]
+    _legacy_schema: serde::de::IgnoredAny,
+    #[serde(rename = "rules_version", default, skip_serializing)]
+    _legacy_rules: serde::de::IgnoredAny,
 }

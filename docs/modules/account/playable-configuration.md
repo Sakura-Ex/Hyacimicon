@@ -10,11 +10,11 @@
 
 ## 数据结构
 
-类型位于 `core/account/src/playable/`。格式版本 `PLAYABLE_ACCOUNT_SCHEMA_VERSION` 当前为 3。
+类型位于 `core/account/src/playable/`。新版可读取原有的 v3 游玩配置。重新保存时会省略旧字段 `schema_version` 和 `rules_version`。需要用旧版程序读取时，请保留原文件。
 
 | 类型 | 保存内容 |
 | --- | --- |
-| `PlayableAccount` | 配置关联、游戏版本、赛季、资料与规则版本、角色列表和持有库存 |
+| `PlayableAccount` | 配置关联、游戏版本、赛季、资料快照、角色列表和持有库存 |
 | `PlayableCharacter` | 角色 ID、本体或试用来源、星魂、能力版本、行迹、光锥、遗器和静态面板 |
 | `CharacterOrigin` | 本体及原始角色 ID，或试用来源；玩法专属角色同样采用模板 |
 | `PlayableTraces` | 计入星魂加级后的实际技能等级，以及一次性节点激活状态 |

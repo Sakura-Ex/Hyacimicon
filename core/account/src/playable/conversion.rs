@@ -12,17 +12,13 @@ use crate::{
 };
 
 use super::{
-    CharacterOrigin, EquipmentOrigin, PLAYABLE_ACCOUNT_SCHEMA_VERSION, PlayableAccount,
-    PlayableCharacter, PlayableLightCone, PlayableRelicGroup, PlayableRelics, PlayableTraces,
-    TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
+    CharacterOrigin, EquipmentOrigin, PlayableAccount, PlayableCharacter, PlayableLightCone,
+    PlayableRelicGroup, PlayableRelics, PlayableTraces, TEMPLATE_LIGHT_CONE_SUPERIMPOSITION,
     attributes::AttributeValues,
     panel,
     selection::{mapped_eidolons, owned_characters},
     traces::raise_traces_to_trial,
 };
-
-/// 完整转换使用的规则版本。
-pub const CONVERSION_RULES_VERSION: &str = "s2-4.7-v2";
 
 /// 完整转换所需的输出标识和角色 ID 对照。
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,13 +205,13 @@ pub fn convert_playable_account(
         });
     }
     Ok(PlayableAccount {
-        schema_version: PLAYABLE_ACCOUNT_SCHEMA_VERSION,
         config_id: request.config_id.clone(),
         raw_config_id: raw.config_id.clone(),
         game_version: data.manifest.game_version.clone(),
         season: data.manifest.season.clone(),
         data_snapshot: data.manifest.snapshot_id.clone(),
-        rules_version: CONVERSION_RULES_VERSION.to_owned(),
+        _legacy_schema: serde::de::IgnoredAny,
+        _legacy_rules: serde::de::IgnoredAny,
         characters,
         owned_light_cones: raw.light_cones.iter().map(owned_light_cone).collect(),
         owned_relics: raw.relics.clone(),
