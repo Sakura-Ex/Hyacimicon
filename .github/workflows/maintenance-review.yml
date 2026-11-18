@@ -1,0 +1,144 @@
+name: Codex maintenance review
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: maintenance-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      result: ${{ steps.codex.outputs['final-message'] }}
+    steps:
+      - name: Check review configuration
+        id: config
+        env:
+          CONFIGURED: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: |
+          echo "configured=$CONFIGURED" >> "$GITHUB_OUTPUT"
+          if [[ "$CONFIGURED" != "true" ]]; then
+            echo "::notice::Set the OPENAI_API_KEY repository secret to enable maintenance reviews."
+          fi
+
+      # Keep the workflow, prompt and project instructions on the trusted base.
+      - name: Check out the target revision
+        if: steps.config.outputs.configured == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Prepare the review comparison
+        id: comparison
+        if: steps.config.outputs.configured == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
+          if [[ "$(git rev-parse FETCH_HEAD)" != "$PR_HEAD" ]]; then
+            echo "::notice::The PR head advanced. The newer run will review it."
+            exit 0
+          fi
+          merge_base="$(git merge-base HEAD "$PR_HEAD")"
+          prompt_file="$RUNNER_TEMP/maintenance-review.md"
+          cp .github/codex/maintenance-review.md "$prompt_file"
+          printf '\n## 本次提交范围\n\n- 目标提交 `%s`\n- 共同祖先 `%s`\n- PR 提交 `%s`\n' \
+            "$(git rev-parse HEAD)" "$merge_base" "$PR_HEAD" >> "$prompt_file"
+          echo "prompt_file=$prompt_file" >> "$GITHUB_OUTPUT"
+
+      - name: Review with Codex
+        id: codex
+        if: steps.comparison.outputs.prompt_file != ''
+        uses: openai/codex-action@86365089eb2b84e0a8fb0717b304f8bdcb13b20e # v1.12
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: ${{ steps.comparison.outputs.prompt_file }}
+          output-schema-file: .github/codex/maintenance-review.schema.json
+          permission-profile: ":read-only"
+          safety-strategy: drop-sudo
+          codex-args: '["--ephemeral"]'
+
+  publish:
+    needs: review
+    if: needs.review.outputs.result != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Update the pull request review summary
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REVIEW_RESULT: ${{ needs.review.outputs.result }}
+        with:
+          script: |
+            const marker = '<!-- hsr-codex-maintenance-review -->';
+            const eventPr = context.payload.pull_request;
+            const issue = { ...context.repo, issue_number: eventPr.number };
+            const { data: currentPr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: eventPr.number,
+            });
+            if (currentPr.state !== 'open' || currentPr.head.sha !== eventPr.head.sha ||
+                currentPr.base.sha !== eventPr.base.sha || currentPr.base.ref !== eventPr.base.ref) {
+              core.notice('The PR changed while the review was running.');
+              return;
+            }
+
+            const result = JSON.parse(process.env.REVIEW_RESULT);
+            if (!['complete', 'partial'].includes(result.coverage) ||
+                !Array.isArray(result.findings) || result.findings.length > 5) {
+              throw new Error('Invalid maintenance review result.');
+            }
+            const escape = (value) => {
+              if (typeof value !== 'string' || !value.trim()) {
+                throw new Error('Missing maintenance review text.');
+              }
+              return value.trim().replace(/\s+/g, ' ').slice(0, 700)
+                .replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+                .replace(/[\\`*_{}\[\]()~!#]/g, '\\$&').replaceAll('@', '@\u200b');
+            };
+            const coverage = result.coverage === 'complete' ? '已完成' : '部分完成';
+            const findings = result.findings.map(({ rule, location, evidence, suggestion }) =>
+              `- **${escape(rule)}** — ${escape(location)}\n  - ${escape(evidence)}\n  - 建议 ${escape(suggestion)}`
+            );
+            const body = [
+              marker,
+              '### Codex 代码结构审查',
+              '',
+              `提交 \`${eventPr.head.sha.slice(0, 12)}\` · 审查${coverage}`,
+              '',
+              escape(result.summary),
+              '',
+              ...(findings.length ? findings : ['已检查的范围内未发现结构问题。']),
+              '',
+              '<p align="right">回复由 Codex 总结</p>',
+            ].join('\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, issue);
+            const previous = comments.find((comment) =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                ...context.repo, comment_id: previous.id, body,
+              });
+            } else if (findings.length || result.coverage === 'partial') {
+              await github.rest.issues.createComment({ ...issue, body });
+            } else {
+              await core.summary.addRaw(body).write();
+            }

@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["coverage", "summary", "findings"],
+  "properties": {
+    "coverage": { "type": "string", "enum": ["complete", "partial"] },
+    "summary": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "location", "evidence", "suggestion"],
+        "properties": {
+          "rule": {
+            "type": "string",
+            "enum": ["目录归属", "依赖方向", "接口与重复封装", "运行时与诊断", "迁移与交付"]
+          },
+          "location": { "type": "string" },
+          "evidence": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    }
+  }
+}
