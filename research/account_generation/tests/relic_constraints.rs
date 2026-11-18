@@ -454,3 +454,73 @@ fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     let investment = &result.investments["1310"];
     assert!(investment.piece_scores.iter().sum::<f64>() >= 0.8 * investment.relic_score_upper);
 }
+
+#[test]
+fn equally_weighted_crit_stats_can_share_the_upgrades_on_a_finished_head_piece() {
+    let spec = RelicSpec {
+        required_substats: vec![Sub::CritRate, Sub::CritDmg, Sub::AtkPercent, Sub::Spd],
+        initial_substat_count: Some(4),
+        min_effective_rolls: Some(7.8),
+        max_effective_rolls: Some(7.8),
+        ..RelicSpec::new(Slot::Head)
+    };
+    let weights = BTreeMap::from([
+        (Sub::CritRate, 1.0),
+        (Sub::CritDmg, 1.0),
+        (Sub::AtkPercent, 0.5),
+        (Sub::Spd, 0.3),
+    ]);
+    let mut splits = BTreeSet::new();
+    for seed in 0..32 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &weights,
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        assert!((score_relic(&piece, &weights) - 7.8).abs() < 1e-9);
+        let rate = (piece.substats[&Sub::CritRate] / 0.029160001).round() as u8;
+        let dmg = (piece.substats[&Sub::CritDmg] / 0.058320003).round() as u8;
+        assert_eq!(rate + dmg, 7);
+        splits.insert((rate, dmg));
+    }
+    assert!(splits.iter().any(|&(rate, dmg)| rate > 1 && dmg > 1));
+    assert!(splits.len() > 1);
+}
+
+#[test]
+fn an_exact_speed_piece_can_roll_its_three_other_substats_at_different_tiers() {
+    let spec = RelicSpec {
+        initial_substat_count: Some(3),
+        required_substats: vec![Sub::Spd, Sub::HpPercent, Sub::DefPercent, Sub::EffectRes],
+        min_effective_rolls: Some(11.8 / 2.3),
+        max_effective_rolls: Some(11.8 / 2.3),
+        ..RelicSpec::new(Slot::Head)
+    };
+    let mut mixed = false;
+    for seed in 0..32 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &BTreeMap::from([(Sub::Spd, 1.0)]),
+            ALL,
+            100,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        assert!((piece.substats[&Sub::Spd] - 11.8).abs() < 1e-9);
+        let tiers: BTreeSet<_> = VALUES
+            .iter()
+            .filter(|(stat, _)| *stat != Sub::Spd)
+            .filter_map(|(stat, rolls)| {
+                piece
+                    .substats
+                    .get(stat)
+                    .map(|v| rolls.iter().position(|x| (x - v).abs() < 1e-12).unwrap())
+            })
+            .collect();
+        mixed |= tiers.len() > 1;
+    }
+    assert!(mixed);
+}
