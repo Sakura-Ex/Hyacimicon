@@ -33,8 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let reference = AccountReference::bundled()?;
     let result = generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(seed))?;
     eprintln!(
-        "seed={seed} generator={} gold={} mean_effective_rolls={:.4} attempts={}",
-        result.generator_version,
+        "seed={seed} gold={} mean_effective_rolls={:.4} attempts={}",
         result.gold_count(),
         result.mean_effective_rolls(),
         result.attempts,

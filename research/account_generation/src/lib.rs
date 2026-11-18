@@ -20,8 +20,6 @@ pub use relics::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const GENERATOR_VERSION: &str = "account-rust-v5";
-
 /// 五星角色和光锥的投入类别，计数单位为一份本体、星魂或叠影。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -260,7 +258,6 @@ pub struct CharacterInvestment {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct GeneratedAccount {
     pub account: RawAccount,
-    pub generator_version: &'static str,
     pub core_character_ids: Vec<String>,
     pub investments: BTreeMap<String, CharacterInvestment>,
     pub gold_categories: Vec<GoldCategory>,
@@ -545,7 +542,6 @@ fn assemble(
     }
     Ok(GeneratedAccount {
         account,
-        generator_version: GENERATOR_VERSION,
         core_character_ids,
         investments,
         gold_categories: request.gold_categories.clone(),

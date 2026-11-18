@@ -46,7 +46,7 @@ hsr-currency-wars-ai/
 
 ## 构建配置
 
-Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。
+Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。项目版本在根清单的 `[workspace.package].version` 统一维护，各 crate 用 `version.workspace = true` 继承。共用包配置和依赖版本也在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。
 
 Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 

@@ -10,7 +10,7 @@ Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色�
 cargo run --locked -p account-generator --example generate_account
 ```
 
-示例在标准输出写入 `RawAccount` JSON，在标准错误输出种子、生成器版本、实际金数、平均词条与搜索次数。准备请求文件后可指定参数和种子。
+示例在标准输出写入 `RawAccount` JSON，在标准错误输出种子、实际金数、平均词条与搜索次数。准备请求文件后可指定参数和种子。
 
 ```json
 {
@@ -48,7 +48,7 @@ let mut rng = ChaCha8Rng::seed_from_u64(42);
 let result = generate_account(&request, &reference, &mut rng)?;
 ```
 
-参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。覆盖的五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。加载时检查行迹前置节点及循环。复现时保存请求、随机源与种子、生成器版本、实际使用的参考文件及完整的覆盖设置。文件也可用唯一快照 ID 或内容哈希标识。
+参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。覆盖的五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。加载时检查行迹前置节点及循环。复现实验时记录项目的 Git 提交、生成请求、随机源和种子，并保存实际使用的参考文件及完整的覆盖设置。文件也可用唯一快照 ID 或内容哈希标识。
 
 ## 生成条件
 
@@ -149,7 +149,7 @@ request.character_overrides.insert("1310".into(), CharacterSpec {
 
 中档得分可用非负有界整数网格表示时，生成器先合并各件和各角色的可达总分，取得满足条件的中档组合。检查候选时，一旦所有支持的刻度均不适用，就转入普通搜索。之后按允许档位的权重重抽强化数值。各副词条独立打乱可用强化次数的考察顺序，使同分配装能产生不同的属性组合。零计分词条共用的额外强化次数逐次随机分配，各自独立抽取数值档位，保留评分和整件强化总次数。重抽结果还要满足单件、角色与账号的分数约束。精确目标也允许零权重词条变化。其余目标通过允许档位内的回溯搜索求解，搜索每尝试一件成品扣一次预算。三条或四条起始条件按 5∶2 抽取优先候选。搜索完毕且无可用分配时返回 `NoSolution`，下一件候选需要超出考察上限时返回 `BudgetExhausted`。
 
-`GeneratedAccount` 保存统一原始账号、实际核心名单、逐角色投入统计、统计口径、生成器版本和搜索次数。用 `gold_count()`、`gold_by_category()`、`copies_by_category()`、`mean_effective_rolls()`、`core_gold_share()` 和 `core_relic_share()` 读取汇总值。五星份数按限定、常驻和免费三个类别汇总。原始账号记录游戏版本及外部资料提供的快照标识。空账号的金数和平均词条均为零。
+`GeneratedAccount` 保存统一原始账号、实际核心名单、逐角色投入统计、统计口径和搜索次数。用 `gold_count()`、`gold_by_category()`、`copies_by_category()`、`mean_effective_rolls()`、`core_gold_share()` 和 `core_relic_share()` 读取汇总值。五星份数按限定、常驻和免费三个类别汇总。原始账号记录游戏版本及外部资料提供的快照标识。空账号的金数和平均词条均为零。
 
 ## 验证
 
