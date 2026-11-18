@@ -356,6 +356,78 @@ fn main_stat_candidates_are_filtered_by_required_stats_and_score_reachability() 
 }
 
 #[test]
+fn scoring_weights_use_a_signed_hundred_point_scale() {
+    let spec = RelicSpec {
+        required_substats: vec![Sub::Spd],
+        ..RelicSpec::new(Slot::Head)
+    };
+    for weight in [-100.0, 100.0, -100.01, 100.01, 1e16, f64::NAN] {
+        let result = generate_relic(
+            &spec,
+            &BTreeMap::from([(Sub::Spd, weight)]),
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(42),
+        );
+        if (-100.0..=100.0).contains(&weight) {
+            assert!(result.is_ok(), "{weight}: {result:?}");
+        } else {
+            assert!(
+                matches!(result, Err(GenerationError::InvalidRequest(_))),
+                "{weight}: {result:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
+    // 三次中档速度约为 3 分，三次中档暴击恰好为 3 分。六件理论上限为 36。
+    let speed = 1.0 - 2e-8;
+    let request = RelicRequest {
+        pieces: (1..=6)
+            .map(|n| RelicSpec {
+                required_substats: vec![Sub::Def, Sub::EffectRes, Sub::BreakEffect],
+                initial_substat_count: Some(4),
+                min_effective_rolls: Some(3.0 * speed),
+                max_effective_rolls: Some(3.0 * speed),
+                ..RelicSpec::new(Slot::try_from(n).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: BTreeMap::from([(Sub::Spd, speed), (Sub::CritRate, 1.0)]),
+        tier_weights: MID,
+        ..Default::default()
+    };
+    let reference = AccountReference::bundled().unwrap();
+    for tier in [2, 3] {
+        let spec = CharacterSpec {
+            relic_quality_tier: Some(tier),
+            relics: Some(request.clone()),
+            ..Default::default()
+        };
+        for seed in [0, 36] {
+            let account = generate_character(
+                "boundary",
+                "1310",
+                &spec,
+                &reference,
+                1000,
+                &mut ChaCha8Rng::seed_from_u64(seed),
+            )
+            .unwrap();
+            let investment = &account.investments["1310"];
+            assert_eq!(investment.relic_score_upper, 36.0);
+            let total: f64 = investment.piece_scores.iter().sum();
+            assert_eq!(
+                total < 18.0,
+                tier == 2,
+                "tier {tier}, seed {seed}, score {total}"
+            );
+        }
+    }
+}
+
+#[test]
 fn signed_stat_weights_preserve_feasible_negative_and_positive_score_extremes() {
     let weights = BTreeMap::from([
         (Sub::HpPercent, 4.0),

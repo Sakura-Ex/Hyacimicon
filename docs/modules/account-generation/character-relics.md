@@ -26,7 +26,7 @@ let pieces = generate_character_relics(&request, 100_000, &mut rng)?;
 | `RelicRequest` 字段 | 含义 |
 | --- | --- |
 | `pieces` | 可选的部位列表，各部位最多出现一次。部位字段见[单件接口](relic-generation.md) |
-| `effective_stat_weights` | 六件共用的角色评分权重，可设正值或负值，未列出属性计零分 |
+| `effective_stat_weights` | 六件共用的角色评分权重，范围和单位见[评分单位与数值限制](relic-generation.md#评分单位与数值限制) |
 | `tier_weights` | 低、中、高档的非负权重，默认 `[1.0; 3]`。零权重排除该档，至少一档为正 |
 | `min_total_effective_rolls`、`max_total_effective_rolls` | 六件合计分数上下限，各端可独立设置 |
 

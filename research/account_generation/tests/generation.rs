@@ -231,10 +231,10 @@ fn middle_grid_checks_the_actual_score_against_the_original_tolerance() {
 }
 
 #[test]
-fn middle_grid_discards_scores_far_above_the_target_without_overflow() {
+fn middle_grid_discards_scores_above_the_requested_total() {
     let request = RelicRequest {
         effective_stat_weights: BTreeMap::from([
-            (RelicSubStat::Spd, 1e30),
+            (RelicSubStat::Spd, 100.0),
             (RelicSubStat::CritRate, 1.0),
         ]),
         tier_weights: [0.0, 1.0, 0.0],

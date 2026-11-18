@@ -21,6 +21,7 @@ pub(super) const SLOTS: [RelicSlot; 6] = [
     RelicSlot::LinkRope,
 ];
 const QUALITY_RATIOS: [f64; 6] = [0.0, 0.35, 0.5, 0.65, 0.8, 1.0];
+const MAX_STAT_WEIGHT: f64 = 100.0;
 
 /// 一个部位的配装条件，留空字段采用该部位的合法候选。
 #[derive(Debug, Clone, Deserialize)]
@@ -93,6 +94,7 @@ impl RelicSpec {
 #[serde(default, deny_unknown_fields)]
 pub struct RelicRequest {
     pub pieces: Vec<RelicSpec>,
+    /// 每次中档副词条的计分权重，取 -100 至 100。未列出的属性计零分。
     pub effective_stat_weights: BTreeMap<RelicSubStat, f64>,
     pub tier_weights: [f64; 3],
     pub min_total_effective_rolls: Option<f64>,
@@ -127,9 +129,9 @@ impl RelicRequest {
         if self
             .effective_stat_weights
             .values()
-            .any(|&weight| !weight.is_finite() || weight.abs() > f64::MAX / 128.0)
+            .any(|weight| !(-MAX_STAT_WEIGHT..=MAX_STAT_WEIGHT).contains(weight))
         {
-            return Err(invalid("副词条评分权重需要为可计算的有限数"));
+            return Err(invalid("副词条评分权重须在 -100 至 100 之间"));
         }
         if self
             .tier_weights
@@ -284,17 +286,6 @@ pub(super) fn generate(
         )?);
     }
     let bounds: Vec<_> = groups.iter().map(|group| group.bounds).collect();
-    // 总分及上下界之差都参与分配，包括有正负权重的账号。
-    let magnitude: f64 = bounds.iter().map(|&(lo, hi)| lo.abs().max(hi.abs())).sum();
-    if !magnitude.is_finite()
-        || !bounds
-            .iter()
-            .map(|&(lo, hi)| hi - lo)
-            .sum::<f64>()
-            .is_finite()
-    {
-        return Err(invalid("账号遗器总分超出可计算范围"));
-    }
     let mut overall = sum_bounds(bounds.iter().copied());
     let count = (choices.len() * SLOTS.len()) as f64;
     overall = intersect(
@@ -438,7 +429,7 @@ fn solve(
 // 分配器给出一组同时达标的分数。依次替换各件时，保留其他件已占用的分数，按真实允许档位抽取成品。
 fn sample_allocated_scores(
     groups: &[Group],
-    scores: Vec<Vec<f64>>,
+    mut scores: Vec<Vec<f64>>,
     overall: Bounds,
     preserve_allocation: bool,
     search: &mut Search<'_>,
@@ -458,22 +449,36 @@ fn sample_allocated_scores(
         let planned = scores[group_idx][slot];
         let group_rest = totals[group_idx] - planned;
         let rest = total - planned;
-        let bounds = intersect(
+        let (lo, hi) = intersect(
             piece.bounds,
             intersect(
                 (group.bounds.0 - group_rest, group.bounds.1 - group_rest),
                 (overall.0 - rest, overall.1 - rest),
             ),
         );
-        // 集中投入时保留分配目标；精确总分不把舍入容差逐件累积。
+        // 分配器已验证 planned，减去其他部位的得分时可能产生舍入误差。
+        let bounds = (lo.min(planned), hi.max(planned));
+        // 集中投入或精确总分保留已分配的目标，避免将整号容差用于逐件调分。
         let bounds = if preserve_allocation || bounds.1 - bounds.0 <= 2.0 * EPSILON + 1e-12 {
-            intersect(piece.bounds, (planned, planned))
+            intersect(bounds, with_roundoff((planned, planned)))
         } else {
             bounds
         };
         let candidate = piece.sample(bounds, search)?;
-        totals[group_idx] = group_rest + candidate.score;
-        total = rest + candidate.score;
+        // 按输出顺序合计；若替换跨过档位边界，保留原分数的成品。
+        let previous_total = totals[group_idx];
+        scores[group_idx][slot] = candidate.score;
+        totals[group_idx] = scores[group_idx].iter().sum();
+        let new_total = totals.iter().sum();
+        let candidate = if contains(group.bounds, totals[group_idx]) && contains(overall, new_total)
+        {
+            total = new_total;
+            candidate
+        } else {
+            scores[group_idx][slot] = planned;
+            totals[group_idx] = previous_total;
+            piece.sample((planned, planned), search)?
+        };
         output[group_idx].push((slot, (piece.materialize(candidate), candidate.score)));
     }
     Ok(groups
@@ -642,8 +647,15 @@ fn intersect(a: Bounds, b: Bounds) -> Bounds {
 }
 
 fn contains(bounds: Bounds, score: f64) -> bool {
-    let rounding = (8.0 * f64::EPSILON * score.abs()).min(1e-12);
-    score >= bounds.0 - rounding && score <= bounds.1 + rounding
+    (bounds.0..=bounds.1).contains(&score)
+}
+
+// 同一组词条分开求和与先合并强化次数再求和会相差几个浮点刻度。
+fn with_roundoff((lo, hi): Bounds) -> Bounds {
+    (
+        lo - 8.0 * f64::EPSILON * lo.abs(),
+        hi + 8.0 * f64::EPSILON * hi.abs(),
+    )
 }
 
 fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
@@ -655,18 +667,14 @@ fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
 }
 
 fn quality_bounds(tier: u8, upper: f64) -> Result<Bounds, GenerationError> {
-    if !upper.is_finite() {
-        return Err(invalid("遗器理论总分超出可计算范围"));
-    }
     if upper <= 0.0 {
         return Err(GenerationError::NoSolution);
     }
     let index = usize::from(tier);
-    let tolerance = EPSILON.min(upper * 1e-8);
-    let adjustment = if index < 5 { tolerance } else { 0.0 };
+    let end = QUALITY_RATIOS[index] * upper;
     Ok((
-        QUALITY_RATIOS[index - 1] * upper - tolerance,
-        QUALITY_RATIOS[index] * upper - adjustment,
+        QUALITY_RATIOS[index - 1] * upper,
+        if tier == 5 { end } else { end.next_down() },
     ))
 }
 

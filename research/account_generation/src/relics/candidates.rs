@@ -253,7 +253,7 @@ impl PieceSearch {
         }
         let legal = legal_bounds(&recipes, &counts, extremes(request.tier_weights));
         let bounds = intersect(
-            legal,
+            super::with_roundoff(legal),
             super::score_bounds(spec.min_effective_rolls, spec.max_effective_rolls),
         );
         feasible(bounds)?;
@@ -382,8 +382,7 @@ impl Iterator for Candidates<'_> {
                 continue;
             }
             let key = if self.desired.is_none() {
-                let snapped = (score * 1e12).round() / 1e12;
-                if snapped.is_finite() { snapped } else { score }
+                (score * 1e12).round() / 1e12
             } else {
                 score
             };
