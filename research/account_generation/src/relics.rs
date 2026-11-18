@@ -9,7 +9,7 @@ use account_core::{RelicInstance, RelicMainStat, RelicSlot, RelicSubStat};
 use serde::Deserialize;
 
 use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invalid};
-use candidates::PieceSearch;
+use candidates::{Candidate, PieceSearch};
 
 pub(super) const EPSILON: f64 = 1e-6;
 const SLOTS: [RelicSlot; 6] = [
@@ -384,9 +384,10 @@ fn solve(
     let count: usize = groups.iter().map(|group| group.pieces.len()).sum();
     if can_use_middle
         && search.limit - search.attempts >= count
-        && let Some(result) = middle_grid::find(groups, overall, desired, search)?
+        && let Some(mut result) = middle_grid::find(groups, overall, desired, search)?
     {
-        return Ok(result);
+        sample_middle_tiers(groups, &mut result, overall, search);
+        return Ok(materialize(groups, result));
     }
     let original_limit = search.limit;
     if can_use_middle {
@@ -403,7 +404,10 @@ fn solve(
             });
         search.limit = original_limit;
         match middle {
-            Ok(Some(result)) => return Ok(result),
+            Ok(Some(mut result)) => {
+                sample_middle_tiers(groups, &mut result, overall, search);
+                return Ok(materialize(groups, result));
+            }
             Err(GenerationError::BudgetExhausted { .. }) if !middle_only => {}
             Err(error) => return Err(error),
             Ok(None) if middle_only => return Err(GenerationError::NoSolution),
@@ -411,7 +415,68 @@ fn solve(
         }
     }
     find(groups, overall, desired, &suffix, &hard, false, search)?
+        .map(|result| materialize(groups, result))
         .ok_or(GenerationError::NoSolution)
+}
+
+fn sample_middle_tiers(
+    groups: &[Group],
+    choices: &mut [Vec<Candidate>],
+    overall: Bounds,
+    search: &mut Search<'_>,
+) {
+    let mut scores: Vec<f64> = choices
+        .iter()
+        .map(|pieces| pieces.iter().map(|piece| piece.score).sum())
+        .collect();
+    let mut total: f64 = scores.iter().sum();
+    // 从已满足约束的中档组合出发。打乱部位次序，避免固定由靠前的角色使用分数余量。
+    let mut order: Vec<_> = groups
+        .iter()
+        .enumerate()
+        .flat_map(|(group, entry)| {
+            entry
+                .pieces
+                .iter()
+                .enumerate()
+                .filter(|(_, piece)| !piece.is_middle_only())
+                .map(move |(index, _)| (group, index))
+        })
+        .collect();
+    search.shuffle(&mut order);
+    for (group, index) in order {
+        let piece = &groups[group].pieces[index];
+        let choice = &mut choices[group][index];
+        let group_rest = scores[group] - choice.score;
+        let total_rest = total - choice.score;
+        let bounds = groups[group].bounds;
+        let feasible = intersect(
+            piece.bounds,
+            intersect(
+                (bounds.0 - group_rest, bounds.1 - group_rest),
+                (overall.0 - total_rest, overall.1 - total_rest),
+            ),
+        );
+        *choice = piece.sample_tiers(*choice, feasible, search);
+        scores[group] = group_rest + choice.score;
+        total = total_rest + choice.score;
+    }
+}
+
+fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
+    groups
+        .iter()
+        .zip(choices)
+        .map(|(group, candidates)| Gear {
+            pieces: group
+                .pieces
+                .iter()
+                .zip(candidates)
+                .map(|(piece, candidate)| (piece.materialize(&candidate), candidate.score))
+                .collect(),
+            upper: group.upper,
+        })
+        .collect()
 }
 
 fn find(
@@ -422,7 +487,7 @@ fn find(
     group_bounds: &[Bounds],
     middle: bool,
     search: &mut Search<'_>,
-) -> Result<Option<Vec<Gear>>, GenerationError> {
+) -> Result<Option<Vec<Vec<Candidate>>>, GenerationError> {
     let mut solver = GearSearch {
         groups,
         overall,
@@ -449,7 +514,7 @@ struct GearSearch<'a, 'b, 'rng> {
     group_bounds: &'a [Bounds],
     middle: bool,
     search: &'b mut Search<'rng>,
-    output: Vec<Gear>,
+    output: Vec<Vec<Candidate>>,
     failed: BTreeSet<(usize, usize, u64, u64)>,
 }
 
@@ -471,10 +536,7 @@ impl GearSearch<'_, '_, '_> {
         }
         let suffix = suffix_bounds(group.pieces.iter().map(|piece| piece.bounds));
         let preferred = self.desired[position].max(bounds.0).min(bounds.1);
-        self.output.push(Gear {
-            upper: group.upper,
-            pieces: Vec::new(),
-        });
+        self.output.push(Vec::new());
         let found = self.piece(position, total, 0.0, bounds, preferred, &suffix)?;
         if !found {
             self.output.pop();
@@ -491,7 +553,7 @@ impl GearSearch<'_, '_, '_> {
         preferred: f64,
         suffix: &[Bounds],
     ) -> Result<bool, GenerationError> {
-        let index = self.output[position].pieces.len();
+        let index = self.output[position].len();
         let state = (position, index, total.to_bits(), score.to_bits());
         if self.failed.contains(&state) {
             return Ok(false);
@@ -519,8 +581,7 @@ impl GearSearch<'_, '_, '_> {
             if self.middle {
                 self.search.consider()?;
             }
-            let relic = self.groups[position].pieces[index].materialize(&candidate);
-            self.output[position].pieces.push((relic, candidate.score));
+            self.output[position].push(candidate);
             if self.piece(
                 position,
                 total,
@@ -531,7 +592,7 @@ impl GearSearch<'_, '_, '_> {
             )? {
                 return Ok(true);
             }
-            self.output[position].pieces.pop();
+            self.output[position].pop();
         }
         self.failed.insert(state);
         Ok(false)

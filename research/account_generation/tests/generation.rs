@@ -197,6 +197,88 @@ fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
 }
 
 #[test]
+fn wide_account_targets_sample_all_three_tiers_within_the_score_bounds() {
+    let reference = AccountReference::bundled().unwrap();
+    let mut pieces = vec![RelicSpec {
+        required_substats: vec![RelicSubStat::Spd],
+        max_effective_rolls: Some(1.5),
+        ..RelicSpec::new(RelicSlot::Head)
+    }];
+    pieces.extend((2..=6).map(|slot| RelicSpec {
+        max_effective_rolls: Some(0.0),
+        ..RelicSpec::new(RelicSlot::try_from(slot).unwrap())
+    }));
+    let weights = BTreeMap::from([(RelicSubStat::Spd, 1.0)]);
+    let request = AccountRequest {
+        gold_count: Some(0.5),
+        character_pool: Some(vec!["1004".to_owned()]),
+        character_overrides: BTreeMap::from([(
+            "1004".to_owned(),
+            CharacterSpec {
+                relics: Some(RelicRequest {
+                    pieces,
+                    effective_stat_weights: weights.clone(),
+                    min_total_effective_rolls: Some(0.8),
+                    max_total_effective_rolls: Some(1.2),
+                    ..RelicRequest::default()
+                }),
+                ..CharacterSpec::default()
+            },
+        )]),
+        min_mean_effective_rolls: Some(0.1),
+        max_mean_effective_rolls: Some(0.25),
+        max_attempts: 7,
+        ..AccountRequest::new("wide", 1)
+    };
+    let speeds: Vec<_> = (0..24)
+        .map(|seed| {
+            let result =
+                generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(seed))
+                    .unwrap();
+            let score: f64 = result
+                .account
+                .relics
+                .iter()
+                .map(|piece| score_relic(piece, &weights))
+                .sum();
+            assert!((0.8..=1.2).contains(&score));
+            assert!((0.1..=0.25).contains(&(score / 6.0)));
+            assert!((result.mean_effective_rolls() - score / 6.0).abs() <= 1e-12);
+            assert_eq!(result.attempts, request.max_attempts);
+            result.account.relics[0].substats[&RelicSubStat::Spd]
+        })
+        .collect();
+    assert!([2.0, 2.3, 2.6].iter().all(|value| speeds.contains(value)));
+}
+
+#[test]
+fn exact_scored_piece_can_keep_numeric_variation_in_unscored_stats() {
+    let spec = RelicSpec {
+        required_substats: vec![RelicSubStat::CritDmg, RelicSubStat::Spd],
+        min_effective_rolls: Some(1.0),
+        max_effective_rolls: Some(1.0),
+        ..RelicSpec::new(RelicSlot::Head)
+    };
+    let weights = BTreeMap::from([(RelicSubStat::CritDmg, 1.0)]);
+    let mut has_non_middle_value = false;
+    for seed in 0..12 {
+        let (piece, score) = generate_relic(
+            &spec,
+            &weights,
+            [1.0; 3],
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        assert!((score - 1.0).abs() <= 1e-9);
+        assert!((score_relic(&piece, &weights) - 1.0).abs() <= 1e-9);
+        let middle_rolls = piece.substats[&RelicSubStat::Spd] / 2.3;
+        has_non_middle_value |= (middle_rolls - middle_rolls.round()).abs() > 1e-9;
+    }
+    assert!(has_non_middle_value);
+}
+
+#[test]
 fn empty_and_fixed_build_requests_preserve_resource_constraints() {
     let reference = AccountReference::bundled().unwrap();
     let mut rng = ChaCha8Rng::seed_from_u64(42);

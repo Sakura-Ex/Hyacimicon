@@ -78,6 +78,7 @@ pub(super) struct Candidate {
     main: Main,
     stats: [Sub; 4],
     values: [f64; 4],
+    weights: [f64; 4],
     pub(super) score: f64,
     preferred_initial: bool,
 }
@@ -280,6 +281,67 @@ impl PieceSearch {
             substats: candidate.stats.into_iter().zip(candidate.values).collect(),
         }
     }
+
+    /// 用允许的档位重抽中档候选的强化数值，保留每个副词条的强化次数。
+    pub(super) fn sample_tiers(
+        &self,
+        mut candidate: Candidate,
+        bounds: Bounds,
+        search: &mut Search<'_>,
+    ) -> Candidate {
+        if self.is_middle_only() {
+            return candidate;
+        }
+        let largest = self.tiers.into_iter().reduce(f64::max).unwrap_or_default();
+        let [low, middle, high] = self.tiers.map(|weight| weight / largest);
+        let weight_sum = low + middle + high;
+        let original_score = candidate.score;
+        let accepts = |score: f64| {
+            if bounds.1 - bounds.0 <= EPSILON {
+                // 精确目标保留已选分数，舍入误差不作为可分配的分数余量。
+                let rounding = 8.0 * f64::EPSILON * original_score.abs().max(1.0);
+                (score - original_score).abs() <= rounding
+            } else {
+                contains(bounds, score)
+            }
+        };
+        let mut proposed = candidate;
+        let mut changes = [0.0; 4];
+        for (index, change) in changes.iter_mut().enumerate() {
+            let [low_value, middle_value, high_value] = rolls(candidate.stats[index]);
+            let count = (candidate.values[index] / middle_value).round();
+            let value: f64 = (0..count as u8)
+                .map(|_| {
+                    let draw = search.unit() * weight_sum;
+                    if low > 0.0 && draw < low {
+                        low_value
+                    } else if high == 0.0 || draw < low + middle {
+                        middle_value
+                    } else {
+                        high_value
+                    }
+                })
+                .sum();
+            proposed.values[index] = value;
+            *change = candidate.weights[index] * (value / middle_value - count);
+        }
+        proposed.score += changes.iter().sum::<f64>();
+        if accepts(proposed.score) {
+            return proposed;
+        }
+
+        // 整件超出范围时，仍接受符合约束的单个词条数值，包括零权重词条。
+        let mut indices = [0, 1, 2, 3];
+        search.shuffle(&mut indices);
+        for index in indices {
+            let score = candidate.score + changes[index];
+            if accepts(score) {
+                candidate.values[index] = proposed.values[index];
+                candidate.score = score;
+            }
+        }
+        candidate
+    }
 }
 
 struct CandidateSearch<'a, 'b, 'rng> {
@@ -307,6 +369,7 @@ impl CandidateSearch<'_, '_, '_> {
                     main: self.recipe.main,
                     stats: self.recipe.stats,
                     values,
+                    weights: self.recipe.weights,
                     score,
                     preferred_initial: self.preferred_initial,
                 };

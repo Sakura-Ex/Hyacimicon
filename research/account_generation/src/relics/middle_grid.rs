@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{GenerationError, Search};
 
-use super::{Bounds, EPSILON, Gear, Group, candidates::Candidate};
+use super::{Bounds, EPSILON, Group, candidates::Candidate};
 
 /// 带上限的可达分数集合。第 n 位表示可取得 n 个整数分数单位。
 struct Scores {
@@ -59,7 +59,7 @@ pub(super) fn find(
     overall: Bounds,
     desired: &[f64],
     search: &mut Search<'_>,
-) -> Result<Option<Vec<Gear>>, GenerationError> {
+) -> Result<Option<Vec<Vec<Candidate>>>, GenerationError> {
     let candidates = groups
         .iter()
         .map(|group| {
@@ -144,7 +144,7 @@ pub(super) fn find(
         };
         remaining -= score;
         let mut pieces = Vec::new();
-        for (j, piece) in group.pieces.iter().enumerate() {
+        for j in 0..group.pieces.len() {
             let target = score as f64 / (group.pieces.len() - j) as f64;
             let Some((&key, candidate)) = options.recipes[j]
                 .iter()
@@ -162,13 +162,10 @@ pub(super) fn find(
                 return Ok(None);
             };
             search.consider()?;
-            pieces.push((piece.materialize(candidate), candidate.score));
+            pieces.push(*candidate);
             score -= key;
         }
-        output.push(Gear {
-            pieces,
-            upper: group.upper,
-        });
+        output.push(pieces);
     }
     Ok(Some(output))
 }
