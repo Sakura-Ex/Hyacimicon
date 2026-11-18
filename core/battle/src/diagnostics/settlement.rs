@@ -1,7 +1,7 @@
 //! Explicit provisional business settlement, separate from combat outcome.
-use crate::model::Outcome;
+use crate::model::{Outcome, Scenario};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -21,6 +21,51 @@ pub struct SettlementPolicy {
     pub failure_loss: f64,
     /// 扣血后请求恢复的 HP。
     pub recovery: f64,
+}
+
+impl SettlementPolicy {
+    /// Validates the provisional rule and its weights before accepting a diagnostic file.
+    pub(super) fn validate(&self, scenario: &Scenario) -> Result<(), String> {
+        if self.name != "weighted_kills_flat_penalty_v1" {
+            return Err("unsupported mechanics.settlement.name".into());
+        }
+        for (field, value, range) in [
+            ("minimum_progress", self.minimum_progress, 0.0..=1.0),
+            ("hp_cap", self.hp_cap, 0.0..=1e12),
+            ("hp_before", self.hp_before, 0.0..=self.hp_cap),
+            ("failure_loss", self.failure_loss, 0.0..=1e12),
+            ("recovery", self.recovery, 0.0..=1e12),
+        ] {
+            if !range.contains(&value) {
+                return Err(format!("invalid mechanics.settlement.{field}"));
+            }
+        }
+        if self.hp_cap == 0.0 || self.hp_before == 0.0 {
+            return Err("mechanics.settlement.hp_before and hp_cap must be positive".into());
+        }
+
+        let mut enemy_ids = BTreeSet::new();
+        for enemy in scenario.waves.iter().flatten() {
+            if !enemy_ids.insert(enemy.id.as_str()) {
+                return Err(format!(
+                    "mechanics.settlement.enemy_weights cannot distinguish duplicate enemy ID {}",
+                    enemy.id
+                ));
+            }
+        }
+        if enemy_ids.is_empty()
+            || enemy_ids.len() != self.enemy_weights.len()
+            || self.enemy_weights.iter().any(|(id, &weight)| {
+                !enemy_ids.contains(id.as_str()) || !(weight > 0.0 && weight <= 1e9)
+            })
+        {
+            return Err(
+                "mechanics.settlement.enemy_weights needs one positive weight per enemy instance"
+                    .into(),
+            );
+        }
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]

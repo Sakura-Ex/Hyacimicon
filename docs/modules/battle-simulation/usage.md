@@ -39,7 +39,9 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCEN
 
 ### 2.1 核心输入结构 (`Scenario`)
 
-使用 [`duel.json`](../../../core/battle/examples/duel.json) 作为可运行的输入模板。正式字段由 [`Scenario`](../../../core/battle/src/model/scenario.rs) 定义，包含 `max_av`、`max_actions`、双方共享战技点、我方单位、敌方波次和 `mechanics`。开发文件中的 `schema_version`、`ruleset`（样例标为 `battle_v2`）等元数据由 [`ScenarioFile`](../../../core/battle/src/diagnostics/mod.rs) 在构造 `Scenario` 前移除。组装方负责保证静态数值和规则引用有效，`inspect` 检查 JSON 和字段结构。
+使用 [`duel.json`](../../../core/battle/examples/duel.json) 作为可运行的输入模板。正式字段由 [`Scenario`](../../../core/battle/src/model/scenario.rs) 定义，包含 `max_av`、`max_actions`、双方共享战技点、我方单位、敌方波次和 `mechanics`。组装方负责保证静态数值和规则引用有效。
+
+[`ScenarioFile`](../../../core/battle/src/diagnostics/mod.rs) checks file structure before constructing the in-memory scenario. When present, `schema_version`, `ruleset` and `unsupported_mechanics` must be `1`, `"battle_v2"` and an empty list respectively. A provisional settlement must specify the supported policy, valid HP and progress parameters, and one positive weight for every distinct enemy instance, including queued enemies. All CLI subcommands share these file checks.
 
 ### 2.2 核心机制字段 (`mechanics`) 说明
 

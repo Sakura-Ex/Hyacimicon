@@ -55,8 +55,8 @@ pub struct ScenarioFile {
 impl ScenarioFile {
     /// 解析开发 JSON，拆出附加信息并构造战斗配置。
     ///
-    /// 参数 bytes 为完整 UTF-8 JSON。此入口处理文件结构；静态规则与引用
-    /// 由资料编译和组装方保证。文件解析失败时返回具体错误。
+    /// Parses UTF-8 JSON and checks explicit file metadata and provisional settlement.
+    /// The caller assembling combat data remains responsible for static battle rules and references.
     pub fn from_slice(bytes: &[u8]) -> Result<Self, String> {
         let mut value: serde_json::Value =
             serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
@@ -73,11 +73,27 @@ impl ScenarioFile {
             .transpose()
             .map_err(|e| e.to_string())?
             .unwrap_or_default();
-        object.remove("schema_version");
-        object.remove("ruleset");
-        object.remove("unsupported_mechanics");
+        if object
+            .remove("schema_version")
+            .is_some_and(|version| version.as_u64() != Some(1))
+        {
+            return Err("unsupported schema_version; expected 1".into());
+        }
+        if object
+            .remove("ruleset")
+            .is_some_and(|ruleset| ruleset.as_str() != Some("battle_v2"))
+        {
+            return Err("unsupported ruleset; expected battle_v2".into());
+        }
+        if let Some(value) = object.remove("unsupported_mechanics") {
+            let declared: Vec<String> = serde_json::from_value(value)
+                .map_err(|error| format!("unsupported_mechanics: {error}"))?;
+            if !declared.is_empty() {
+                return Err(format!("unsupported_mechanics: {}", declared.join(", ")));
+            }
+        }
         let mut assumptions = vec![];
-        let mut settlement = None;
+        let mut settlement: Option<settlement::SettlementPolicy> = None;
         if let Some(mechanics) = object.get_mut("mechanics").and_then(|v| v.as_object_mut()) {
             assumptions = mechanics
                 .remove("assumptions")
@@ -89,9 +105,12 @@ impl ScenarioFile {
                 .remove("settlement")
                 .map(serde_json::from_value)
                 .transpose()
-                .map_err(|e| e.to_string())?;
+                .map_err(|error| format!("mechanics.settlement: {error}"))?;
         }
         let battle = serde_json::from_value(value).map_err(|e| e.to_string())?;
+        if let Some(policy) = &settlement {
+            policy.validate(&battle)?;
+        }
         Ok(Self {
             battle,
             provenance,
