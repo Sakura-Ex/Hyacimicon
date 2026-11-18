@@ -4,6 +4,10 @@ on:
   pull_request_target:
     branches: [main]
     types: [opened, reopened, synchronize]
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+    paths: [.github/workflows/maintenance-review.yml]
 
 permissions: {}
 
@@ -13,7 +17,10 @@ concurrency:
 
 jobs:
   review:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event_name == 'pull_request_target' ||
+      (github.event.pull_request.number == 14 && github.actor == 'Sakura-Ex'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: codex-review
@@ -48,6 +55,7 @@ jobs:
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          REVIEW_EVENT: ${{ github.event_name }}
         run: |
           git fetch --no-tags origin "refs/pull/$PR_NUMBER/head"
           if [[ "$(git rev-parse FETCH_HEAD)" != "$PR_HEAD" ]]; then
@@ -56,10 +64,19 @@ jobs:
           fi
           merge_base="$(git merge-base HEAD "$PR_HEAD")"
           prompt_file="$RUNNER_TEMP/maintenance-review.md"
-          cp .github/codex/maintenance-review.md "$prompt_file"
+          schema_file=".github/codex/maintenance-review.schema.json"
+          if [[ "$REVIEW_EVENT" == 'pull_request' ]]; then
+            git show "$PR_HEAD:.github/codex/maintenance-review.md" > "$prompt_file"
+            trial_schema="$RUNNER_TEMP/maintenance-review.schema.json"
+            git show "$PR_HEAD:$schema_file" > "$trial_schema"
+            schema_file="$trial_schema"
+          else
+            cp .github/codex/maintenance-review.md "$prompt_file"
+          fi
           printf '\n## 本次提交范围\n\n- 目标提交 `%s`\n- 共同祖先 `%s`\n- PR 提交 `%s`\n' \
             "$(git rev-parse HEAD)" "$merge_base" "$PR_HEAD" >> "$prompt_file"
           echo "prompt_file=$prompt_file" >> "$GITHUB_OUTPUT"
+          echo "schema_file=$schema_file" >> "$GITHUB_OUTPUT"
 
       - name: Review with Codex
         id: codex
@@ -68,7 +85,7 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           prompt-file: ${{ steps.comparison.outputs.prompt_file }}
-          output-schema-file: .github/codex/maintenance-review.schema.json
+          output-schema-file: ${{ steps.comparison.outputs.schema_file }}
           model: gpt-6.2-sol
           effort: medium
           permission-profile: ":read-only"
