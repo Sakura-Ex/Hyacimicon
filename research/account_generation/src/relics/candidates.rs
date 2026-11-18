@@ -6,6 +6,8 @@ use crate::{GenerationError, Search};
 
 use super::{Bounds, EPSILON, RelicRequest, RelicSpec, contains, feasible, intersect, set_range};
 
+mod sampling;
+
 const STATS: [Sub; 12] = [
     Sub::Hp,
     Sub::Atk,
@@ -80,7 +82,6 @@ pub(super) struct Candidate {
     values: [f64; 4],
     weights: [f64; 4],
     pub(super) score: f64,
-    zero_extras: u8,
 }
 
 /// 四种互异副词条及每种词条的生成参数。
@@ -88,6 +89,7 @@ struct Recipe {
     main: Main,
     stats: [Sub; 4],
     weights: [f64; 4],
+    mass: f64,
 }
 
 impl Recipe {
@@ -172,9 +174,11 @@ fn recipes(
     weights: &BTreeMap<Sub, f64>,
 ) -> Vec<Recipe> {
     let weight = |stat: Sub| weights.get(&stat).copied().unwrap_or_default();
-    let mut examined = BTreeSet::new();
-    let mut recipes = Vec::new();
+    let mut recipes: Vec<Recipe> = Vec::new();
     for main in mains {
+        let start = recipes.len();
+        let mut classes = BTreeMap::new();
+        let mut combinations = 0;
         let keys: Vec<_> = stats
             .iter()
             .copied()
@@ -193,21 +197,31 @@ fn recipes(
                             continue;
                         }
                         stats.sort();
-                        let effective: Vec<_> = stats
+                        // 同一主词条下，对得分等价的组合计数。打乱后的首个代表等概率选取零分填充词条。
+                        let effective = stats
                             .iter()
-                            .copied()
-                            .filter(|&stat| weight(stat) != 0.0)
-                            .collect();
-                        if examined.insert(effective) {
+                            .filter(|&&s| weight(s) != 0.0)
+                            .fold(0u16, |mask, &s| mask | (1 << s as u32));
+                        combinations += 1;
+                        if let Some(&index) = classes.get(&effective) {
+                            let recipe: &mut Recipe = &mut recipes[index];
+                            recipe.mass += 1.0;
+                        } else {
+                            classes.insert(effective, recipes.len());
+                            stats.sort_by_key(|&s| weight(s) == 0.0);
                             recipes.push(Recipe {
                                 main,
                                 stats,
                                 weights: stats.map(weight),
+                                mass: 1.0,
                             });
                         }
                     }
                 }
             }
+        }
+        for recipe in &mut recipes[start..] {
+            recipe.mass /= f64::from(combinations);
         }
     }
     recipes
@@ -218,7 +232,7 @@ pub(super) struct PieceSearch {
     slot: RelicSlot,
     recipes: Vec<Recipe>,
     counts: Vec<u8>,
-    tiers: [f64; 3],
+    pub(super) tiers: [f64; 3],
     pub(super) upper: f64,
     pub(super) bounds: Bounds,
 }
@@ -289,24 +303,15 @@ impl PieceSearch {
                         recipe,
                         position: 0,
                         remaining: count,
-                        zero_extras: 0,
                         score: 0.0,
-                        values: [0.0; 4],
                         distance: desired.map_or(0.0, |goal| distance(bounds, goal)),
                     });
                 }
             }
         }
         next_first(&mut pending, desired.is_some());
-        // 同分成品保留首个候选。独立抽取每种副词条的顺序，让同分分配也有机会入选。
-        let count_orders = std::array::from_fn(|_| {
-            let mut counts = [1, 2, 3, 4, 5, 6];
-            search.shuffle(&mut counts);
-            counts
-        });
         Candidates {
             pending,
-            count_orders,
             bounds,
             extremes,
             desired,
@@ -315,22 +320,7 @@ impl PieceSearch {
         }
     }
 
-    pub(super) fn materialize(
-        &self,
-        mut candidate: Candidate,
-        search: &mut Search<'_>,
-    ) -> RelicInstance {
-        // 搜索按得分合并零权重词条。确定成品后，再逐次抽取它们的强化去向和档位。
-        let unscored: Vec<_> = (0..4).filter(|&i| candidate.weights[i] == 0.0).collect();
-        if !unscored.is_empty() {
-            let mut counts = [1u8; 4];
-            for _ in 0..candidate.zero_extras {
-                counts[unscored[search.index(unscored.len())]] += 1;
-            }
-            for i in unscored {
-                candidate.values[i] = self.sample_rolls(candidate.stats[i], counts[i], search);
-            }
-        }
+    pub(super) fn materialize(&self, candidate: Candidate) -> RelicInstance {
         RelicInstance {
             instance_id: String::new(),
             set_id: self.set.clone(),
@@ -342,9 +332,12 @@ impl PieceSearch {
         }
     }
 
-    fn sample_rolls(&self, stat: Sub, count: u8, search: &mut Search<'_>) -> f64 {
-        let largest = self.tiers.into_iter().fold(0.0, f64::max);
-        let [low, middle, high] = self.tiers.map(|weight| weight / largest);
+    fn sample_rolls(tiers: [f64; 3], stat: Sub, count: u8, search: &mut Search<'_>) -> f64 {
+        if tiers[0] == 0.0 && tiers[2] == 0.0 {
+            return f64::from(count) * rolls(stat)[1];
+        }
+        let largest = tiers.into_iter().fold(0.0, f64::max);
+        let [low, middle, high] = tiers.map(|weight| weight / largest);
         let values = rolls(stat);
         (0..count)
             .map(|_| {
@@ -382,7 +375,7 @@ impl PieceSearch {
         for (index, change) in changes.iter_mut().enumerate() {
             let middle_value = rolls(candidate.stats[index])[1];
             let count = (candidate.values[index] / middle_value).round();
-            let value = self.sample_rolls(candidate.stats[index], count as u8, search);
+            let value = Self::sample_rolls(self.tiers, candidate.stats[index], count as u8, search);
             proposed.values[index] = value;
             *change = candidate.weights[index] * (value / middle_value - count);
         }
@@ -408,7 +401,6 @@ impl PieceSearch {
 /// 逐件产生候选。待考察的分配保存在向量中，调用方可以暂停以检查后续部位。
 pub(super) struct Candidates<'a> {
     pending: Vec<Assignment<'a>>,
-    count_orders: [[u8; 6]; 4],
     bounds: Bounds,
     extremes: (usize, usize),
     desired: Option<f64>,
@@ -421,14 +413,12 @@ struct Assignment<'a> {
     recipe: &'a Recipe,
     position: usize,
     remaining: u8,
-    zero_extras: u8,
     score: f64,
-    values: [f64; 4],
     distance: f64,
 }
 
 impl Iterator for Candidates<'_> {
-    type Item = Candidate;
+    type Item = f64;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(assignment) = self.pending.pop() {
@@ -447,14 +437,7 @@ impl Iterator for Candidates<'_> {
                 score
             };
             if self.examined.insert(key.to_bits()) {
-                return Some(Candidate {
-                    main: assignment.recipe.main,
-                    stats: assignment.recipe.stats,
-                    weights: assignment.recipe.weights,
-                    values: assignment.values,
-                    score,
-                    zero_extras: assignment.zero_extras,
-                });
+                return Some(score);
             }
         }
         None
@@ -479,10 +462,7 @@ impl<'a> Candidates<'a> {
         let start = self.pending.len();
 
         let range = minimum..=if equivalent_zero { minimum } else { maximum };
-        for count in self.count_orders[position]
-            .into_iter()
-            .filter(|count| range.contains(count))
-        {
+        for count in range {
             let distributions = &self.distributions[usize::from(count)];
             let distributions = if weight == 0.0 {
                 &distributions[..1]
@@ -504,16 +484,11 @@ impl<'a> Candidates<'a> {
                 let score = score + contribution;
                 let bounds = intersect(self.bounds, (score + low, score + high));
                 if bounds.0 <= bounds.1 + EPSILON {
-                    let mut values = assignment.values;
-                    values[position] = value;
                     self.pending.push(Assignment {
                         recipe,
                         position: position + 1,
                         remaining: remaining - count,
-                        zero_extras: assignment.zero_extras
-                            + if weight == 0.0 { count - 1 } else { 0 },
                         score,
-                        values,
                         distance: self.desired.map_or(0.0, |goal| distance(bounds, goal)),
                     });
                 }
@@ -537,33 +512,14 @@ fn distance((min, max): Bounds, goal: f64) -> f64 {
 type DistributionTable = [Vec<[u8; 3]>; 7];
 
 fn distributions(tier_weights: [f64; 3], search: &mut Search<'_>) -> DistributionTable {
-    std::array::from_fn(|count| {
-        let count = count as u8;
-        let mut options = Vec::new();
-        for low in 0..=count {
-            for middle in 0..=count - low {
-                let counts = [low, middle, count - low - middle];
-                if counts
-                    .iter()
-                    .zip(tier_weights)
-                    .any(|(&count, weight)| count > 0 && weight == 0.0)
-                {
-                    continue;
-                }
-                // 随机排序保留多项式概率，包括同一数值分配的不同强化顺序。
-                let weight: f64 = counts
-                    .iter()
-                    .zip(tier_weights)
-                    .filter(|&(&count, _)| count > 0)
-                    .map(|(&count, weight)| {
-                        f64::from(count) * weight.ln()
-                            - (1..=count).map(|n| f64::from(n).ln()).sum::<f64>()
-                    })
-                    .sum();
-                let draw = (1.0 - search.unit()).ln();
-                options.push((counts, weight - (-draw).ln()));
-            }
-        }
+    sampling::tier_outcomes(tier_weights).map(|outcomes| {
+        let mut options: Vec<_> = outcomes
+            .into_iter()
+            .map(|outcome| {
+                let u = search.unit().max(f64::MIN_POSITIVE);
+                (outcome.counts, outcome.log_mass - (-u.ln()).ln())
+            })
+            .collect();
         options.sort_by(|a, b| b.1.total_cmp(&a.1));
         options.into_iter().map(|(counts, _)| counts).collect()
     })

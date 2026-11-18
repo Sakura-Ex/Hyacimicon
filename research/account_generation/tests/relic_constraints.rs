@@ -29,6 +29,92 @@ fn all_stats() -> BTreeMap<Sub, f64> {
     VALUES.into_iter().map(|(stat, _)| (stat, 1.0)).collect()
 }
 
+#[test]
+fn scoring_speed_alone_does_not_change_its_unconstrained_drop_rate() {
+    let weights = BTreeMap::from([(Sub::Spd, 1.0)]);
+    let spec = RelicSpec::new(Slot::Head);
+    let mut with_speed = 0;
+    for seed in 0..1024 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &weights,
+            ALL,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        with_speed += usize::from(piece.substats.contains_key(&Sub::Spd));
+    }
+    // 头部有 11 种合法副词条，每件取 4 种。期望约 372 件，标准差约 15 件。
+    assert!((295..=450).contains(&with_speed), "{with_speed}");
+}
+
+#[test]
+fn equal_scoring_substats_receive_independent_upgrades() {
+    let stats = [Sub::AtkPercent, Sub::Spd, Sub::CritRate, Sub::CritDmg];
+    let spec = RelicSpec {
+        required_substats: stats.to_vec(),
+        initial_substat_count: Some(4),
+        ..RelicSpec::new(Slot::Head)
+    };
+    let weights = stats.map(|stat| (stat, 1.0)).into();
+    let mut totals = [0; 4];
+    let mut all_on_one = 0;
+    for seed in 0..2048 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &weights,
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        let hits = stats.map(|stat| {
+            let (_, rolls) = VALUES.iter().find(|(id, _)| *id == stat).unwrap();
+            (piece.substats[&stat] / rolls[1]).round() as usize - 1
+        });
+        assert_eq!(hits.iter().sum::<usize>(), 5);
+        for (total, n) in totals.iter_mut().zip(hits) {
+            *total += n;
+        }
+        all_on_one += usize::from(hits.contains(&5));
+    }
+    // 每条平均占 1/4。五次全中任一条的概率为 1/256，2048 件中期望 8 件。
+    assert!(
+        totals.iter().all(|n| (2310..=2810).contains(n)),
+        "{totals:?}"
+    );
+    assert!(all_on_one <= 25, "{all_on_one}");
+}
+
+#[test]
+fn exact_crit_score_samples_the_five_upgrades_by_roll_probability() {
+    let spec = RelicSpec {
+        required_substats: vec![Sub::AtkPercent, Sub::Spd, Sub::CritRate, Sub::CritDmg],
+        initial_substat_count: Some(4),
+        min_effective_rolls: Some(7.0),
+        max_effective_rolls: Some(7.0),
+        ..RelicSpec::new(Slot::Head)
+    };
+    let weights = BTreeMap::from([(Sub::CritRate, 1.0), (Sub::CritDmg, 1.0)]);
+    let mut on_one = 0;
+    for seed in 0..1024 {
+        let (piece, score) = generate_relic(
+            &spec,
+            &weights,
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        assert!((score - 7.0).abs() < 1e-9);
+        let hits = (piece.substats[&Sub::CritRate] / 0.029160001).round() as usize - 1;
+        on_one += usize::from(matches!(hits, 0 | 5));
+    }
+    // 目标要求五次全部落在双暴上，其中全部落在同一条的条件概率是 2 / 2^5。
+    assert!((27..=103).contains(&on_one), "{on_one}");
+}
+
 fn valid_roll_counts(piece: &RelicInstance, tiers: [f64; 3]) -> BTreeSet<u8> {
     assert_eq!(
         (piece.rarity, piece.level, piece.substats.len()),

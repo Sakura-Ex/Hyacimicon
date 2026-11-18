@@ -228,12 +228,7 @@ fn generate_set(
         .map(|spec| PieceSearch::new(spec, request, search))
         .collect::<Result<Vec<_>, _>>()?;
     let group = Group::new(pieces, request, None)?;
-    let bounds = group.bounds;
-    let score = bounds.0 + search.unit() * (bounds.1 - bounds.0);
-    let mut gear = solve(&[group], bounds, &[score], search)?;
-    gear.pop()
-        .map(|gear| gear.pieces)
-        .ok_or(GenerationError::NoSolution)
+    Ok(sample_group(&group, search)?.pieces)
 }
 
 pub(super) fn generate(
@@ -319,6 +314,12 @@ pub(super) fn generate(
     let strength = request
         .relic_concentration
         .unwrap_or(request.resource_concentration);
+    if (strength == 0.0 || groups.len() == 1) && overall == sum_bounds(bounds.iter().copied()) {
+        return groups
+            .iter()
+            .map(|group| sample_group(group, search))
+            .collect();
+    }
     let weights = allocation::weights(
         choices.iter().map(|choice| choice.profile.id.as_str()),
         cores,
@@ -367,6 +368,31 @@ impl Group {
     }
 }
 
+fn sample_group(group: &Group, search: &mut Search<'_>) -> Result<Gear, GenerationError> {
+    if group.bounds == group.suffix[0] {
+        let mut pieces = Vec::with_capacity(group.pieces.len());
+        for piece in &group.pieces {
+            let candidate = piece.sample(piece.bounds, piece.tiers, search)?;
+            search.consider()?;
+            pieces.push((piece.materialize(candidate), candidate.score));
+        }
+        return Ok(Gear {
+            pieces,
+            upper: group.upper,
+        });
+    }
+    let (lo, hi) = group.bounds;
+    let desired = lo + search.unit() * (hi - lo);
+    solve(
+        std::slice::from_ref(group),
+        group.bounds,
+        &[desired],
+        search,
+    )?
+    .pop()
+    .ok_or(GenerationError::NoSolution)
+}
+
 fn solve(
     groups: &[Group],
     overall: Bounds,
@@ -380,10 +406,11 @@ fn solve(
     let count: usize = groups.iter().map(|group| group.pieces.len()).sum();
     if can_use_middle
         && search.limit - search.attempts >= count
-        && let Some(mut result) = middle_grid::find(groups, overall, desired, search)?
+        && let Some(scores) = middle_grid::find(groups, overall, desired, search)?
     {
+        let mut result = sample_allocated_scores(groups, scores, true, search)?;
         sample_middle_tiers(groups, &mut result, overall, search);
-        return Ok(materialize(groups, result, search));
+        return Ok(materialize(groups, result));
     }
     let suffix = suffix_bounds(groups.iter().map(|group| group.bounds));
     let mut solver = GearSearch {
@@ -396,10 +423,34 @@ fn solve(
         failed: BTreeSet::new(),
     };
     if solver.solve()? {
-        Ok(materialize(groups, solver.output, search))
+        let result = sample_allocated_scores(groups, solver.output, false, search)?;
+        Ok(materialize(groups, result))
     } else {
         Err(GenerationError::NoSolution)
     }
+}
+
+fn sample_allocated_scores(
+    groups: &[Group],
+    scores: Vec<Vec<f64>>,
+    middle: bool,
+    search: &mut Search<'_>,
+) -> Result<Vec<Vec<Candidate>>, GenerationError> {
+    groups
+        .iter()
+        .zip(scores)
+        .map(|(group, targets)| {
+            group
+                .pieces
+                .iter()
+                .zip(targets)
+                .map(|(piece, score)| {
+                    let tiers = if middle { [0.0, 1.0, 0.0] } else { piece.tiers };
+                    piece.sample(intersect(piece.bounds, (score, score)), tiers, search)
+                })
+                .collect()
+        })
+        .collect()
 }
 
 fn sample_middle_tiers(
@@ -446,11 +497,7 @@ fn sample_middle_tiers(
     }
 }
 
-fn materialize(
-    groups: &[Group],
-    choices: Vec<Vec<Candidate>>,
-    search: &mut Search<'_>,
-) -> Vec<Gear> {
+fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
     groups
         .iter()
         .zip(choices)
@@ -459,7 +506,7 @@ fn materialize(
                 .pieces
                 .iter()
                 .zip(candidates)
-                .map(|(piece, candidate)| (piece.materialize(candidate, search), candidate.score))
+                .map(|(piece, candidate)| (piece.materialize(candidate), candidate.score))
                 .collect(),
             upper: group.upper,
         })
@@ -472,7 +519,7 @@ struct GearSearch<'a, 'b, 'rng> {
     desired: &'a [f64],
     suffix: &'a [Bounds],
     search: &'b mut Search<'rng>,
-    output: Vec<Vec<Candidate>>,
+    output: Vec<Vec<f64>>,
     failed: BTreeSet<(usize, usize, u64, u64)>,
 }
 
@@ -556,7 +603,7 @@ impl<'a> GearSearch<'a, '_, '_> {
             };
 
             self.search.consider()?;
-            let group_score = position.group_score + candidate.score;
+            let group_score = position.group_score + candidate;
             let next = if position.piece + 1 == self.groups[position.group].pieces.len() {
                 if !contains(frame.group_bounds, group_score) {
                     continue;

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{GenerationError, Search};
 
-use super::{Bounds, EPSILON, Group, candidates::Candidate, contains};
+use super::{Bounds, EPSILON, Group, contains};
 
 /// 带上限的可达分数集合。第 n 位表示可取得 n 个整数分数单位。
 struct Scores {
@@ -51,7 +51,7 @@ impl Scores {
 }
 
 struct ReachableGroup {
-    recipes: Vec<BTreeMap<usize, Candidate>>,
+    recipes: Vec<BTreeMap<usize, f64>>,
     suffix: Vec<Scores>,
     possible: Vec<usize>,
 }
@@ -62,7 +62,7 @@ pub(super) fn find(
     overall: Bounds,
     desired: &[f64],
     search: &mut Search<'_>,
-) -> Result<Option<Vec<Vec<Candidate>>>, GenerationError> {
+) -> Result<Option<Vec<Vec<f64>>>, GenerationError> {
     let mut scales: Vec<_> = [1.0, 10.0, 100.0, 1000.0, 10_000.0]
         .into_iter()
         .filter(|scale| overall.1 * scale <= 50_000.0)
@@ -77,7 +77,7 @@ pub(super) fn find(
             let mut options = Vec::new();
             for candidate in piece.candidates(piece.bounds, None, search) {
                 scales.retain(|&scale| {
-                    let score = candidate.score * scale;
+                    let score = candidate * scale;
                     score >= 0.0 && (score - score.round()).abs() <= 1e-10
                 });
                 if scales.is_empty() {
@@ -107,7 +107,7 @@ pub(super) fn find(
             .map(|pieces| {
                 pieces
                     .into_iter()
-                    .map(|candidate| ((candidate.score * scale).round() as usize, candidate))
+                    .map(|score| ((score * scale).round() as usize, score))
                     .collect()
             })
             .collect();
@@ -176,7 +176,7 @@ pub(super) fn find(
             pieces.push(*candidate);
             score -= key;
         }
-        let actual_score: f64 = pieces.iter().map(|piece| piece.score).sum();
+        let actual_score: f64 = pieces.iter().sum();
         if !contains(group.bounds, actual_score) {
             return Ok(None);
         }
