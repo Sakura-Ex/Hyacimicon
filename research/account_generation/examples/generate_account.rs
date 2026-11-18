@@ -1,4 +1,9 @@
-use std::{env, error::Error, fs, io};
+use std::{
+    env,
+    error::Error,
+    fs,
+    io::{self, Write},
+};
 
 use account_generator::{
     AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, generate_account,
@@ -34,6 +39,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         result.mean_effective_rolls(),
         result.attempts,
     );
-    serde_json::to_writer_pretty(io::stdout().lock(), &result.account)?;
+    let mut output = io::stdout().lock();
+    serde_json::to_writer_pretty(&mut output, &result.account)?;
+    output.flush()?;
     Ok(())
 }

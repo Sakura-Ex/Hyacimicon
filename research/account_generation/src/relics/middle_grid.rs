@@ -63,28 +63,36 @@ pub(super) fn find(
     desired: &[f64],
     search: &mut Search<'_>,
 ) -> Result<Option<Vec<Vec<Candidate>>>, GenerationError> {
-    let candidates = groups
-        .iter()
-        .map(|group| {
-            group
-                .pieces
-                .iter()
-                .map(|piece| piece.middle_candidates(search))
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>();
-    let Some(scale) = [1.0, 10.0, 100.0, 1000.0, 10_000.0]
+    let mut scales: Vec<_> = [1.0, 10.0, 100.0, 1000.0, 10_000.0]
         .into_iter()
-        .find(|&scale| {
-            overall.1 * scale <= 50_000.0
-                && candidates.iter().flatten().flatten().all(|candidate| {
+        .filter(|scale| overall.1 * scale <= 50_000.0)
+        .collect();
+    if scales.is_empty() {
+        return Ok(None);
+    }
+    let mut candidates = Vec::with_capacity(groups.len());
+    for group in groups {
+        let mut pieces = Vec::with_capacity(group.pieces.len());
+        for piece in &group.pieces {
+            let mut options = Vec::new();
+            for candidate in piece.candidates(piece.bounds, None, search) {
+                scales.retain(|&scale| {
                     let score = candidate.score * scale;
                     score >= 0.0 && (score - score.round()).abs() <= 1e-10
-                })
-        })
-    else {
-        return Ok(None);
-    };
+                });
+                if scales.is_empty() {
+                    return Ok(None);
+                }
+                options.push(candidate);
+            }
+            if options.is_empty() {
+                return Ok(None);
+            }
+            pieces.push(options);
+        }
+        candidates.push(pieces);
+    }
+    let scale = scales[0];
     let Some((low, high)) = integer_bounds(overall, scale) else {
         return Ok(None);
     };

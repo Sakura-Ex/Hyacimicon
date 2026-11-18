@@ -498,6 +498,15 @@ fn choose_builds<'a>(
     target: Option<usize>,
     search: &mut Search<'_>,
 ) -> Result<Option<Vec<Choice<'a>>>, GenerationError> {
+    let mut reserved = BTreeSet::new();
+    for candidate in order.iter().map(|&index| &menu[index]) {
+        if candidate.cone_count == 1 {
+            let cone = candidate.builds[0].cone;
+            if cone.unique && !reserved.insert(&cone.id) {
+                return Ok(None);
+            }
+        }
+    }
     // 指定总金数已由 roster_fits 检查。这里的后缀表用于剪枝光锥分配。
     let cap = target.unwrap_or_else(|| {
         order

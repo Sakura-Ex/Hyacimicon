@@ -281,17 +281,24 @@ pub(super) fn generate(
         )?);
     }
     let bounds: Vec<_> = groups.iter().map(|group| group.bounds).collect();
+    // 总分及上下界之差都参与分配，包括有正负权重的账号。
+    let magnitude: f64 = bounds.iter().map(|&(lo, hi)| lo.abs().max(hi.abs())).sum();
+    if !magnitude.is_finite()
+        || !bounds
+            .iter()
+            .map(|&(lo, hi)| hi - lo)
+            .sum::<f64>()
+            .is_finite()
+    {
+        return Err(invalid("账号遗器总分超出可计算范围"));
+    }
     let mut overall = sum_bounds(bounds.iter().copied());
     let count = (choices.len() * SLOTS.len()) as f64;
     overall = intersect(
         overall,
-        (
-            request
-                .min_mean_effective_rolls
-                .map_or(f64::NEG_INFINITY, |score| score * count),
-            request
-                .max_mean_effective_rolls
-                .map_or(f64::INFINITY, |score| score * count),
+        score_bounds(
+            request.min_mean_effective_rolls.map(|v| v * count),
+            request.max_mean_effective_rolls.map(|v| v * count),
         ),
     );
     if let Some(quality) = request.relic_quality_tier {
@@ -334,11 +341,9 @@ impl Group {
         let suffix = suffix_bounds(pieces.iter().map(|piece| piece.bounds));
         let mut bounds = intersect(
             suffix[0],
-            (
-                request
-                    .min_total_effective_rolls
-                    .unwrap_or(f64::NEG_INFINITY),
-                request.max_total_effective_rolls.unwrap_or(f64::INFINITY),
+            score_bounds(
+                request.min_total_effective_rolls,
+                request.max_total_effective_rolls,
             ),
         );
         if let Some(quality) = quality {
@@ -370,7 +375,7 @@ fn solve(
         && let Some(mut result) = middle_grid::find(groups, overall, desired, search)?
     {
         sample_middle_tiers(groups, &mut result, overall, search);
-        return Ok(materialize(groups, result));
+        return Ok(materialize(groups, result, search));
     }
     let suffix = suffix_bounds(groups.iter().map(|group| group.bounds));
     let mut solver = GearSearch {
@@ -383,7 +388,7 @@ fn solve(
         failed: BTreeSet::new(),
     };
     if solver.solve()? {
-        Ok(materialize(groups, solver.output))
+        Ok(materialize(groups, solver.output, search))
     } else {
         Err(GenerationError::NoSolution)
     }
@@ -433,7 +438,11 @@ fn sample_middle_tiers(
     }
 }
 
-fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
+fn materialize(
+    groups: &[Group],
+    choices: Vec<Vec<Candidate>>,
+    search: &mut Search<'_>,
+) -> Vec<Gear> {
     groups
         .iter()
         .zip(choices)
@@ -442,7 +451,7 @@ fn materialize(groups: &[Group], choices: Vec<Vec<Candidate>>) -> Vec<Gear> {
                 .pieces
                 .iter()
                 .zip(candidates)
-                .map(|(piece, candidate)| (piece.materialize(&candidate), candidate.score))
+                .map(|(piece, candidate)| (piece.materialize(candidate, search), candidate.score))
                 .collect(),
             upper: group.upper,
         })
@@ -590,12 +599,20 @@ fn suffix_bounds(
     bounds
 }
 
+fn score_bounds(min: Option<f64>, max: Option<f64>) -> Bounds {
+    (
+        min.map_or(f64::NEG_INFINITY, |value| value - EPSILON),
+        max.map_or(f64::INFINITY, |value| value + EPSILON),
+    )
+}
+
 fn intersect(a: Bounds, b: Bounds) -> Bounds {
     (a.0.max(b.0), a.1.min(b.1))
 }
 
 fn contains(bounds: Bounds, score: f64) -> bool {
-    score >= bounds.0 - EPSILON && score <= bounds.1 + EPSILON
+    let rounding = (8.0 * f64::EPSILON * score.abs()).min(1e-12);
+    score >= bounds.0 - rounding && score <= bounds.1 + rounding
 }
 
 fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
@@ -607,13 +624,17 @@ fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
 }
 
 fn quality_bounds(tier: u8, upper: f64) -> Result<Bounds, GenerationError> {
-    if upper <= EPSILON {
+    if !upper.is_finite() {
+        return Err(invalid("遗器理论总分超出可计算范围"));
+    }
+    if upper <= 0.0 {
         return Err(GenerationError::NoSolution);
     }
     let index = usize::from(tier);
-    let adjustment = if index < 5 { 2.0 * EPSILON } else { 0.0 };
+    let tolerance = EPSILON.min(upper * 1e-8);
+    let adjustment = if index < 5 { tolerance } else { 0.0 };
     Ok((
-        QUALITY_RATIOS[index - 1] * upper,
+        QUALITY_RATIOS[index - 1] * upper - tolerance,
         QUALITY_RATIOS[index] * upper - adjustment,
     ))
 }

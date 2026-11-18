@@ -80,6 +80,7 @@ pub(super) struct Candidate {
     values: [f64; 4],
     weights: [f64; 4],
     pub(super) score: f64,
+    zero_extras: u8,
 }
 
 /// 四种互异副词条及每种词条的生成参数。
@@ -240,10 +241,7 @@ impl PieceSearch {
         let legal = legal_bounds(&recipes, &counts, extremes(request.tier_weights));
         let bounds = intersect(
             legal,
-            (
-                spec.min_effective_rolls.unwrap_or(f64::NEG_INFINITY),
-                spec.max_effective_rolls.unwrap_or(f64::INFINITY),
-            ),
+            super::score_bounds(spec.min_effective_rolls, spec.max_effective_rolls),
         );
         feasible(bounds)?;
         let set = spec.set_id.clone().unwrap_or_else(|| {
@@ -270,10 +268,6 @@ impl PieceSearch {
         self.has_middle() && self.tiers[0] == 0.0 && self.tiers[2] == 0.0
     }
 
-    pub(super) fn middle_candidates(&self, search: &mut Search<'_>) -> Vec<Candidate> {
-        self.candidates(self.bounds, None, search).collect()
-    }
-
     pub(super) fn candidates(
         &self,
         bounds: Bounds,
@@ -295,6 +289,7 @@ impl PieceSearch {
                         recipe,
                         position: 0,
                         remaining: count,
+                        zero_extras: 0,
                         score: 0.0,
                         values: [0.0; 4],
                         distance: desired.map_or(0.0, |goal| distance(bounds, goal)),
@@ -313,7 +308,22 @@ impl PieceSearch {
         }
     }
 
-    pub(super) fn materialize(&self, candidate: &Candidate) -> RelicInstance {
+    pub(super) fn materialize(
+        &self,
+        mut candidate: Candidate,
+        search: &mut Search<'_>,
+    ) -> RelicInstance {
+        // 搜索按得分合并零权重词条。确定成品后，再逐次抽取它们的强化去向和档位。
+        let unscored: Vec<_> = (0..4).filter(|&i| candidate.weights[i] == 0.0).collect();
+        if unscored.len() > 1 && candidate.zero_extras > 0 {
+            let mut counts = [1u8; 4];
+            for _ in 0..candidate.zero_extras {
+                counts[unscored[search.index(unscored.len())]] += 1;
+            }
+            for i in unscored {
+                candidate.values[i] = self.sample_rolls(candidate.stats[i], counts[i], search);
+            }
+        }
         RelicInstance {
             instance_id: String::new(),
             set_id: self.set.clone(),
@@ -325,6 +335,24 @@ impl PieceSearch {
         }
     }
 
+    fn sample_rolls(&self, stat: Sub, count: u8, search: &mut Search<'_>) -> f64 {
+        let largest = self.tiers.into_iter().fold(0.0, f64::max);
+        let [low, middle, high] = self.tiers.map(|weight| weight / largest);
+        let values = rolls(stat);
+        (0..count)
+            .map(|_| {
+                let draw = search.unit() * (low + middle + high);
+                if low > 0.0 && draw < low {
+                    values[0]
+                } else if high == 0.0 || draw < low + middle {
+                    values[1]
+                } else {
+                    values[2]
+                }
+            })
+            .sum()
+    }
+
     /// 用允许的档位重抽中档候选的强化数值，保留每个副词条的强化次数。
     pub(super) fn sample_tiers(
         &self,
@@ -332,12 +360,9 @@ impl PieceSearch {
         bounds: Bounds,
         search: &mut Search<'_>,
     ) -> Candidate {
-        let largest = self.tiers.into_iter().reduce(f64::max).unwrap_or_default();
-        let [low, middle, high] = self.tiers.map(|weight| weight / largest);
-        let weight_sum = low + middle + high;
         let original_score = candidate.score;
         let accepts = |score: f64| {
-            if bounds.1 - bounds.0 <= EPSILON {
+            if bounds.1 - bounds.0 <= 2.0 * EPSILON + 1e-12 {
                 // 精确目标保留已选分数，舍入误差不作为可分配的分数余量。
                 let rounding = 8.0 * f64::EPSILON * original_score.abs().max(1.0);
                 (score - original_score).abs() <= rounding
@@ -348,20 +373,9 @@ impl PieceSearch {
         let mut proposed = candidate;
         let mut changes = [0.0; 4];
         for (index, change) in changes.iter_mut().enumerate() {
-            let [low_value, middle_value, high_value] = rolls(candidate.stats[index]);
+            let middle_value = rolls(candidate.stats[index])[1];
             let count = (candidate.values[index] / middle_value).round();
-            let value: f64 = (0..count as u8)
-                .map(|_| {
-                    let draw = search.unit() * weight_sum;
-                    if low > 0.0 && draw < low {
-                        low_value
-                    } else if high == 0.0 || draw < low + middle {
-                        middle_value
-                    } else {
-                        high_value
-                    }
-                })
-                .sum();
+            let value = self.sample_rolls(candidate.stats[index], count as u8, search);
             proposed.values[index] = value;
             *change = candidate.weights[index] * (value / middle_value - count);
         }
@@ -399,6 +413,7 @@ struct Assignment<'a> {
     recipe: &'a Recipe,
     position: usize,
     remaining: u8,
+    zero_extras: u8,
     score: f64,
     values: [f64; 4],
     distance: f64,
@@ -430,6 +445,7 @@ impl Iterator for Candidates<'_> {
                     weights: assignment.recipe.weights,
                     values: assignment.values,
                     score,
+                    zero_extras: assignment.zero_extras,
                 });
             }
         }
@@ -482,6 +498,8 @@ impl<'a> Candidates<'a> {
                         recipe,
                         position: position + 1,
                         remaining: remaining - count,
+                        zero_extras: assignment.zero_extras
+                            + if weight == 0.0 { count - 1 } else { 0 },
                         score,
                         values,
                         distance: self.desired.map_or(0.0, |goal| distance(bounds, goal)),

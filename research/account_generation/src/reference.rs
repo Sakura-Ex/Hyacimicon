@@ -26,6 +26,8 @@ pub struct ReferenceOverrides {
     pub ability_versions: BTreeMap<String, u32>,
 }
 
+type TraceLevels = BTreeMap<u8, TraceLevel>;
+
 #[derive(Debug)]
 pub(crate) struct Profile {
     pub id: String,
@@ -37,7 +39,7 @@ pub(crate) struct Profile {
     pub recommended: Vec<String>,
     pub teams: Vec<Team>,
     pub relics: Recommendations,
-    traces: BTreeMap<String, BTreeMap<u8, TraceLevel>>,
+    traces: Vec<(String, TraceLevels)>,
 }
 
 #[derive(Debug)]
@@ -168,20 +170,15 @@ impl AccountReference {
         let mut light_cones = BTreeMap::new();
         for (id, source) in cones {
             let rarity = rarity(&source.rank)?;
-            let category = overrides
-                .light_cone_categories
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| {
-                    category(
-                        rarity,
-                        &id,
-                        "24",
-                        &[
-                            "23000", "23002", "23003", "23004", "23005", "23012", "23013",
-                        ],
-                    )
-                });
+            let category = category(
+                rarity,
+                &id,
+                "24",
+                &[
+                    "23000", "23002", "23003", "23004", "23005", "23012", "23013",
+                ],
+                overrides.light_cone_categories.get(&id).copied(),
+            )?;
             light_cones.insert(
                 id.clone(),
                 Cone {
@@ -201,18 +198,13 @@ impl AccountReference {
         for id in catalog.into_keys() {
             let source = profile(&id)?;
             let rarity = rarity(&source.rarity)?;
-            let category = overrides
-                .character_categories
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| {
-                    category(
-                        rarity,
-                        &id,
-                        "80",
-                        &["1003", "1004", "1101", "1104", "1107", "1209", "1211"],
-                    )
-                });
+            let category = category(
+                rarity,
+                &id,
+                "80",
+                &["1003", "1004", "1101", "1104", "1107", "1209", "1211"],
+                overrides.character_categories.get(&id).copied(),
+            )?;
             let mut traces = BTreeMap::new();
             for levels in source.skill_trees.into_values() {
                 let first = levels
@@ -262,9 +254,12 @@ impl AccountReference {
             if rarity == 5
                 && !signature
                     .as_ref()
-                    .is_some_and(|cone| light_cones.contains_key(cone))
+                    .and_then(|id| light_cones.get(id))
+                    .is_some_and(|cone| cone.path == source.base_type)
             {
-                return Err(error(format!("五星角色 {id} 缺少可用专锥")));
+                return Err(error(format!(
+                    "五星角色 {id} 需要同命途专锥，当前为 {signature:?}"
+                )));
             }
             let teams = source
                 .teams
@@ -279,6 +274,7 @@ impl AccountReference {
                 })
                 .collect();
             let relics = Recommendations::from_source(source.relics, &id)?;
+            let traces = ordered_traces(traces, &id)?;
             characters.insert(
                 id.clone(),
                 Profile {
@@ -304,10 +300,51 @@ impl AccountReference {
     }
 }
 
+/// 按前置关系排列节点，生成时可以直接读取已算好的等级。
+fn ordered_traces(
+    mut nodes: BTreeMap<String, BTreeMap<u8, TraceLevel>>,
+    character_id: &str,
+) -> Result<Vec<(String, TraceLevels)>, GenerationError> {
+    for (id, levels) in &nodes {
+        for parent in &levels[&1].pre_point {
+            if !nodes.contains_key(&parent.to_string()) {
+                return Err(error(format!(
+                    "角色 {character_id} 的行迹 {id} 缺少前置 {parent}"
+                )));
+            }
+        }
+    }
+    let mut ordered = Vec::with_capacity(nodes.len());
+    while !nodes.is_empty() {
+        let mut ready = Vec::new();
+        for (id, levels) in &nodes {
+            if levels[&1]
+                .pre_point
+                .iter()
+                .all(|parent| !nodes.contains_key(&parent.to_string()))
+            {
+                ready.push(id.clone());
+            }
+        }
+        if ready.is_empty() {
+            let (id, levels) = nodes.first_key_value().expect("pending trace");
+            return Err(error(format!(
+                "角色 {character_id} 的行迹 {id} 依赖循环前置 {:?}",
+                levels[&1].pre_point
+            )));
+        }
+        for id in ready {
+            let levels = nodes.remove(&id).expect("ready trace");
+            ordered.push((id, levels));
+        }
+    }
+    Ok(ordered)
+}
+
 impl Profile {
-    pub fn generate_traces(&self, spec: &CharacterSpec) -> Result<TraceConfig, GenerationError> {
+    pub fn generate_traces(&self, spec: &CharacterSpec) -> TraceConfig {
         if let Some(traces) = &spec.traces {
-            return Ok(traces.clone());
+            return traces.clone();
         }
         let mut result = TraceConfig {
             skill_levels: BTreeMap::new(),
@@ -315,50 +352,27 @@ impl Profile {
         };
         let mut levels = BTreeMap::new();
         for (id, source) in &self.traces {
-            let level = self.trace_level(id, spec, &mut levels)?;
-            if !source[&1].level_up_skill_id.is_empty() {
+            let first = &source[&1];
+            let level = if first.pre_point.iter().all(|parent| levels[parent] > 0) {
+                source
+                    .iter()
+                    .rev()
+                    .find(|(_, node)| {
+                        spec.level >= node.avatar_level_limit.unwrap_or(1)
+                            && spec.promotion >= node.avatar_promotion_limit.unwrap_or(0)
+                    })
+                    .map_or(0, |(&level, _)| level)
+            } else {
+                0
+            };
+            levels.insert(first.point_id, level);
+            if !first.level_up_skill_id.is_empty() {
                 result.skill_levels.insert(id.clone(), level);
             } else {
                 result.node_unlocks.insert(id.clone(), level > 0);
             }
         }
-        Ok(result)
-    }
-
-    fn trace_level(
-        &self,
-        id: &str,
-        spec: &CharacterSpec,
-        levels: &mut BTreeMap<String, Option<u8>>,
-    ) -> Result<u8, GenerationError> {
-        if let Some(level) = levels.get(id) {
-            return level
-                .ok_or_else(|| error(format!("角色 {} 的行迹 {id} 存在循环前置", self.id)));
-        }
-        let source = self
-            .traces
-            .get(id)
-            .ok_or_else(|| error(format!("角色 {} 缺少行迹 {id}", self.id)))?;
-        let first = &source[&1];
-        levels.insert(id.to_owned(), None);
-        let mut available = true;
-        for parent in &first.pre_point {
-            available &= self.trace_level(&parent.to_string(), spec, levels)? > 0;
-        }
-        let level = if available {
-            source
-                .iter()
-                .rev()
-                .find(|(_, node)| {
-                    spec.level >= node.avatar_level_limit.unwrap_or(1)
-                        && spec.promotion >= node.avatar_promotion_limit.unwrap_or(0)
-                })
-                .map_or(0, |(&level, _)| level)
-        } else {
-            0
-        };
-        levels.insert(id.to_owned(), Some(level));
-        Ok(level)
+        result
     }
 }
 
@@ -469,8 +483,20 @@ fn rarity(value: &str) -> Result<u8, GenerationError> {
         .ok_or_else(|| error(format!("无效的稀有度 {value}")))
 }
 
-fn category(rarity: u8, id: &str, free_prefix: &str, standard: &[&str]) -> GoldCategory {
-    if rarity != 5 {
+fn category(
+    rarity: u8,
+    id: &str,
+    free_prefix: &str,
+    standard: &[&str],
+    override_value: Option<GoldCategory>,
+) -> Result<GoldCategory, GenerationError> {
+    if let Some(value) = override_value {
+        if rarity != 5 && value != GoldCategory::None {
+            return Err(error(format!("非五星条目 {id} 不能计入五星投入")));
+        }
+        return Ok(value);
+    }
+    Ok(if rarity != 5 {
         GoldCategory::None
     } else if id.starts_with(free_prefix) {
         GoldCategory::Free
@@ -478,7 +504,7 @@ fn category(rarity: u8, id: &str, free_prefix: &str, standard: &[&str]) -> GoldC
         GoldCategory::Standard
     } else {
         GoldCategory::Limited
-    }
+    })
 }
 
 fn parse<T: DeserializeOwned>(source: &str, label: &str) -> Result<T, GenerationError> {
@@ -528,6 +554,75 @@ mod tests {
             );
             assert!(
                 matches!(result, Err(GenerationError::Reference(text)) if text.contains(message))
+            );
+        }
+    }
+
+    #[test]
+    fn edited_references_reject_inconsistent_categories_signatures_and_prerequisites() {
+        let original: Value =
+            serde_json::from_str(include_str!("../data/character/1310.json")).unwrap();
+        for (profile, overrides, expected) in [
+            (
+                original.clone(),
+                ReferenceOverrides {
+                    light_cone_categories: BTreeMap::from([(
+                        "20000".into(),
+                        GoldCategory::Limited,
+                    )]),
+                    ..Default::default()
+                },
+                "20000",
+            ),
+            (
+                original.clone(),
+                ReferenceOverrides {
+                    signature_light_cones: BTreeMap::from([("1310".into(), "20000".into())]),
+                    ..Default::default()
+                },
+                "20000",
+            ),
+            (
+                {
+                    let mut source = original.clone();
+                    source["rarity"] = json!("CombatPowerAvatarRarityType4");
+                    source
+                },
+                ReferenceOverrides {
+                    character_categories: BTreeMap::from([("1310".into(), GoldCategory::Standard)]),
+                    ..Default::default()
+                },
+                "1310",
+            ),
+            (
+                {
+                    let mut source = original.clone();
+                    source["skill_trees"]["1310001"]["1"]["pre_point"] = json!([1310001]);
+                    source
+                },
+                Default::default(),
+                "1310001",
+            ),
+            (
+                {
+                    let mut source = original;
+                    source["skill_trees"]["1310001"]["1"]["pre_point"] = json!([999999]);
+                    source
+                },
+                Default::default(),
+                "999999",
+            ),
+        ] {
+            let loaded = AccountReference::load(
+                include_str!("../data/source-manifest.json"),
+                r#"{"1310":null}"#,
+                include_str!("../data/lightcone.json"),
+                |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                &overrides,
+            );
+            assert!(
+                matches!(loaded, Err(GenerationError::Reference(ref text)) if text.contains(expected)),
+                "{expected}"
             );
         }
     }

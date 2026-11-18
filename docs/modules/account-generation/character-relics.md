@@ -30,7 +30,7 @@ let pieces = generate_character_relics(&request, 100_000, &mut rng)?;
 | `tier_weights` | 低、中、高档的非负权重，默认 `[1.0; 3]`。零权重排除该档，至少一档为正 |
 | `min_total_effective_rolls`、`max_total_effective_rolls` | 六件合计分数上下限，各端可独立设置 |
 
-上下限相等时要求精确总分。单件分数限制和整套限制共同生效，六件共享 `max_attempts`。调用方可按相同请求和随机源重现结果。
+上下限相等时，生成结果在 `1e-6` 的绝对容差内匹配目标总分。单件分数限制和整套限制共同生效，六件共享 `max_attempts`。调用方可按相同请求和随机源重现结果。
 
 `maximum_character_relic_score(&request)` 根据合法的部位、主副词条、起始条数和允许档位计算六件理论上限。该上限用于[五档练度](relic-quality.md)。
 

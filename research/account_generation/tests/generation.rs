@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{
     RawAccount, RelicMainStat, RelicSlot, RelicSubStat,
@@ -84,7 +84,15 @@ fn fixed_light_cones_conflict_and_budget_exhaustion_are_reported() {
             ("1310".to_owned(), spec.clone()),
             ("1225".to_owned(), spec),
         ]),
-        ..AccountRequest::new("unique", 2)
+        core_character_ids: [
+            "1501", "1502", "1503", "1505", "1506", "1511", "1310", "1225",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect(),
+        light_cone_pool: Some(vec!["23053".into()]),
+        max_attempts: 1_000,
+        ..AccountRequest::new("unique", 8)
     };
     let mut rng = ChaCha8Rng::seed_from_u64(2);
     assert!(matches!(
@@ -301,7 +309,7 @@ fn full_roster_meets_an_exact_score_and_converts() {
     assert_eq!(result.account.relics.len(), 360);
     assert!((result.mean_effective_rolls() - 6.5).abs() <= 1e-9);
     assert!(result.attempts <= request.max_attempts);
-    convert_playable_account(
+    let playable = convert_playable_account(
         &result.account,
         &PlayableData::bundled().unwrap(),
         &ConversionRequest {
@@ -310,6 +318,23 @@ fn full_roster_meets_an_exact_score_and_converts() {
         },
     )
     .unwrap();
+    let owned: BTreeSet<_> = playable
+        .characters
+        .iter()
+        .filter_map(|character| match &character.origin {
+            CharacterOrigin::Owned { raw_character_id } => Some(raw_character_id),
+            CharacterOrigin::Trial => None,
+        })
+        .collect();
+    assert_eq!(
+        owned,
+        result
+            .account
+            .characters
+            .iter()
+            .map(|c| &c.character_id)
+            .collect()
+    );
 }
 
 #[test]

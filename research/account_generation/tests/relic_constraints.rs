@@ -378,3 +378,79 @@ fn all_character_quality_tiers_use_the_same_legal_upper_and_apply_score_override
     relics.max_total_effective_rolls = Some(0.0);
     assert!(matches!(generate(&spec), Err(GenerationError::NoSolution)));
 }
+
+#[test]
+fn unscored_training_relics_can_spread_upgrades_across_multiple_substats() {
+    let spec = RelicSpec {
+        initial_substat_count: Some(4),
+        required_substats: vec![Sub::Atk, Sub::Def, Sub::Spd, Sub::BreakEffect],
+        ..RelicSpec::new(Slot::Head)
+    };
+    let mut split = false;
+    for seed in 0..32 {
+        let (piece, _) = generate_relic(
+            &spec,
+            &BTreeMap::new(),
+            MID,
+            1,
+            &mut ChaCha8Rng::seed_from_u64(seed),
+        )
+        .unwrap();
+        let counts: Vec<_> = VALUES
+            .iter()
+            .filter_map(|(stat, rolls)| {
+                piece
+                    .substats
+                    .get(stat)
+                    .map(|value| (value / rolls[1]).round() as u8)
+            })
+            .collect();
+        assert_eq!(counts.iter().sum::<u8>(), 9);
+        split |= counts.iter().filter(|&&n| n > 1).count() >= 2;
+    }
+    assert!(split, "all five upgrades always landed on a single substat");
+}
+
+#[test]
+fn rounded_piece_limits_still_allow_the_requested_set_total() {
+    let request = RelicRequest {
+        pieces: (1..=6)
+            .map(|slot| RelicSpec {
+                initial_substat_count: Some(3),
+                max_effective_rolls: Some(8.0 - 0.75e-6),
+                ..RelicSpec::new(Slot::try_from(slot).unwrap())
+            })
+            .collect(),
+        effective_stat_weights: all_stats(),
+        tier_weights: MID,
+        min_total_effective_rolls: Some(48.0),
+        max_total_effective_rolls: Some(48.0),
+    };
+    let pieces =
+        generate_character_relics(&request, 6, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
+    assert!(pieces.iter().all(|(_, score)| *score == 8.0));
+}
+
+#[test]
+fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
+    let spec = CharacterSpec {
+        relics: Some(RelicRequest {
+            effective_stat_weights: VALUES.iter().map(|(stat, _)| (*stat, 1e-8)).collect(),
+            tier_weights: MID,
+            ..Default::default()
+        }),
+        relic_quality_tier: Some(5),
+        ..Default::default()
+    };
+    let result = generate_character(
+        "normalized",
+        "1310",
+        &spec,
+        &AccountReference::bundled().unwrap(),
+        500,
+        &mut ChaCha8Rng::seed_from_u64(42),
+    )
+    .unwrap();
+    let investment = &result.investments["1310"];
+    assert!(investment.piece_scores.iter().sum::<f64>() >= 0.8 * investment.relic_score_upper);
+}

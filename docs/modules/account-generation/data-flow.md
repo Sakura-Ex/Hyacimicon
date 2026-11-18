@@ -42,7 +42,7 @@ flowchart LR
 
 账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。运行方式见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
 
-程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。用 `generate_account` 返回的 `GeneratedAccount.account` 直接调用 [`convert_playable_account`](../account/playable-configuration.md)，即可完成试用补齐、练度与装备映射、技能加级和静态面板计算。原始账号保存持有库存及装备引用。生成统计保存在 `GeneratedAccount`，导入报告保存在导入结果。
+程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。将生成结果 `GeneratedAccount.account`、版本匹配的 `PlayableData` 和指定输出配置 ID 的 `ConversionRequest` 一起传给 [`convert_playable_account`](../account/playable-configuration.md)，即可完成试用补齐、练度与装备映射、技能加级和静态面板计算。原始账号保存持有库存及装备引用。生成统计保存在 `GeneratedAccount`，导入报告保存在导入结果。
 
 ## 生成与实际配置的分工
 
@@ -63,6 +63,6 @@ flowchart LR
 
 账号原始配置保存持有资源及装备引用。实际配置转换根据实际持有情况选择本体或试用，供后续选择资源和检查操作使用。用于全试用挑战的账号按其真实持有资源独立导入和转换。
 
-调用方记录账号生成请求与随机种子，生成结果记录生成规则版本。原始配置与生效配置通过配置标识关联，并引用相同的数据快照。两个下游使用同一次转换结果，便于复现模型决策和战斗计算。
+调用方记录账号生成请求与随机种子，生成结果记录生成规则版本。原始配置与生效配置通过配置 ID 关联。原始配置的 `data_snapshot` 取自生成资料清单，可为空；生效配置记录转换资料的快照 ID。复现时分别保存两份资料的标识或文件。两个下游使用同一次转换结果，便于复现模型决策和战斗计算。
 
 完整账号样例的交付条件见[首个样例与完成条件](design.md#首个样例与完成条件)。

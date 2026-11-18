@@ -45,13 +45,13 @@ fn gold_counts_and_equipment_references_follow_the_budget_categories() {
         BTreeMap::from([(Limited, 4.0), (Standard, 2.0)])
     );
     assert_eq!(result.gold_count(), 6.0);
-    let cones: BTreeSet<_> = result
+    let mut cones: BTreeSet<_> = result
         .account
         .light_cones
         .iter()
         .map(|cone| &cone.instance_id)
         .collect();
-    let relics: BTreeMap<_, _> = result
+    let mut relics: BTreeMap<_, _> = result
         .account
         .relics
         .iter()
@@ -60,10 +60,10 @@ fn gold_counts_and_equipment_references_follow_the_budget_categories() {
     assert_eq!(cones.len(), 2);
     assert_eq!(relics.len(), 12);
     for character in &result.account.characters {
-        assert!(cones.contains(character.light_cone_instance_id.as_ref().unwrap()));
+        assert!(cones.remove(character.light_cone_instance_id.as_ref().unwrap()));
         assert_eq!(character.relic_instance_ids.len(), 6);
         for (slot, instance) in &character.relic_instance_ids {
-            assert_eq!(*slot, relics[instance]);
+            assert_eq!(relics.remove(instance), Some(*slot));
         }
     }
     request.gold_count = Some(4.0);
