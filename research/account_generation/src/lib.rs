@@ -379,6 +379,17 @@ fn invalid(message: impl Into<String>) -> GenerationError {
     GenerationError::InvalidRequest(message.into())
 }
 
+fn random_index(rng: &mut dyn RngCore, len: usize) -> usize {
+    let bound = len as u64;
+    let threshold = bound.wrapping_neg() % bound;
+    loop {
+        let value = rng.next_u64();
+        if value >= threshold {
+            return (value % bound) as usize;
+        }
+    }
+}
+
 struct Search<'a> {
     rng: &'a mut dyn RngCore,
     attempts: usize,
@@ -401,14 +412,7 @@ impl Search<'_> {
     }
 
     fn index(&mut self, len: usize) -> usize {
-        let bound = len as u64;
-        let threshold = bound.wrapping_neg() % bound;
-        loop {
-            let value = self.rng.next_u64();
-            if value >= threshold {
-                return (value % bound) as usize;
-            }
-        }
+        random_index(self.rng, len)
     }
 
     fn shuffle<T>(&mut self, values: &mut [T]) {
@@ -454,13 +458,8 @@ pub fn generate_character(
         if profile.recommended.is_empty() {
             return Err(invalid(format!("角色 {character_id} 缺少推荐光锥")));
         }
-        let mut search = Search {
-            rng,
-            attempts: 0,
-            limit: max_attempts,
-        };
-        spec.light_cone.light_cone_id =
-            Some(profile.recommended[search.index(profile.recommended.len())].clone());
+        let index = random_index(rng, profile.recommended.len());
+        spec.light_cone.light_cone_id = Some(profile.recommended[index].clone());
     }
     request.character_pool = Some(vec![character_id.to_owned()]);
     request

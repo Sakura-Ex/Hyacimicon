@@ -256,22 +256,30 @@ pub(super) fn generate(
         let recommended = &choice.profile.relics;
         let outer = &recommended.outer[search.index(recommended.outer.len())];
         let planar = &recommended.planar[search.index(recommended.planar.len())];
-        let defaults = RelicRequest {
-            effective_stat_weights: recommended.weights.clone(),
-            ..RelicRequest::default()
+        let defaults;
+        let conditions = match &choice.spec.relics {
+            Some(request) => request,
+            None => {
+                defaults = RelicRequest {
+                    effective_stat_weights: recommended.weights.clone(),
+                    ..RelicRequest::default()
+                };
+                &defaults
+            }
         };
-        let conditions = choice.spec.relics.as_ref().unwrap_or(&defaults);
         let pieces = SLOTS
             .into_iter()
             .zip(&recommended.mains)
             .map(|(slot, mains)| {
-                let supplied = conditions.pieces.iter().find(|piece| piece.slot == slot);
+                if let Some(spec) = conditions.pieces.iter().find(|piece| piece.slot == slot) {
+                    return PieceSearch::new(spec, conditions, search);
+                }
                 let suggested = RelicSpec {
                     set_id: Some(if u8::from(slot) <= 4 { outer } else { planar }.clone()),
                     mainstat: mains.clone(),
                     ..RelicSpec::new(slot)
                 };
-                PieceSearch::new(supplied.unwrap_or(&suggested), conditions, search)
+                PieceSearch::new(&suggested, conditions, search)
             })
             .collect::<Result<Vec<_>, _>>()?;
         groups.push(Group::new(
