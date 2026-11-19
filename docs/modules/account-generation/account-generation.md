@@ -48,7 +48,17 @@ let mut rng = ChaCha8Rng::seed_from_u64(42);
 let result = generate_account(&request, &reference, &mut rng)?;
 ```
 
-参考资料可复用。`AccountReference::from_dir` 可加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照。加载时逐项校验角色的推荐主词条与套装，错误信息包含角色 ID。`ReferenceOverrides` 支持覆盖角色和光锥分类、五星专锥及原始能力版本。覆盖的五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。加载时检查行迹前置节点及循环。复现实验时记录项目的 Git 提交、生成请求、随机源和种子，并保存实际使用的参考文件及完整的覆盖设置。文件也可用唯一快照 ID 或内容哈希标识。
+### 外部参考资料
+
+`AccountReference::from_dir` 加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照，校验各角色的推荐主词条和套装，错误信息包含角色 ID。`ReferenceOverrides` 可覆盖角色和光锥分类、五星专锥及原始能力版本。五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。
+
+外部快照沿用内置 4.7 资料的行迹格式。每个节点在第一级的 `pre_point` 列出解锁所需的前置节点，后续等级填 `[]`。加载器用第一级的前置关系检查缺失节点和循环。生成器按该关系解锁节点，再按各级的角色等级和突破要求选择行迹等级。高等级单独声明的前置条件会被忽略。
+
+### 复现生成结果
+
+记录项目的 Git 提交、完整生成请求、实际使用的参考文件和 `ReferenceOverrides`。参考文件可用唯一快照 ID 或内容哈希标识。
+
+每次用新随机源生成时，记录随机源类型和本次种子，例如上例的 `ChaCha8Rng` 和 `42`。多次调用共用一个随机源时，保存目标调用开始前的随机源状态，或从原种子按原顺序重放此前所有消耗该随机源的操作。
 
 ## 生成条件
 

@@ -42,7 +42,7 @@ flowchart LR
 
 账号生成器位于 `research/account_generation/`，供研究和训练调用。玩家数据接入位于 `core/account/`，当前支持 [reliquary-archiver v4 导入](../account/reliquary-import.md)。运行方式见[账号数据生成](account-generation.md)、[完整角色配置生成](character-generation.md)与[单件遗器生成与评分](relic-generation.md)。
 
-程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。将生成结果 `GeneratedAccount.account`、版本匹配的 `PlayableData` 和指定输出配置 ID 的 `ConversionRequest` 一起传给 [`convert_playable_account`](../account/playable-configuration.md)，即可完成试用补齐、练度与装备映射、技能加级和静态面板计算。原始账号保存持有库存及装备引用。生成统计保存在 `GeneratedAccount`，导入报告保存在导入结果。
+程序生成和玩家导入共用 `core/account/` 的 [Rust 账号模型](../account/README.md)。调用 `convert_playable_account` 时传入原始账号（生成时为 `GeneratedAccount.account`）、转换资料 `PlayableData` 和转换请求 `ConversionRequest`。原始账号标明的游戏版本须与转换资料一致。要将角色作为本体转换，目标资料还须收录对应角色、所用装备的必需数据，以及原始角色 ID 和能力版本对应的行迹绑定。例如，外部 4.7 快照为流萤（`1310`）指定了转换资料缺少的能力版本时，转换会返回 `ConversionError`。见[转换输入与错误条件](../account/playable-configuration.md#输入与交付)。
 
 ## 生成与实际配置的分工
 
@@ -63,6 +63,6 @@ flowchart LR
 
 账号原始配置保存持有资源及装备引用。实际配置转换根据实际持有情况选择本体或试用，供后续选择资源和检查操作使用。用于全试用挑战的账号按其真实持有资源独立导入和转换。
 
-调用方在实验记录中保存项目的 Git 提交、账号生成请求和随机种子。原始配置与生效配置通过配置 ID 关联。原始配置的 `data_snapshot` 取自生成资料清单，可为空；生效配置记录转换资料的快照 ID。复现时分别保存两份资料的标识或文件。两个下游使用同一次转换结果，便于复现模型决策和战斗计算。
+复现生成的原始账号见[复现生成结果](account-generation.md#复现生成结果)。重放配置转换时，保存原始账号、项目的 Git 提交、实际使用的转换资料（文件或唯一快照 ID）和完整的 `ConversionRequest`。其中 `config_id` 指定输出配置 ID，`character_aliases` 保存已确认的原始角色 ID 到目标角色 ID 的对照。例如导入的开拓者使用 `8010 → 8009` 对照时，重放也要传入这组对照，才能按同一本体转换。生成账号的 `data_snapshot` 取自生成资料清单，可以为空。生效配置记录转换资料的快照 ID。
 
 完整账号样例的交付条件见[首个样例与完成条件](design.md#首个样例与完成条件)。
