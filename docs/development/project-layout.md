@@ -24,7 +24,7 @@ hsr-currency-wars-ai/
 
 | 目录 | 职责与依赖 |
 | --- | --- |
-| `research/account_generation/` | Rust crate `account-generator` 根据生成条件和随机源产出 `account-core` 的原始账号配置。详见[账号与遗器数据](../modules/account-generation/README.md)。 |
+| `research/account_generation/` | Rust crate `account-generator` 根据生成条件和随机源产出 `account-core` 的原始账号配置。详见[账号生成器](../modules/account-generation/README.md)。 |
 | `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
 | `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后通过战斗输入组装步骤准备参数，调用 `core/battle/`，并在满足条件时结算结果。 |

@@ -1,16 +1,10 @@
 # 账号数据生成
 
-Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色、光锥、遗器和装备关系。`GeneratedAccount.account` 是 `account_core::RawAccount`，可直接交给 [`convert_playable_account`](../account/playable-configuration.md)。
+Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色、光锥、遗器和装备关系。`GeneratedAccount.account` 是 `account_core::RawAccount`，可与对应版本的转换资料和转换请求一起交给 [`convert_playable_account`](data-flow.md#调用实际配置转换)。
 
-## 运行样例
+## 用请求文件生成账号
 
-在仓库根目录运行默认样例。它使用种子 42 生成 12 人、20 金、平均有效词条 4.5～5 的账号。
-
-```powershell
-cargo run --locked -p account-generator --example generate_account
-```
-
-示例在标准输出写入 `RawAccount` JSON，在标准错误输出种子、实际金数、平均词条与搜索次数。准备请求文件后可指定参数和种子。
+先在[模块首页](README.md#运行默认样例)运行默认样例。要显式指定生成条件，在仓库根目录创建 `request.json`，填入以下内容：
 
 ```json
 {
@@ -89,6 +83,17 @@ let result = generate_account(&request, &reference, &mut rng)?;
 
 每名持有角色生成一个光锥实例和六件五星 +15 遗器。金数容量由持有人数、星魂上限、光锥叠影及显式覆盖共同决定。
 
+## 参数如何共同生效
+
+| 同时设置 | 处理顺序与结果 |
+| --- | --- |
+| 候选池、核心角色、角色覆盖 | `character_pool` 限定可持有的角色。指定核心和覆盖角色都必须在池内，并占用 `character_count` 名额。显式核心名单决定核心角色，省略时才用 `core_count` 自动选择。筛选后若某个必须持有的角色没有任何可用光锥，则返回 `InvalidRequest` |
+| 角色覆盖、统一五星配装 | `character_overrides` 为对应角色提供完整配置。其他五星按 `five_star_build` 配装。覆盖里的显式光锥 ID 可超出自动光锥池或跨命途，仍受唯一实例限制 |
+| 自动光锥池、固定光锥 | `light_cone_pool` 约束自动选择的光锥。统一五星配装固定的专锥和角色覆盖中显式指定的光锥均可超出该池 |
+| 固定配装、精确金数 | 已确定的投入先计入预算。角色覆盖可固定星魂和叠影，同时留空光锥 ID，此时光锥类别及其金数仍由搜索决定。例如候选池只有一名限定五星，固定为 0 魂加叠影 1 的常驻五星光锥，默认口径下只能达到 1.5 金，请求 2 金时返回 `NoSolution` |
+| 共同集中程度、单项集中程度 | `gold_concentration` 和 `relic_concentration` 分别优先于 `resource_concentration`。集中程度引导可调资源分配，实际份额从结果读取 |
+| 单件目标、角色档位、账号档位与显式均分 | 各级约束同时生效。角色档位约束对应角色六件总分，账号档位约束全账号总分，显式均分上下限乘以遗器件数后约束同一总分 |
+
 ## 金数与统一五星配装
 
 五星角色每个本体及星魂对应一份，五星光锥每级叠影对应一份：
@@ -160,9 +165,18 @@ request.character_overrides.insert("1310".into(), CharacterSpec {
 
 各件可以独立生成时，按[单件抽样概率](relic-generation.md)分别生成。有角色或账号总分要求、或要把投入集中到核心角色时，分配器先确定一组可行分数。可达中档分数使用有界整数网格求解，其余情况在允许档位内回溯。生成成品时打乱部位次序，根据单件、角色与整号剩余的分数范围抽取副词条、强化次数及档位。集中投入时保留已经分配的单件目标。各条路径都使用请求允许的完整数值档位。
 
-因此，单件在给定分数下保留副词条和强化次数的抽样概率；整号各件分数还受核心投入目标和分数分配规则影响。搜索完毕且无可用分配时返回 `NoSolution`，下一件候选需要超出考察上限时返回 `BudgetExhausted`。
+单件在给定分数下保留副词条和强化次数的抽样概率。整号各件分数受核心投入目标和分数分配规则影响。
 
 `GeneratedAccount` 保存统一原始账号、实际核心名单、逐角色投入统计、统计口径和搜索次数。用 `gold_count()`、`gold_by_category()`、`copies_by_category()`、`mean_effective_rolls()`、`core_gold_share()` 和 `core_relic_share()` 读取汇总值。五星份数按限定、常驻和免费三个类别汇总。原始账号记录游戏版本及外部资料提供的快照标识。空账号的金数和平均词条均为零。
+
+## 遇到错误时查什么
+
+| 错误 | 含义与排查 |
+| --- | --- |
+| `InvalidRequest` | 请求字段无效。根据错误消息检查取值，例如金数是否按 0.5 金递增、集中程度是否在 0～1 |
+| `Reference` | 参考资料缺失、格式错误或内部条件不一致。按错误消息检查快照文件与条目 |
+| `NoSolution` | 约束下没有可行结果。检查固定配装的可达金数、唯一光锥冲突和遗器分数范围 |
+| `BudgetExhausted { attempts }` | 搜索预算用尽时仍未找到结果，可能还有可行解。用同一请求和种子提高 `max_attempts` 后重试 |
 
 ## 验证
 
