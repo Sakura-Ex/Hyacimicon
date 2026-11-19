@@ -188,8 +188,8 @@ pub fn score_relic(relic: &RelicInstance, weights: &BTreeMap<RelicSubStat, f64>)
 }
 
 /// 按请求生成六件五星 +15 遗器，返回各件实例及实际得分。显式部位保留输入顺序，缺少的部位按标准部位顺序追加。
-/// 搜索共用 `max_attempts`。分数目标不可达时返回 [`GenerationError::NoSolution`]，
-/// 搜索未完成且次数已用尽时返回 [`GenerationError::BudgetExhausted`]。
+/// 搜索共用 `max_attempts`。确认分数目标不可达时返回 [`GenerationError::NoSolution`]，
+/// 用尽预算后仍需考察候选时返回 [`GenerationError::BudgetExhausted`]。
 pub fn generate_character_relics(
     request: &RelicRequest,
     max_attempts: usize,

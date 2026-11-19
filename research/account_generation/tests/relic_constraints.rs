@@ -55,7 +55,7 @@ fn scoring_speed_alone_does_not_change_its_unconstrained_drop_rate() {
     assert!((295..=450).contains(&with_speed), "{with_speed}");
 }
 
-/// 验证同权副词条的五次强化独立抽取且总体次数接近均匀分布。
+/// 在 2,048 件四词条头部中，检查五次强化落在四条上的总次数，以及五次全中同一条的件数。
 #[test]
 fn equal_scoring_substats_receive_independent_upgrades() {
     let stats = [Sub::AtkPercent, Sub::Spd, Sub::CritRate, Sub::CritDmg];
@@ -396,7 +396,7 @@ fn scoring_weights_use_a_signed_hundred_point_scale() {
     }
 }
 
-/// 验证半强度评分上限只归入对应的单一品质档位。
+/// 当六件理论最高分为 36 时，检查第二档成品低于 18 分，第三档成品至少 18 分。
 #[test]
 fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
     // 三次中档速度约为 3 分，三次中档暴击恰好为 3 分。六件理论上限为 36。
@@ -750,7 +750,7 @@ fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
     );
 }
 
-/// 验证毕业档可达到速度或双暴词条的高档理论上限。
+/// 分别只给暴击率或速度计分，检验第五档在仅允许高档数值时能达到六件遗器的理论最高分。
 #[test]
 fn graduation_tier_can_reach_the_high_roll_maximum() {
     let reference = AccountReference::bundled().unwrap();
@@ -788,7 +788,7 @@ fn graduation_tier_can_reach_the_high_roll_maximum() {
     }
 }
 
-/// 验证第五档在极小评分权重归一化后仍接受正的分数上限。
+/// 各副词条权重均取 `1e-8` 且只允许中档数值时，第五档成品仍须达到六件理论最高分的 80%。
 #[test]
 fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     let spec = CharacterSpec {
@@ -885,7 +885,7 @@ fn an_exact_speed_piece_can_roll_its_three_other_substats_at_different_tiers() {
     assert!(mixed);
 }
 
-/// 验证瓦尔特双暴强化分布可独立于速度和效果命中强化分布。
+/// 固定瓦尔特头部为 5.5 分，检查双暴组分两次强化、速度和命中组分三次时，能观察到全部 12 种组内分配。
 #[test]
 fn welt_crit_upgrades_vary_independently_of_speed_and_hit_rate_upgrades() {
     let spec = RelicSpec {

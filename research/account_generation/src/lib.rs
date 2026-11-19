@@ -529,8 +529,8 @@ impl Search<'_> {
 /// 生成满足约束的账号，推进调用方传入的随机源。
 ///
 /// 请求字段无效时返回 [`GenerationError::InvalidRequest`]，搜索确认约束无解时返回
-/// [`GenerationError::NoSolution`]。达到 `max_attempts` 时，[`GenerationError::BudgetExhausted`]
-/// 给出已经使用的次数，此时可能仍有可行分配。
+/// [`GenerationError::NoSolution`]。最后一次允许的尝试可以成功。若仍需尝试下一个候选，
+/// [`GenerationError::BudgetExhausted`] 给出已用次数，此时可能仍有可行分配。
 ///
 /// 复现结果时需使用相同请求、参考资料和随机源初始状态；连续调用共享随机源时，
 /// 后续结果还取决于此前调用的顺序及消耗。可保存调用前状态或从种子重放调用序列。

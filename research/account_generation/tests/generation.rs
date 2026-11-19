@@ -280,7 +280,7 @@ fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     );
 }
 
-/// 验证全角色名单在单个角色禁用中档强化时仍可通过档位回退生成。
+/// 为流萤禁用中档强化，验证 60 人账号仍能在 400 金预算下生成 360 件遗器。
 #[test]
 fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
     let reference = AccountReference::bundled().unwrap();
