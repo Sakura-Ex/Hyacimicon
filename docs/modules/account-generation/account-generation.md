@@ -14,7 +14,6 @@ cargo run --locked -p account-generator --example generate_account
 
 ```json
 {
-  "account_id": "account-001",
   "character_count": 12,
   "gold_count": 20,
   "core_character_ids": ["1310", "1225"],
@@ -42,11 +41,13 @@ let mut request = AccountRequest {
     resource_concentration: 0.7,
     min_mean_effective_rolls: Some(4.5),
     max_mean_effective_rolls: Some(5.0),
-    ..AccountRequest::new("account-001", 12)
+    ..AccountRequest::with_random_id(12)
 };
 let mut rng = ChaCha8Rng::seed_from_u64(42);
 let result = generate_account(&request, &reference, &mut rng)?;
 ```
+
+省略 `account_id` 时，生成器在角色和装备确定后，从同一随机源取 128 位生成 `account-<32 位十六进制数>`。实际 ID 保存在 `result.account.config_id`，也用于光锥和遗器的实例编号。使用相同请求、资料和随机源起始状态会得到相同的账号及 ID。需要固定名称时，在 JSON 中填写 `account_id`，或在 Rust 中使用 `AccountRequest::new("account-001", 12)`。
 
 ### 外部参考资料
 
@@ -64,7 +65,7 @@ let result = generate_account(&request, &reference, &mut rng)?;
 
 | 参数 | 含义 | 默认值 |
 | --- | --- | --- |
-| `account_id` | 账号 ID，也是装备实例 ID 前缀 | 必填 |
+| `account_id` | 账号 ID，也是光锥和遗器实例 ID 的前缀。可指定非空白字符串 | 省略时随机生成 |
 | `character_count` | 持有角色总数 | 必填，允许 0 |
 | `gold_count` | 精确金数，支持 0.5 金步长 | 从可达金额中选择 |
 | `five_star_build` | 所有持有五星的统一星魂和专锥叠影，如 `(0, 1)`、`(2, 1)` | `None` |

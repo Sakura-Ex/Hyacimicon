@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         resource_concentration: 0.7,
         min_mean_effective_rolls: Some(4.5),
         max_mean_effective_rolls: Some(5.0),
-        ..AccountRequest::new("account-001", 12)
+        ..AccountRequest::with_random_id(12)
     };
     if let Some(path) = args.next() {
         let source = fs::read_to_string(path)?;

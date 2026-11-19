@@ -122,8 +122,8 @@ impl Default for CharacterSpec {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccountRequest {
-    /// 生成账号 ID，同时作为装备实例 ID 的前缀。
-    pub account_id: String,
+    /// 写入原始账号并用作装备实例前缀的 ID。省略时在配装完成后从调用方的随机源生成。
+    pub account_id: Option<String>,
     /// 持有角色总数，允许为零。
     pub character_count: usize,
     /// 精确五星总金数，按半金步长；留空时由其他限制决定。
@@ -193,10 +193,18 @@ fn default_max_attempts() -> usize {
 
 /// 创建和校验账号生成请求。
 impl AccountRequest {
-    /// 以给定账号 ID 和持有人数创建请求，默认自动选一名核心，金数和遗器分数均不设目标。
+    /// 以指定账号 ID 和持有人数创建请求。
     pub fn new(account_id: impl Into<String>, character_count: usize) -> Self {
         Self {
-            account_id: account_id.into(),
+            account_id: Some(account_id.into()),
+            ..Self::with_random_id(character_count)
+        }
+    }
+
+    /// 以给定持有人数创建请求。生成时随机命名账号，默认自动选一名核心，金数和遗器分数均不设目标。
+    pub fn with_random_id(character_count: usize) -> Self {
+        Self {
+            account_id: None,
             character_count,
             gold_count: None,
             five_star_build: None,
@@ -221,7 +229,11 @@ impl AccountRequest {
     /// 验证请求的金数步长、类别、比例、人数、配装和遗器约束。
     fn validate(&self) -> Result<(), GenerationError> {
         use std::collections::BTreeSet;
-        if self.account_id.trim().is_empty() {
+        if self
+            .account_id
+            .as_ref()
+            .is_some_and(|id| id.trim().is_empty())
+        {
             return Err(invalid("账号 ID 不能为空"));
         }
         if self
@@ -590,7 +602,13 @@ fn assemble(
     let gear = relics::generate(request, choices, &core_character_ids, search)?;
     let mut account = RawAccount {
         schema_version: RAW_ACCOUNT_SCHEMA_VERSION,
-        config_id: request.account_id.clone(),
+        config_id: request.account_id.clone().unwrap_or_else(|| {
+            format!(
+                "account-{:016x}{:016x}",
+                search.rng.next_u64(),
+                search.rng.next_u64()
+            )
+        }),
         game_version: Some(reference.game_version.clone()),
         data_snapshot: reference.data_snapshot.clone(),
         characters: Vec::with_capacity(choices.len()),
@@ -605,7 +623,7 @@ fn assemble(
             build,
         } = choice;
         let id = &profile.id;
-        let prefix = format!("{}:{id}", request.account_id);
+        let prefix = format!("{}:{id}", account.config_id);
         let cone_instance_id = format!("{prefix}:light-cone:1");
         account.light_cones.push(LightConeInstance {
             instance_id: cone_instance_id.clone(),

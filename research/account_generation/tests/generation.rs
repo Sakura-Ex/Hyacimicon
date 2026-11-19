@@ -16,6 +16,61 @@ use account_generator::{
     score_relic,
 };
 
+/// 省略账号 ID 时，用同一种子可重放账号，所有光锥和遗器引用均使用生成的 ID。
+#[test]
+fn omitted_account_id_is_replayable_and_names_the_equipment_instances() {
+    let request: AccountRequest = serde_json::from_str(r#"{"character_count": 1}"#).unwrap();
+    let reference = AccountReference::bundled().unwrap();
+    let draw = |rng: &mut ChaCha8Rng| generate_account(&request, &reference, rng).unwrap();
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    let first = draw(&mut rng);
+    let id = &first.account.config_id;
+    let suffix = id.strip_prefix("account-").unwrap();
+    assert_eq!(suffix.len(), 32);
+    assert!(suffix.bytes().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(id, &draw(&mut rng).account.config_id);
+    assert_eq!(first, draw(&mut ChaCha8Rng::seed_from_u64(42)));
+
+    let character = &first.account.characters[0];
+    let prefix = format!("{id}:{}", character.character_id);
+    let cone_id = format!("{prefix}:light-cone:1");
+    assert_eq!(first.account.light_cones[0].instance_id, cone_id);
+    assert_eq!(character.light_cone_instance_id.as_ref(), Some(&cone_id));
+    assert_eq!(first.account.relics.len(), 6);
+    for relic in &first.account.relics {
+        let relic_id = format!("{prefix}:relic:{}", u8::from(relic.slot));
+        assert_eq!(relic.instance_id, relic_id);
+        assert_eq!(
+            character.relic_instance_ids.get(&relic.slot),
+            Some(&relic_id)
+        );
+    }
+
+    let named = AccountRequest::new(id, 1);
+    let mut named_rng = ChaCha8Rng::seed_from_u64(42);
+    let replay = generate_account(&named, &reference, &mut named_rng).unwrap();
+    assert_eq!(replay, first);
+}
+
+/// 同一随机源连续生成空账号也会分别命名，显式传入空白名称仍属于无效请求。
+#[test]
+fn empty_accounts_get_individual_ids_and_explicit_blank_ids_are_invalid() {
+    let reference = AccountReference::bundled().unwrap();
+    let mut rng = ChaCha8Rng::seed_from_u64(42);
+    let request: AccountRequest = serde_json::from_str(r#"{"character_count": 0}"#).unwrap();
+    let first = generate_account(&request, &reference, &mut rng).unwrap();
+    let second = generate_account(&request, &reference, &mut rng).unwrap();
+    assert_ne!(first.account.config_id, second.account.config_id);
+    let named: AccountRequest =
+        serde_json::from_str(r#"{"account_id":"training","character_count":0}"#).unwrap();
+    let explicit = generate_account(&named, &reference, &mut rng).unwrap();
+    assert_eq!(explicit.account.config_id, "training");
+    assert!(matches!(
+        generate_account(&AccountRequest::new("  ", 0), &reference, &mut rng),
+        Err(GenerationError::InvalidRequest(_))
+    ));
+}
+
 /// 验证固定种子生成精确金数账号，并可序列化后转换为可玩配置。
 #[test]
 fn sample_has_exact_gold_and_converts_with_shared_account_core() {
