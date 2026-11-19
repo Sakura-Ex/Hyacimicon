@@ -67,7 +67,7 @@ pub struct Mechanics {
     #[cfg_attr(feature = "diagnostics", serde(default))]
     pub cycles: Vec<f64>,
     #[cfg_attr(feature = "diagnostics", serde(default = "one"))]
-    /// 现有我方伤害系数，按既有规则应用一次。
+    /// 我方直接伤害的可选乘数，默认 1，取有限非负值。每次命中结算一次。
     pub ally_damage_factor: f64,
     #[cfg_attr(feature = "diagnostics", serde(default))]
     /// 按声明顺序执行的规则监听器。

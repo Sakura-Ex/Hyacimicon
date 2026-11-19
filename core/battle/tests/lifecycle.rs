@@ -1,7 +1,8 @@
 mod common;
 use battle_core::{
     decision::*,
-    diagnostics::{simulate, simulate_with_policy},
+    diagnostics::{simulate, simulate_with_policy, ScenarioFile},
+    engine::simulate as simulate_in_memory,
     model::*,
 };
 use common::*;
@@ -291,10 +292,80 @@ fn single_friendly_damage_factor_does_not_change_enemy_damage() {
     e.actions = vec![action("e", vec![damage(100.0, Target::AllEnemies)])];
     let mut s = scenario(vec![a], vec![vec![e]]);
     s.max_actions = 2;
-    s.mechanics.ally_damage_factor = 0.3;
-    let r = run(s);
-    close(state(&r, "e").hp, 970.0);
-    close(state(&r, "a").hp, 900.0);
+    for (factor, enemy_hp) in [(1.0, 900.0), (0.3, 970.0), (0.0, 1_000.0)] {
+        s.mechanics.ally_damage_factor = factor;
+        let memory = simulate_in_memory(&s, 7).unwrap();
+        close(state(&memory, "e").hp, enemy_hp);
+        close(state(&memory, "a").hp, 900.0);
+        let mut json = serde_json::to_value(&s).unwrap();
+        if factor == 1.0 {
+            json["mechanics"]
+                .as_object_mut()
+                .unwrap()
+                .remove("ally_damage_factor");
+        }
+        let file = ScenarioFile::from_slice(&serde_json::to_vec(&json).unwrap()).unwrap();
+        let diagnostic = simulate(&file.battle, 7, false).unwrap();
+        assert_eq!(
+            serde_json::to_value(memory).unwrap(),
+            serde_json::to_value(diagnostic).unwrap()
+        );
+    }
+}
+
+#[test]
+fn invalid_friendly_damage_factor_cannot_change_enemy_shield() {
+    let mut a = unit("a", 100.0);
+    a.actions = vec![action("a", vec![damage(100.0, Target::AllEnemies)])];
+    let mut s = scenario(vec![a], vec![vec![unit("e", 1.0)]]);
+    s.max_actions = 1;
+    for factor in [-1.0, f64::NAN, f64::INFINITY] {
+        s.mechanics.ally_damage_factor = factor;
+        assert_eq!(
+            simulate_in_memory(&s, 7).expect_err("invalid factor must prevent damage settlement"),
+            "ally_damage_factor must be finite and non-negative"
+        );
+    }
+    s.mechanics.ally_damage_factor = -1.0;
+    let file = ScenarioFile::from_slice(&serde_json::to_vec(&s).unwrap()).unwrap();
+    assert_eq!(
+        simulate(&file.battle, 7, false).unwrap_err(),
+        "ally_damage_factor must be finite and non-negative"
+    );
+}
+
+#[test]
+fn friendly_damage_without_a_live_target_does_not_apply_the_factor() {
+    let mut s = scenario(vec![unit("a", 100.0)], vec![vec![unit("e", 1.0)]]);
+    s.mechanics.ally_damage_factor = -1.0;
+    let mut after_death = hook(
+        "a",
+        BattleEvent::Death,
+        vec![damage(100.0, Target::AllEnemies)],
+    );
+    after_death.subject = Some("e".into());
+    s.mechanics.triggers = vec![
+        hook(
+            "e",
+            BattleEvent::BattleStart,
+            vec![damage(1000.0, Target::SelfUnit)],
+        ),
+        after_death,
+    ];
+    let result = run(s);
+    assert_eq!(result.termination, Termination::EnemiesDefeated);
+    assert_eq!(result.actions, 0);
+    let damage_events: Vec<_> = result
+        .events
+        .iter()
+        .filter(|e| e.kind == "damage")
+        .collect();
+    assert_eq!(damage_events.len(), 1);
+    assert_eq!(damage_events[0].actor, "e");
+    assert!(result
+        .events
+        .iter()
+        .any(|e| e.kind == "trigger" && e.actor == "a"));
 }
 #[test]
 fn event_status_expiry_and_illegal_policy_are_observable() {

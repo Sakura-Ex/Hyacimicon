@@ -12,12 +12,22 @@ impl State<'_> {
         can_crit: bool,
         target: Target,
     ) -> Result<(), String> {
+        let factor = if self.units[actor].ally {
+            self.input.mechanics.ally_damage_factor
+        } else {
+            1.0
+        };
+        let valid_factor = factor.is_finite() && factor >= 0.0;
         for _ in 0..hits {
             for victim in self.targets(actor, target)? {
                 // Earlier recipients can dispatch immediate damage. A
                 // cached AoE target list is not proof this victim lives.
                 if !self.units[victim].alive() {
                     continue;
+                }
+                // Validate only at a hit. A negative factor would grant shield.
+                if !valid_factor {
+                    return Err("ally_damage_factor must be finite and non-negative".into());
                 }
                 if self.attack_owner == Some(actor) && !self.attack_targets.contains(&victim) {
                     self.attack_targets.push(victim);
@@ -76,11 +86,7 @@ impl State<'_> {
                         crit_damage: attacker.crit_damage,
                     },
                     critical,
-                )? * if self.units[actor].ally {
-                    self.input.mechanics.ally_damage_factor
-                } else {
-                    1.0
-                };
+                )? * factor;
                 finite(amount, "mode damage")?;
                 let absorbed = amount.min(self.units[victim].shield);
                 self.units[victim].shield -= absorbed;

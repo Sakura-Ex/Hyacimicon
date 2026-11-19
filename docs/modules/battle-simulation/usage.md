@@ -44,7 +44,7 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCEN
 ### 2.2 核心机制字段 (`mechanics`) 说明
 
 - `cycles`：各轮次（Cycle）的 AV 额度列表。组装方保证额度之和等于 `max_av`，列表为空时使用单轮 `max_av`。
-- `ally_damage_factor`：我方单位造成直接伤害时，在公式末尾乘算一次。开发 JSON 省略时取 `1.0`。
+- `ally_damage_factor` 是我方直接伤害的可选乘数。Rust `Mechanics::default()` 与省略此字段的开发 JSON 均取 `1.0`。填入有限非负数，`0.0` 表示该次直接伤害量为零。我方直接伤害命中存活目标时，在护盾和生命结算前乘算一次。敌方伤害使用 `1.0`。用于命中的值为负数或非有限值时返回 `ally_damage_factor must be finite and non-negative`。
 - `queue_capacity`：有限敌人队列的在场槽位数。启用时，组装方将所有敌人按入场顺序放入唯一一波 `waves[0]`。敌人阵亡并结束当前 Action 后，引擎依序补足空槽。
 - `triggers`: 战局全局或单位级事件监听器（`BattleStart`、`WaveStart`、`Hit`、`Break`、`Death`、`TurnEnd` 等）。
 
