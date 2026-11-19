@@ -1,3 +1,5 @@
+//! 验证账号金数、装备唯一性、资源集中度和角色覆盖约束。
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicMainStat, RelicSlot, RelicSubStat, TraceConfig};
@@ -7,6 +9,7 @@ use account_generator::{
     generate_character,
 };
 
+/// 构造包含两个指定候选角色和一个核心角色的基础请求。
 fn two_characters() -> AccountRequest {
     AccountRequest {
         character_pool: Some(vec!["1004".into(), "1005".into()]),
@@ -15,6 +18,7 @@ fn two_characters() -> AccountRequest {
     }
 }
 
+/// 构造固定使用指定光锥的角色配置。
 fn with_cone(id: &str) -> CharacterSpec {
     CharacterSpec {
         light_cone: LightConeSpec {
@@ -25,6 +29,7 @@ fn with_cone(id: &str) -> CharacterSpec {
     }
 }
 
+/// 验证分类金数统计、装备引用完整性及预算不足时的失败结果。
 #[test]
 fn gold_counts_and_equipment_references_follow_the_budget_categories() {
     let reference = AccountReference::bundled().unwrap();
@@ -80,6 +85,7 @@ fn gold_counts_and_equipment_references_follow_the_budget_categories() {
     );
 }
 
+/// 验证免费资源可排除在金数外，也可显式计入预算。
 #[test]
 fn free_resources_are_counted_and_can_be_included_in_the_budget() {
     let reference = AccountReference::bundled().unwrap();
@@ -106,6 +112,7 @@ fn free_resources_are_counted_and_can_be_included_in_the_budget() {
     );
 }
 
+/// 验证半金精度的自动配装及唯一光锥实例约束。
 #[test]
 fn automatic_builds_respect_half_gold_and_unique_cones() {
     let reference = AccountReference::bundled().unwrap();
@@ -160,6 +167,7 @@ fn automatic_builds_respect_half_gold_and_unique_cones() {
     );
 }
 
+/// 验证覆盖角色仍可成为自动核心角色。
 #[test]
 fn ownership_overrides_still_allow_either_character_to_be_the_automatic_core() {
     let reference = AccountReference::bundled().unwrap();
@@ -191,6 +199,7 @@ fn ownership_overrides_still_allow_either_character_to_be_the_automatic_core() {
     );
 }
 
+/// 验证资源集中度提高核心角色获得的金数和遗器分数占比。
 #[test]
 fn concentrating_resources_changes_the_core_shares_under_the_same_constraints() {
     let reference = AccountReference::bundled().unwrap();
@@ -225,6 +234,7 @@ fn concentrating_resources_changes_the_core_shares_under_the_same_constraints() 
     assert!(focused.core_relic_share() > even.core_relic_share() + 0.3);
 }
 
+/// 验证账号品质档位及独立平均分上下限作用于生成结果。
 #[test]
 fn account_quality_and_independent_average_bounds_apply_to_the_result() {
     let reference = AccountReference::bundled().unwrap();
@@ -252,6 +262,7 @@ fn account_quality_and_independent_average_bounds_apply_to_the_result() {
     assert!(result.mean_effective_rolls() <= 1.0 + 1e-6);
 }
 
+/// 验证负遗器评分在角色和账号汇总时保持符号与目标值。
 #[test]
 fn signed_relic_scores_survive_character_and_account_aggregation() {
     let reference = AccountReference::bundled().unwrap();
@@ -297,6 +308,7 @@ fn signed_relic_scores_survive_character_and_account_aggregation() {
     ));
 }
 
+/// 验证显式行迹与单件遗器覆盖保留其他推荐配置。
 #[test]
 fn explicit_character_traces_and_partial_relic_overrides_preserve_other_recommendations() {
     let reference = AccountReference::bundled().unwrap();

@@ -1,3 +1,5 @@
+//! 从内置资料生成账号，并将 RawAccount JSON 写到标准输出。
+
 use std::{
     env,
     error::Error,
@@ -9,6 +11,8 @@ use account_generator::{
     AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, generate_account,
 };
 
+/// 第一个位置参数为请求 JSON 路径，第二个为随机种子（默认 42）。
+/// 将原始账号 JSON 写到标准输出，将种子、金数、遗器均分和搜索次数写到标准错误。
 fn main() -> Result<(), Box<dyn Error>> {
     let mut args = env::args().skip(1);
     let mut seed = 42;

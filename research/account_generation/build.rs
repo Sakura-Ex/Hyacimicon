@@ -1,5 +1,8 @@
+//! 将内置角色资料文件名和路径生成 Rust 静态资料索引。
+
 use std::{env, fs, io, path::PathBuf};
 
+/// 按文件名排序角色 JSON，并生成供 `include_str!` 使用的资料表。
 fn main() -> io::Result<()> {
     let profiles = PathBuf::from("data/character");
     println!("cargo:rerun-if-changed={}", profiles.display());

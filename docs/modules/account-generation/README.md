@@ -20,3 +20,5 @@ Rust 账号生成器支持账号级金数、统一五星配装、推荐队友关
 | [当前开发任务](../../project/roadmap.md#当前先做运营-ai-决策流程) | 运营 AI 的首个节点及账号与战斗侧对接 |
 
 生成账号时，从账号接口页开始；生成完整角色时查角色配置接口页；验证单件生成时查对应接口页。扩展账号生成或对接下游时，先阅读数据流，再查数据设计。
+
+开发者可在仓库根目录运行 `cargo doc -p account-generator --no-deps --document-private-items --open` 查看公开接口和私有实现。角色与金数分配见 `allocation`，行迹与快照加载见 `reference`，遗器评分、抽样及可达分数搜索见 `relics`。各项回归测试的输入和预期结果见[生成器测试目录](../../../research/account_generation/tests/)。

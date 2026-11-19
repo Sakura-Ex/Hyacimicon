@@ -1,3 +1,5 @@
+//! 验证遗器词条、强化档位、评分范围和套装生成约束。
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat as Main, RelicSlot as Slot, RelicSubStat as Sub};
@@ -6,10 +8,12 @@ use account_generator::{
     SeedableRng, generate_character, generate_character_relics, generate_relic, score_relic,
 };
 
+/// 仅允许中档副词条强化数值。
 const MID: [f64; 3] = [0.0, 1.0, 0.0];
+/// 低、中、高三档强化数值等概率参与抽样。
 const ALL: [f64; 3] = [1.0; 3];
 
-// 4.7 的单次低、中、高档数值。独立校验输出的单位和强化次数。
+/// 4.7 的低、中、高档单次强化值，用于独立核验成品的数值单位和强化次数。
 const VALUES: [(Sub, [f64; 3]); 12] = [
     (Sub::Hp, [33.87004, 38.103798, 42.33755]),
     (Sub::Atk, [16.935019, 19.051895, 21.168774]),
@@ -25,10 +29,12 @@ const VALUES: [(Sub, [f64; 3]); 12] = [
     (Sub::BreakEffect, [0.05184, 0.058320003, 0.0648]),
 ];
 
+/// 为所有副词条设置相同评分权重。
 fn all_stats() -> BTreeMap<Sub, f64> {
     VALUES.into_iter().map(|(stat, _)| (stat, 1.0)).collect()
 }
 
+/// 验证只给速度评分不会改变未约束遗器出现速度词条的概率。
 #[test]
 fn scoring_speed_alone_does_not_change_its_unconstrained_drop_rate() {
     let weights = BTreeMap::from([(Sub::Spd, 1.0)]);
@@ -49,6 +55,7 @@ fn scoring_speed_alone_does_not_change_its_unconstrained_drop_rate() {
     assert!((295..=450).contains(&with_speed), "{with_speed}");
 }
 
+/// 验证同权副词条的五次强化独立抽取且总体次数接近均匀分布。
 #[test]
 fn equal_scoring_substats_receive_independent_upgrades() {
     let stats = [Sub::AtkPercent, Sub::Spd, Sub::CritRate, Sub::CritDmg];
@@ -87,6 +94,7 @@ fn equal_scoring_substats_receive_independent_upgrades() {
     assert!(all_on_one <= 25, "{all_on_one}");
 }
 
+/// 验证精确双暴评分下五次强化按合法组合概率抽样。
 #[test]
 fn exact_crit_score_samples_the_five_upgrades_by_roll_probability() {
     let spec = RelicSpec {
@@ -115,6 +123,7 @@ fn exact_crit_score_samples_the_five_upgrades_by_roll_probability() {
     assert!((27..=103).contains(&on_one), "{on_one}");
 }
 
+/// 验证套装总分范围允许低档与高档强化相互补偿。
 #[test]
 fn a_set_score_range_samples_compensating_low_and_high_rolls() {
     // 头部的攻击百分比与效果抵抗共得约两分，其余五件得零分。
@@ -147,6 +156,7 @@ fn a_set_score_range_samples_compensating_low_and_high_rolls() {
     assert!((82..=175).contains(&mid), "{mid} middle rolls");
 }
 
+/// 验证精确套装分数仍保留需要低档强化才能达标的副词条。
 #[test]
 fn a_set_score_target_keeps_substats_that_need_a_low_roll() {
     let mut pieces: Vec<_> = (1..=6)
@@ -183,6 +193,7 @@ fn a_set_score_target_keeps_substats_that_need_a_low_roll() {
     );
 }
 
+/// 按副词条数值反推出合法强化次数总数。
 fn valid_roll_counts(piece: &RelicInstance, tiers: [f64; 3]) -> BTreeSet<u8> {
     assert_eq!(
         (piece.rarity, piece.level, piece.substats.len()),
@@ -224,6 +235,7 @@ fn valid_roll_counts(piece: &RelicInstance, tiers: [f64; 3]) -> BTreeSet<u8> {
     totals
 }
 
+/// 验证生成遗器的主词条、稀有度及副词条强化分解均符合规则。
 #[test]
 fn generated_relics_have_legal_main_stats_and_roll_decompositions() {
     let cases = [
@@ -264,6 +276,7 @@ fn generated_relics_have_legal_main_stats_and_roll_decompositions() {
     }
 }
 
+/// 验证三条或四条初始副词条均可生成，且分数目标可指定其中一种。
 #[test]
 fn initial_three_and_four_rolls_are_both_sampled_and_score_targets_can_force_either() {
     let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -292,6 +305,7 @@ fn initial_three_and_four_rolls_are_both_sampled_and_score_targets_can_force_eit
     }
 }
 
+/// 验证六件输入顺序、单件分数范围和套装总分范围均被保留。
 #[test]
 fn provided_six_piece_order_and_piece_and_total_bounds_are_all_preserved() {
     let request = RelicRequest {
@@ -334,6 +348,7 @@ fn provided_six_piece_order_and_piece_and_total_bounds_are_all_preserved() {
     }
 }
 
+/// 验证主词条候选同时满足必需副词条和目标分数可达性。
 #[test]
 fn main_stat_candidates_are_filtered_by_required_stats_and_score_reachability() {
     let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -355,6 +370,7 @@ fn main_stat_candidates_are_filtered_by_required_stats_and_score_reachability() 
     assert_eq!(score, 5.0);
 }
 
+/// 验证评分权重接受正负一百范围内的值并拒绝越界或非有限值。
 #[test]
 fn scoring_weights_use_a_signed_hundred_point_scale() {
     let spec = RelicSpec {
@@ -380,6 +396,7 @@ fn scoring_weights_use_a_signed_hundred_point_scale() {
     }
 }
 
+/// 验证半强度评分上限只归入对应的单一品质档位。
 #[test]
 fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
     // 三次中档速度约为 3 分，三次中档暴击恰好为 3 分。六件理论上限为 36。
@@ -427,6 +444,7 @@ fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
     }
 }
 
+/// 验证带符号权重下可生成可达的负分与正分极值。
 #[test]
 fn signed_stat_weights_preserve_feasible_negative_and_positive_score_extremes() {
     let weights = BTreeMap::from([
@@ -469,6 +487,7 @@ fn signed_stat_weights_preserve_feasible_negative_and_positive_score_extremes() 
     }
 }
 
+/// 验证非法请求返回参数错误，离散不可达分数返回无解。
 #[test]
 fn invalid_requests_and_discrete_unreachable_scores_report_distinct_errors() {
     let mut rng = ChaCha8Rng::seed_from_u64(42);
@@ -529,6 +548,7 @@ fn invalid_requests_and_discrete_unreachable_scores_report_distinct_errors() {
     ));
 }
 
+/// 验证极小的正档位权重仍可参与精确分数搜索。
 #[test]
 fn any_positive_tier_weight_is_still_eligible_for_exact_search() {
     let target = 2.0 / 2.3;
@@ -550,6 +570,7 @@ fn any_positive_tier_weight_is_still_eligible_for_exact_search() {
     assert_eq!(score, target);
 }
 
+/// 验证各角色品质档共用合法分数上限并应用显式分数覆盖。
 #[test]
 fn all_character_quality_tiers_use_the_same_legal_upper_and_apply_score_overrides() {
     let reference = AccountReference::bundled().unwrap();
@@ -605,6 +626,7 @@ fn all_character_quality_tiers_use_the_same_legal_upper_and_apply_score_override
     assert!(matches!(generate(&spec), Err(GenerationError::NoSolution)));
 }
 
+/// 验证无评分训练遗器的强化次数可分散到多个副词条。
 #[test]
 fn unscored_training_relics_can_spread_upgrades_across_multiple_substats() {
     let spec = RelicSpec {
@@ -637,6 +659,7 @@ fn unscored_training_relics_can_spread_upgrades_across_multiple_substats() {
     assert!(split, "all five upgrades always landed on a single substat");
 }
 
+/// 验证浮点舍入后的单件上限仍允许达到指定套装总分。
 #[test]
 fn rounded_piece_limits_still_allow_the_requested_set_total() {
     let request = RelicRequest {
@@ -657,6 +680,7 @@ fn rounded_piece_limits_still_allow_the_requested_set_total() {
     assert!(pieces.iter().all(|(_, score)| *score == 8.0));
 }
 
+/// 验证连结绳主词条与必需副词条冲突时直接判定无解。
 #[test]
 fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
     let spec = CharacterSpec {
@@ -684,6 +708,7 @@ fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
     ));
 }
 
+/// 验证第三档品质可达到高档合法分数上限的一半。
 #[test]
 fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
     let per_piece = 3.0 * 0.0648 / 0.058320003;
@@ -725,6 +750,7 @@ fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
     );
 }
 
+/// 验证毕业档可达到速度或双暴词条的高档理论上限。
 #[test]
 fn graduation_tier_can_reach_the_high_roll_maximum() {
     let reference = AccountReference::bundled().unwrap();
@@ -762,6 +788,7 @@ fn graduation_tier_can_reach_the_high_roll_maximum() {
     }
 }
 
+/// 验证第五档在极小评分权重归一化后仍接受正的分数上限。
 #[test]
 fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     let spec = CharacterSpec {
@@ -786,6 +813,7 @@ fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     assert!(investment.piece_scores.iter().sum::<f64>() >= 0.8 * investment.relic_score_upper);
 }
 
+/// 验证成品头部的等权双暴可共同分配强化次数且结果存在变化。
 #[test]
 fn equally_weighted_crit_stats_can_share_the_upgrades_on_a_finished_head_piece() {
     let spec = RelicSpec {
@@ -821,6 +849,7 @@ fn equally_weighted_crit_stats_can_share_the_upgrades_on_a_finished_head_piece()
     assert!(splits.len() > 1);
 }
 
+/// 验证精确速度目标下其余三条副词条可采用不同强化档位。
 #[test]
 fn an_exact_speed_piece_can_roll_its_three_other_substats_at_different_tiers() {
     let spec = RelicSpec {
@@ -856,6 +885,7 @@ fn an_exact_speed_piece_can_roll_its_three_other_substats_at_different_tiers() {
     assert!(mixed);
 }
 
+/// 验证瓦尔特双暴强化分布可独立于速度和效果命中强化分布。
 #[test]
 fn welt_crit_upgrades_vary_independently_of_speed_and_hit_rate_upgrades() {
     let spec = RelicSpec {

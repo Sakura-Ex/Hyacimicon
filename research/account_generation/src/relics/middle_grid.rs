@@ -1,16 +1,22 @@
+//! 将遗器候选分数映射到有限精度整数网格，搜索可达总分并还原组合。
+
 use std::collections::BTreeMap;
 
 use crate::{GenerationError, Search};
 
 use super::{Bounds, EPSILON, Group, contains};
 
-/// 带上限的可达分数集合。第 n 位表示可取得 n 个整数分数单位。
+/// 带上限的可达整数分数集合；第 n 位表示恰好可取得 n 个网格单位。
 struct Scores {
+    /// 位图数据，每个 `u64` 按低位优先编码连续 64 个分数。
     words: Vec<u64>,
+    /// 当前位图中允许查询的最大非负整数分数索引。
     maximum: usize,
 }
 
+/// 维护遗器分数组合的整数可达集合。
 impl Scores {
+    /// 创建仅包含零分的可达集合。
     fn zero() -> Self {
         Self {
             words: vec![1],
@@ -18,10 +24,12 @@ impl Scores {
         }
     }
 
+    /// 判断非负整数分数是否在上限内且对应位已置位。
     fn contains(&self, score: usize) -> bool {
         score <= self.maximum && self.words[score / 64] & (1 << (score % 64)) != 0
     }
 
+    /// 将当前可达值与单件选项做和集合并，并截断到 `cap`。
     fn extend(&self, options: &[usize], cap: usize) -> Self {
         let maximum = self
             .maximum
@@ -50,13 +58,18 @@ impl Scores {
     }
 }
 
+/// 一个角色在整数网格上的单件分数选项及后缀可达集合。
 struct ReachableGroup {
+    /// 每件的网格分数到实际分数映射，用于回溯原始浮点值。
     recipes: Vec<BTreeMap<usize, f64>>,
+    /// 从每个部位起算的可达分数位图，最后一项表示空后缀只能取零分。
     suffix: Vec<Scores>,
+    /// 同时满足该角色区间且可由各件组合得到的整数分数。
     possible: Vec<usize>,
 }
 
-/// 先拼合每件及每个角色的可达分数，再逐件还原，窄区间也只需一次成品考察。
+/// 将可达中档分数映射到整数网格，按角色及整号目标回溯各件分数。
+/// 原始浮点分数通过复核后，每件计一次预算。无法表示或找不到符合区间的组合时返回 `None`，供调用方改用全档位搜索。
 pub(super) fn find(
     groups: &[Group],
     overall: Bounds,
@@ -193,6 +206,7 @@ pub(super) fn find(
     Ok(Some(output))
 }
 
+/// 为每个后缀构造可达和集合，用于分数组合剪枝及回溯。
 fn suffix(options: impl DoubleEndedIterator<Item = Vec<usize>>, cap: usize) -> Vec<Scores> {
     let mut result = Vec::new();
     let mut current = Scores::zero();
@@ -206,6 +220,7 @@ fn suffix(options: impl DoubleEndedIterator<Item = Vec<usize>>, cap: usize) -> V
     result
 }
 
+/// 将实数分数区间映射到给定缩放下可接受的非负整数边界。
 fn integer_bounds(bounds: Bounds, scale: f64) -> Option<(usize, usize)> {
     let low = ((bounds.0 - EPSILON) * scale).ceil().max(0.0);
     let high = ((bounds.1 + EPSILON) * scale).floor();

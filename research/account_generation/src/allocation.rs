@@ -1,3 +1,5 @@
+﻿//! 按持有人数、五星投入、核心名单及队友关联条件搜索账号分配。
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
@@ -6,29 +8,46 @@ use crate::{
     reference::{Cone, Profile, Team},
 };
 
+/// 单个角色的可行光锥、星魂与叠影组合及其预算成本。
 struct Candidate<'a> {
+    /// 参考资料中的角色配置与推荐信息。
     profile: &'a Profile,
+    /// 生成请求指定或采用的角色练度。
     spec: CharacterSpec,
+    /// 该角色可选的光锥、星魂和叠影组合。
     builds: Vec<Build<'a>>,
+    /// 不同配装能达到的半金数，去重后升序排列，供可达性检查使用。
     costs: Vec<usize>,
+    /// 可选光锥数量，用于优先处理选择较少的角色。
     cone_count: usize,
 }
 
+/// 一个角色的光锥、星魂与叠影组合，以及计入预算的半金数。
 #[derive(Clone, Copy)]
 pub(super) struct Build<'a> {
+    /// 此组合使用的光锥参考条目。
     pub cone: &'a Cone,
+    /// 角色星魂数量。
     pub eidolons: u8,
+    /// 光锥叠影等级。
     pub stack: u8,
+    /// 角色与光锥合计的半金预算单位。
     units: usize,
+    /// 光锥本身的半金预算单位。
     cone_units: usize,
 }
 
+/// 交给账号组装的角色、练度及选定配装。
 pub(super) struct Choice<'a> {
+    /// 角色参考资料。
     pub profile: &'a Profile,
+    /// 角色练度配置。
     pub spec: &'a CharacterSpec,
+    /// 选定的光锥、星魂、叠影及其预算成本。
     pub build: Build<'a>,
 }
 
+/// 构造角色候选池，并搜索满足账号约束的一组角色与配装。
 pub(super) fn select(
     request: &AccountRequest,
     reference: &AccountReference,
@@ -92,6 +111,7 @@ pub(super) fn select(
         .ok_or(GenerationError::NoSolution)
 }
 
+/// 将 ID 列表映射为候选下标，去除重复项并拒绝池外 ID。
 fn unique_indices<'a>(
     ids: impl IntoIterator<Item = &'a String>,
     menus: &[Candidate<'_>],
@@ -109,6 +129,7 @@ fn unique_indices<'a>(
     Ok(result)
 }
 
+/// 按请求筛选角色和光锥，并展开每名角色的合法配装选项。
 fn menus<'a>(
     request: &AccountRequest,
     reference: &'a AccountReference,
@@ -197,6 +218,7 @@ fn menus<'a>(
     Ok(result)
 }
 
+/// 读取可选 ID 池；未指定时返回全部条目，重复 ID 只保留一次。
 fn pool<'a, T>(
     ids: Option<&[String]>,
     source: &'a BTreeMap<String, T>,
@@ -216,6 +238,7 @@ fn pool<'a, T>(
         .collect()
 }
 
+/// 按请求纳入预算的类别计算半金整数单位。
 fn gold_units(category: GoldCategory, quantity: u8, request: &AccountRequest) -> usize {
     if request.gold_categories.contains(&category) {
         category.half_units() * usize::from(quantity)
@@ -224,6 +247,8 @@ fn gold_units(category: GoldCategory, quantity: u8, request: &AccountRequest) ->
     }
 }
 
+/// 检查已选角色加上指定数量的候选角色，能否恰好凑出目标半金数。
+/// 表按持有人数和半金数记录可达性。唯一光锥冲突留到具体配装时检查。
 fn roster_fits(
     menu: &[Candidate<'_>],
     selected: &[usize],
@@ -267,6 +292,7 @@ fn roster_fits(
     counts[needed][target]
 }
 
+/// 将一个角色的所有可选成本并入可达金数集合。
 fn extend_costs(previous: &[bool], costs: &[usize], next: &mut [bool]) {
     let limit = next.len();
     for &cost in costs.iter().take_while(|&&cost| cost < limit) {
@@ -276,21 +302,35 @@ fn extend_costs(previous: &[bool], costs: &[usize], next: &mut [bool]) {
     }
 }
 
+/// 在候选角色中回溯选择持有人、核心名单和配装。
 struct RosterSearch<'a, 'b, 'rng> {
+    /// 账号生成约束。
     request: &'a AccountRequest,
+    /// 角色与光锥参考资料。
     reference: &'a AccountReference,
+    /// 按请求筛出的角色候选及配装。
     menu: &'a [Candidate<'a>],
+    /// 可选的精确总金数，单位为半金。
     target: Option<usize>,
+    /// 需要纳入核心名单的角色数。
     core_count: usize,
+    /// 是否将所有持有人都作为核心角色。
     all_cores: bool,
+    /// 请求人数是否等于候选池人数。此时每名候选都必须入选。
     fixed_roster: bool,
+    /// 当前已选角色候选下标。
     selected: &'b mut Vec<usize>,
+    /// 当前核心角色候选下标。
     cores: &'b mut Vec<usize>,
+    /// 有推荐队伍的已选角色各自抽出的队伍。
     plans: &'b mut Vec<&'a Team>,
+    /// 共用的搜索预算与随机源。
     search: &'b mut Search<'rng>,
 }
 
+/// 执行角色名单的递归选择与回溯。
 impl RosterSearch<'_, '_, '_> {
+    /// 逐层选择核心角色或普通持有人，失败时回溯并尝试其他候选。
     fn choose(
         &mut self,
         available: Vec<usize>,
@@ -375,6 +415,7 @@ impl RosterSearch<'_, '_, '_> {
         Ok(None)
     }
 
+    /// 有队友权重时按 `teammate_bias` 决定是否采用加权抽样，其余情况均匀抽取。
     fn draw(&mut self, candidates: &[usize], scores: &BTreeMap<&str, f64>) -> usize {
         let weight = |index: usize| {
             scores
@@ -401,6 +442,7 @@ impl RosterSearch<'_, '_, '_> {
         last
     }
 
+    /// 为已选名单寻找配装，并将结果组装成原始账号。
     fn generate(&mut self) -> Result<Option<GeneratedAccount>, GenerationError> {
         let mut order = self.selected.clone();
         order.sort_by_key(|&index| self.menu[index].cone_count);
@@ -438,10 +480,12 @@ impl RosterSearch<'_, '_, '_> {
     }
 }
 
+/// 从角色的推荐队伍中抽取一个关联计划。
 fn team<'a>(profile: &'a Profile, search: &mut Search<'_>) -> Option<&'a Team> {
     (!profile.teams.is_empty()).then(|| &profile.teams[search.index(profile.teams.len())])
 }
 
+/// 为尚未被已选角色填满的位置累计候选权重，每个位置的首选加 1，替补加 0.5。
 fn teammate_scores<'a>(plans: &[&'a Team], selected: &BTreeSet<&str>) -> BTreeMap<&'a str, f64> {
     let mut result = BTreeMap::new();
     for plan in plans {
@@ -468,6 +512,7 @@ fn teammate_scores<'a>(plans: &[&'a Team], selected: &BTreeSet<&str>) -> BTreeMa
     result
 }
 
+/// 使用增广路径为队伍位置匹配互不重复的已选角色。
 fn match_slot<'a>(
     slot: usize,
     slots: &[Vec<&'a str>],
@@ -490,6 +535,7 @@ fn match_slot<'a>(
     false
 }
 
+/// 为名单选择满足预算与光锥唯一性约束的配装。未指定总金数时，按随机顺序尝试可达的半金总数。
 fn choose_builds<'a>(
     menu: &'a [Candidate<'a>],
     order: &[usize],
@@ -561,18 +607,30 @@ fn choose_builds<'a>(
     Ok(None)
 }
 
+/// 按角色顺序搜索符合剩余半金预算的配装，记录已经分配的唯一光锥。
 struct BuildSearch<'a, 'b, 'rng> {
+    /// 全部候选角色和可选配装。
     menu: &'a [Candidate<'a>],
+    /// 按光锥选择数排序的角色下标。
     order: &'b [usize],
+    /// 各后缀角色可达到的剩余预算集合。
     suffix: &'b [Vec<bool>],
+    /// 当前资源分布策略为每名角色指定的预算。
     desired: &'b [f64],
+    /// 预算中分配给光锥的目标比例。
     light_cone_share: f64,
+    /// 递归过程中已选配装。
     selected: Vec<Choice<'a>>,
+    /// 已占用的唯一光锥 ID。
     used_unique: BTreeSet<&'a str>,
+    /// 共用的搜索预算与随机源。
     search: &'b mut Search<'rng>,
 }
 
+/// 执行配装组合的递归搜索。
 impl BuildSearch<'_, '_, '_> {
+    /// 先排除后续角色凑不出余额的组合，再按角色预算、光锥份额和推荐光锥排序，随机打破平局。
+    /// 同一角色只尝试一次半金成本和唯一光锥占用相同的组合，每次尝试消耗一次搜索预算。
     fn solve(&mut self, remaining: usize) -> Result<bool, GenerationError> {
         let position = self.selected.len();
         let Some(&index) = self.order.get(position) else {
@@ -630,6 +688,7 @@ impl BuildSearch<'_, '_, '_> {
     }
 }
 
+/// 按核心名单和集中度计算每名角色的资源分配权重。
 pub(super) fn weights<'a>(
     ids: impl ExactSizeIterator<Item = &'a str>,
     cores: &[String],
@@ -647,6 +706,7 @@ pub(super) fn weights<'a>(
     .collect()
 }
 
+/// 各角色先取下限，剩余资源按权重分配。已达上限的角色退出下一轮，剩余角色权重全为零时平分。
 pub(super) fn distribute(total: f64, bounds: &[(f64, f64)], weights: &[f64]) -> Vec<f64> {
     let mut values: Vec<_> = bounds.iter().map(|&(min, _)| min).collect();
     let mut remaining = total - values.iter().sum::<f64>();
@@ -689,11 +749,13 @@ pub(super) fn distribute(total: f64, bounds: &[(f64, f64)], weights: &[f64]) -> 
     values
 }
 
+/// 覆盖队友匹配和候选回溯边界的分配单元测试。
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{ChaCha8Rng, LightConeSpec, SeedableRng, generate_account};
 
+    /// 验证一个队友不能同时填入同一推荐队伍的多个位置。
     #[test]
     fn preferred_teammates_only_fill_one_recommended_slot_per_character() {
         let mut reference = AccountReference::bundled().unwrap();
@@ -724,6 +786,7 @@ mod tests {
         assert_eq!(roster, BTreeSet::from(["1004", "8009", "1103"]));
     }
 
+    /// 验证队伍选择和配装评分失败时会回溯尝试其他候选。
     #[test]
     fn roster_retries_when_the_first_choice_cannot_complete_equipment_or_score() {
         let mut reference = AccountReference::bundled().unwrap();

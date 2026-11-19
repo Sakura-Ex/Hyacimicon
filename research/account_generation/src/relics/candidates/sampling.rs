@@ -7,18 +7,27 @@ use super::{
     extremes, rolls,
 };
 
+/// 0 到 6 的阶乘，用于计算多项档位分配概率。
 const FACTORIAL: [f64; 7] = [1.0, 1.0, 2.0, 6.0, 24.0, 120.0, 720.0];
 
+/// 一种副词条强化分配的前缀状态。
 #[derive(Clone, Copy)]
 struct Prefix<'a> {
+    /// 当前四副词条组合配方。
     recipe: &'a Recipe,
+    /// 下一条尚未处理的副词条索引，最大为 4。
     position: usize,
+    /// 尚未分配给副词条的强化次数。
     extras: u8,
+    /// 已处理副词条的数值总和，百分比属性以比例值表示。
     values: [f64; 4],
+    /// 已处理副词条贡献的有效词条分。
     score: f64,
 }
 
+/// 创建并完成一条强化分配路径。
 impl<'a> Prefix<'a> {
+    /// 创建起始副词条数对应的根状态；总次数为 8 或 9。
     fn new(recipe: &'a Recipe, count: u8) -> Self {
         Self {
             recipe,
@@ -29,7 +38,7 @@ impl<'a> Prefix<'a> {
         }
     }
 
-    // 剩余部分全部合法时，直接独立抽取每次强化和档位。
+    /// 剩余分配都符合区间时，每次强化独立等概率选择一个待处理副词条，再按档位权重抽其数值。
     fn finish(mut self, tiers: [f64; 3], search: &mut Search<'_>) -> Candidate {
         let mut counts = [1u8; 4];
         for _ in 0..self.extras {
@@ -50,6 +59,7 @@ impl<'a> Prefix<'a> {
     }
 }
 
+/// 计算属性的有效词条贡献；纯中档时按次数计分，其余档位按实际数值归一化。
 fn contribution(tiers: [f64; 3], stat: Sub, weight: f64, count: u8, value: f64) -> f64 {
     if tiers[0] == 0.0 && tiers[2] == 0.0 {
         weight * f64::from(count)
@@ -58,18 +68,27 @@ fn contribution(tiers: [f64; 3], stat: Sub, weight: f64, count: u8, value: f64) 
     }
 }
 
+/// 一种强化次数对应的低中高档次数和概率质量。
 pub(super) struct TierOutcome {
+    /// 低、中、高档强化次数，三项之和等于本次强化次数。
     pub(super) counts: [u8; 3],
+    /// 该次数组合相对概率的自然对数。
     pub(super) log_mass: f64,
 }
 
+/// 按有效分数区间对原始强化概率进行条件抽样的搜索器。
 struct ConditionalDraw {
+    /// 成品分数必须满足的闭区间。
     bounds: Bounds,
+    /// 低、中、高档的抽样权重。
     tiers: [f64; 3],
+    /// 权重大于零的档位索引端点，用于可达分数边界。
     extremes: (usize, usize),
+    /// 按本次强化次数索引的多项分布结果。
     outcomes: [Vec<TierOutcome>; 7],
 }
 
+/// 枚举每个强化次数下所有可用档位次数组合及其多项分布对数概率。
 pub(super) fn tier_outcomes(tiers: [f64; 3]) -> [Vec<TierOutcome>; 7] {
     let largest = tiers.into_iter().fold(0.0, f64::max);
     let total_log = largest.ln() + tiers.iter().map(|w| w / largest).sum::<f64>().ln();
@@ -97,9 +116,12 @@ pub(super) fn tier_outcomes(tiers: [f64; 3]) -> [Vec<TierOutcome>; 7] {
     })
 }
 
+/// 以副词条位置、剩余强化次数和累计分数位模式缓存完成概率。
 type CompletionMass = HashMap<(usize, u8, u64), f64>;
 
+/// 对给定分数区间计算并抽取合法强化路径。
 impl ConditionalDraw {
+    /// 初始化档位组合表和可达分数边界。
     fn new(bounds: Bounds, tiers: [f64; 3]) -> Self {
         Self {
             bounds,
@@ -110,6 +132,7 @@ impl ConditionalDraw {
     }
 
     // 整段落入区间时，所有后续抽法都合法；整段在区间外时，可行概率为零。
+    /// 判断前缀能否立即终止，并返回其完成路径的对数质量。
     fn terminal_mass(&self, prefix: Prefix<'_>) -> Option<f64> {
         let (lo, hi) = prefix
             .recipe
@@ -125,6 +148,7 @@ impl ConditionalDraw {
         None
     }
 
+    /// 产生下一条属性的强化次数及档位组合，并给出分支对数概率。
     fn branches<'r>(&self, prefix: Prefix<'r>) -> impl Iterator<Item = (Prefix<'r>, f64)> {
         let i = prefix.position;
         let recipe = prefix.recipe;
@@ -158,6 +182,7 @@ impl ConditionalDraw {
         })
     }
 
+    /// 递归计算当前前缀最终落入目标分数区间的对数概率质量。
     fn log_probability(&self, prefix: Prefix<'_>, cache: &mut CompletionMass) -> f64 {
         if let Some(mass) = self.terminal_mass(prefix) {
             return mass;
@@ -179,6 +204,7 @@ impl ConditionalDraw {
         log_sum
     }
 
+    /// 按各合法后续路径的原始概率质量逐步抽取完整候选。
     fn draw(
         &self,
         piece: &PieceSearch,
@@ -210,7 +236,7 @@ impl ConditionalDraw {
     }
 }
 
-// 指数竞赛在分支间按概率选取。对数形式保留精确分数所需的极小正权重。
+/// 用对数形式的指数竞赛抽取分支，保留精确分数条件下极小的正权重。
 fn weighted_branch<T>(
     branches: impl Iterator<Item = (T, f64)>,
     search: &mut Search<'_>,
@@ -228,7 +254,9 @@ fn weighted_branch<T>(
     selected.ok_or(GenerationError::NoSolution)
 }
 
+/// 从遗器搜索器中抽取满足分数区间的完整候选。
 impl PieceSearch {
+    /// 先尝试原始先验抽样；不符合区间时按条件概率路径重新抽样。
     pub(in crate::relics) fn sample(
         &self,
         bounds: Bounds,

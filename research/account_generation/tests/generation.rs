@@ -1,3 +1,5 @@
+//! 验证账号、单角色与遗器生成结果及其约束和转换行为。
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{
@@ -14,6 +16,7 @@ use account_generator::{
     score_relic,
 };
 
+/// 验证固定种子生成精确金数账号，并可序列化后转换为可玩配置。
 #[test]
 fn sample_has_exact_gold_and_converts_with_shared_account_core() {
     let reference = AccountReference::bundled().unwrap();
@@ -69,6 +72,7 @@ fn sample_has_exact_gold_and_converts_with_shared_account_core() {
     );
 }
 
+/// 验证固定唯一光锥冲突返回无解，搜索预算为零时返回预算耗尽。
 #[test]
 fn fixed_light_cones_conflict_and_budget_exhaustion_are_reported() {
     let reference = AccountReference::bundled().unwrap();
@@ -109,6 +113,7 @@ fn fixed_light_cones_conflict_and_budget_exhaustion_are_reported() {
     ));
 }
 
+/// 验证单件遗器遵守指定强化档位、必需词条和精确有效分数。
 #[test]
 fn single_piece_respects_explicit_roll_tiers_and_required_stats() {
     let spec = RelicSpec {
@@ -133,6 +138,7 @@ fn single_piece_respects_explicit_roll_tiers_and_required_stats() {
     assert!((score - score_relic(&piece, &weights)).abs() < 1e-12);
 }
 
+/// 验证遗器搜索可在最后一次尝试成功，且整套生成按每件计入预算。
 #[test]
 fn full_tier_search_can_use_the_last_attempt_to_finish() {
     use account_generator::generate_character_relics;
@@ -171,6 +177,7 @@ fn full_tier_search_can_use_the_last_attempt_to_finish() {
     );
 }
 
+/// 验证中档目标不可达时，高档回退仍能在预算内满足套装总分。
 #[test]
 fn mixed_tier_fallback_keeps_the_budget_after_an_unreachable_middle_score() {
     let target = 5.0 + 2.6 / 2.3;
@@ -205,6 +212,7 @@ fn mixed_tier_fallback_keeps_the_budget_after_an_unreachable_middle_score() {
     assert!((result.iter().map(|(_, score)| score).sum::<f64>() - target).abs() <= 1e-12);
 }
 
+/// 验证中档网格按原始容差核验实际分数并拒绝偏差超限的目标。
 #[test]
 fn middle_grid_checks_the_actual_score_against_the_original_tolerance() {
     let target = 1.0 - 1e-6;
@@ -230,6 +238,7 @@ fn middle_grid_checks_the_actual_score_against_the_original_tolerance() {
     ));
 }
 
+/// 验证中档网格排除超过总分目标的候选并返回精确总分。
 #[test]
 fn middle_grid_discards_scores_above_the_requested_total() {
     let request = RelicRequest {
@@ -251,6 +260,7 @@ fn middle_grid_discards_scores_above_the_requested_total() {
     assert_eq!(result.iter().map(|(_, score)| score).sum::<f64>(), 1.0);
 }
 
+/// 验证理论遗器分数上限依据合法强化数值计算，不受目标分数截断。
 #[test]
 fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     let request = RelicRequest {
@@ -270,6 +280,7 @@ fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
     );
 }
 
+/// 验证全角色名单在单个角色禁用中档强化时仍可通过档位回退生成。
 #[test]
 fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
     let reference = AccountReference::bundled().unwrap();
@@ -293,6 +304,7 @@ fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
     assert_eq!(result.gold_count(), 400.0);
 }
 
+/// 验证全角色名单满足精确遗器均分、金数预算并转换为可玩账号。
 #[test]
 fn full_roster_meets_an_exact_score_and_converts() {
     let reference = AccountReference::bundled().unwrap();
@@ -337,6 +349,7 @@ fn full_roster_meets_an_exact_score_and_converts() {
     );
 }
 
+/// 验证完整角色候选范围在搜索预算内达到精确及窄区间低分目标。
 #[test]
 fn full_catalog_can_meet_exact_and_narrow_lower_score_targets_within_the_budget() {
     let reference = AccountReference::bundled().unwrap();
@@ -357,6 +370,7 @@ fn full_catalog_can_meet_exact_and_narrow_lower_score_targets_within_the_budget(
     }
 }
 
+/// 验证小额预算下可组合低档和高档速度强化达到账号精确分数。
 #[test]
 fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
     let mut pieces: Vec<_> = (1..=4)
@@ -401,6 +415,7 @@ fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
     assert_eq!(result.account.relics[5].substats[&RelicSubStat::Spd], 2.6);
 }
 
+/// 验证较宽账号分数区间会采样三种强化档位且结果保持在上下限内。
 #[test]
 fn wide_account_targets_sample_all_three_tiers_within_the_score_bounds() {
     let reference = AccountReference::bundled().unwrap();
@@ -456,6 +471,7 @@ fn wide_account_targets_sample_all_three_tiers_within_the_score_bounds() {
     assert!([2.0, 2.3, 2.6].iter().all(|value| speeds.contains(value)));
 }
 
+/// 验证精确评分遗器的未计分速度词条仍可出现不同数值档位。
 #[test]
 fn exact_scored_piece_can_keep_numeric_variation_in_unscored_stats() {
     let spec = RelicSpec {
@@ -483,6 +499,7 @@ fn exact_scored_piece_can_keep_numeric_variation_in_unscored_stats() {
     assert!(has_non_middle_value);
 }
 
+/// 验证空账号可生成，固定统一星魂和光锥叠影时资源条件仍生效。
 #[test]
 fn empty_and_fixed_build_requests_preserve_resource_constraints() {
     let reference = AccountReference::bundled().unwrap();
@@ -526,6 +543,7 @@ fn empty_and_fixed_build_requests_preserve_resource_constraints() {
     }
 }
 
+/// 验证账号品质档按角色 ID 顺序汇总报告分数，并拒绝不可达档位。
 #[test]
 fn account_tier_uses_the_scores_reported_in_character_id_order() {
     use RelicSubStat::{AtkPercent, BreakEffect, CritDmg, CritRate, Def, EffectRes, Spd};
@@ -590,6 +608,7 @@ fn account_tier_uses_the_scores_reported_in_character_id_order() {
     ));
 }
 
+/// 验证单角色生成保留指定等级、光锥配置及早期行迹状态。
 #[test]
 fn individual_character_keeps_explicit_equipment_and_early_traces() {
     let reference = AccountReference::bundled().unwrap();
@@ -630,6 +649,7 @@ fn individual_character_keeps_explicit_equipment_and_early_traces() {
     .unwrap();
 }
 
+/// 验证零权重遗器可在每件一次的搜索预算内完成生成。
 #[test]
 fn zero_weight_relics_fit_exactly_one_attempt_per_piece() {
     let reference = AccountReference::bundled().unwrap();

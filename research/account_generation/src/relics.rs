@@ -11,7 +11,9 @@ use serde::Deserialize;
 use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invalid};
 use candidates::{Candidates, PieceSearch};
 
+/// 分数区间比较和约束放宽使用的绝对容差，单位为有效词条分。
 pub(super) const EPSILON: f64 = 1e-6;
+/// 遗器请求和账号统计共用的部位次序。
 pub(super) const SLOTS: [RelicSlot; 6] = [
     RelicSlot::Head,
     RelicSlot::Hands,
@@ -20,29 +22,40 @@ pub(super) const SLOTS: [RelicSlot; 6] = [
     RelicSlot::PlanarSphere,
     RelicSlot::LinkRope,
 ];
+/// 相邻两项给出一个练度档位的下、上边界占比，第一档从零分开始。
 const QUALITY_RATIOS: [f64; 6] = [0.0, 0.35, 0.5, 0.65, 0.8, 1.0];
+/// 自定义有效词条权重允许的最大绝对值。
 const MAX_STAT_WEIGHT: f64 = 100.0;
 
 /// 一个部位的配装条件，留空字段采用该部位的合法候选。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RelicSpec {
+    /// 遗器部位。
     pub slot: RelicSlot,
+    /// 套装 ID；留空时从该部位支持的套装中选择。
     #[serde(default)]
     pub set_id: Option<String>,
+    /// 主词条候选；留空时使用该部位的全部合法主词条。
     #[serde(default)]
     pub mainstat: Vec<RelicMainStat>,
+    /// 初始副词条数可取 3 或 4。留空时两者的抽样权重为 5 比 2，分数约束会改变成品比例。
     #[serde(default)]
     pub initial_substat_count: Option<u8>,
+    /// 成品必须包含的副词条，最多四种且不能重复。
     #[serde(default)]
     pub required_substats: Vec<RelicSubStat>,
+    /// 单件有效词条数下限。
     #[serde(default)]
     pub min_effective_rolls: Option<f64>,
+    /// 单件有效词条数上限。
     #[serde(default)]
     pub max_effective_rolls: Option<f64>,
 }
 
+/// 提供遗器部位条件的构造与校验。
 impl RelicSpec {
+    /// 创建指定部位的默认请求，候选条件均留空。
     pub fn new(slot: RelicSlot) -> Self {
         Self {
             slot,
@@ -55,6 +68,7 @@ impl RelicSpec {
         }
     }
 
+    /// 检查套装、部位、主词条、副词条和单件分数范围是否合法。
     fn validate(&self) -> Result<(), GenerationError> {
         if self
             .set_id
@@ -93,15 +107,21 @@ impl RelicSpec {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RelicRequest {
+    /// 显式覆盖的部位；未列出的部位由生成器补齐。
     pub pieces: Vec<RelicSpec>,
     /// 每次中档副词条的计分权重，取 -100 至 100。未列出的属性计零分。
     pub effective_stat_weights: BTreeMap<RelicSubStat, f64>,
+    /// 低、中、高三档的相对抽样权重。每项须为有限非负数，至少一项为正。零权重的档位不参与生成。
     pub tier_weights: [f64; 3],
+    /// 六件遗器有效词条总数下限。
     pub min_total_effective_rolls: Option<f64>,
+    /// 六件遗器有效词条总数上限。
     pub max_total_effective_rolls: Option<f64>,
 }
 
+/// 为遗器请求提供空部位、等档位权重和无分数约束的默认值。
 impl Default for RelicRequest {
+    /// 创建无显式部位条件、三档权重相等且无分数限制的请求。
     fn default() -> Self {
         Self {
             pieces: Vec::new(),
@@ -113,7 +133,9 @@ impl Default for RelicRequest {
     }
 }
 
+/// 验证遗器组请求及其跨部位计分参数。
 impl RelicRequest {
+    /// 检查部位唯一性、分数范围、评分权重和档位权重。
     pub(crate) fn validate(&self) -> Result<(), GenerationError> {
         let mut slots = BTreeSet::new();
         for piece in &self.pieces {
@@ -145,12 +167,16 @@ impl RelicRequest {
     }
 }
 
+/// 一组已生成的遗器、各件实际得分及本组理论上限。
 pub(super) struct Gear {
+    /// 按本组输入部位顺序排列的遗器及其有效词条分数。
     pub pieces: Vec<(RelicInstance, f64)>,
+    /// 当前角色配装约束下的理论最高分。
     pub upper: f64,
 }
 
-/// 使用请求对应的中档数值计算有效词条数。
+/// 将成品每条副词条的数值除以该属性的单次中档值，再乘以调用方给出的权重并求和。
+/// 未指定权重的属性计零分。百分比使用原始比例值，例如 6.48% 暴击伤害传入 0.0648。
 pub fn score_relic(relic: &RelicInstance, weights: &BTreeMap<RelicSubStat, f64>) -> f64 {
     relic
         .substats
@@ -161,7 +187,9 @@ pub fn score_relic(relic: &RelicInstance, weights: &BTreeMap<RelicSubStat, f64>)
         .sum()
 }
 
-/// 独立生成六件遗器，缺少的部位用合法候选补齐。
+/// 按请求生成六件五星 +15 遗器，返回各件实例及实际得分。显式部位保留输入顺序，缺少的部位按标准部位顺序追加。
+/// 搜索共用 `max_attempts`。分数目标不可达时返回 [`GenerationError::NoSolution`]，
+/// 搜索未完成且次数已用尽时返回 [`GenerationError::BudgetExhausted`]。
 pub fn generate_character_relics(
     request: &RelicRequest,
     max_attempts: usize,
@@ -176,7 +204,7 @@ pub fn generate_character_relics(
     generate_set(request, &complete_specs(request), &mut search)
 }
 
-/// 计算六件的理论有效词条上限，依据配装条件和允许的档位。
+/// 计算六件合法成品在配装条件和允许档位下的理论最高分，不应用单件或总分目标区间。
 pub fn maximum_character_relic_score(request: &RelicRequest) -> Result<f64, GenerationError> {
     request.validate()?;
     complete_specs(request)
@@ -185,6 +213,7 @@ pub fn maximum_character_relic_score(request: &RelicRequest) -> Result<f64, Gene
         .sum()
 }
 
+/// 保留显式部位顺序，并按头、手、躯干、脚、球、绳顺序追加缺失部位。
 fn complete_specs(request: &RelicRequest) -> Vec<RelicSpec> {
     let mut specs = request.pieces.clone();
     for slot in SLOTS {
@@ -195,7 +224,8 @@ fn complete_specs(request: &RelicRequest) -> Vec<RelicSpec> {
     specs
 }
 
-/// 独立生成指定部位的一件遗器。
+/// 在指定部位、主副词条条件和单件得分区间内抽取一件五星 +15 遗器，同时返回成品得分。
+/// `weights` 按中档值计分，`tier_weights` 指定低、中、高档的相对概率。成品的实例 ID 留空，由装配方分配。
 pub fn generate_relic(
     spec: &RelicSpec,
     weights: &BTreeMap<RelicSubStat, f64>,
@@ -220,6 +250,7 @@ pub fn generate_relic(
         .ok_or(GenerationError::NoSolution)
 }
 
+/// 为给定部位条件建立搜索状态并抽取一整组遗器。
 fn generate_set(
     request: &RelicRequest,
     specs: &[RelicSpec],
@@ -233,6 +264,7 @@ fn generate_set(
     Ok(sample_group(&group, search)?.pieces)
 }
 
+/// 按推荐配装和账号级分数目标生成每个角色的遗器组。
 pub(super) fn generate(
     request: &AccountRequest,
     choices: &[allocation::Choice<'_>],
@@ -343,14 +375,21 @@ pub(super) fn generate(
     Ok(loadouts.into_iter().map(|(_, gear)| gear).collect())
 }
 
+/// 一组遗器候选及其可行总分区间；角色账号生成时包含六个部位。
 struct Group {
+    /// 按输入条件排列的单件搜索器；账号生成会按头、手、躯干、脚、球、绳提供。
     pieces: Vec<PieceSearch>,
+    /// 从各位置起算的剩余可达分数区间，末项为零分。
     suffix: Vec<Bounds>,
+    /// 单件条件、角色总分和练度档共同裁定的组分区间。
     bounds: Bounds,
+    /// 各部位理论最高分之和，用于换算练度档位。
     upper: f64,
 }
 
+/// 汇总本组各件的分数区间，再与请求的总分及练度档位取交集。
 impl Group {
+    /// 构造可行的遗器组；单件或六件入口均可调用，约束无交集时返回 `NoSolution`。
     fn new(
         pieces: Vec<PieceSearch>,
         request: &RelicRequest,
@@ -378,6 +417,7 @@ impl Group {
     }
 }
 
+/// 抽取满足角色组分数范围的遗器；范围未收窄时逐件独立抽样。
 fn sample_group(group: &Group, search: &mut Search<'_>) -> Result<Gear, GenerationError> {
     if group.bounds == group.suffix[0] {
         let mut pieces = Vec::with_capacity(group.pieces.len());
@@ -404,6 +444,7 @@ fn sample_group(group: &Group, search: &mut Search<'_>) -> Result<Gear, Generati
     .ok_or(GenerationError::NoSolution)
 }
 
+/// 搜索同时满足角色组与账号总分范围的单件分数组合。
 fn solve(
     groups: &[Group],
     overall: Bounds,
@@ -439,7 +480,7 @@ fn solve(
     }
 }
 
-// 分配器给出一组同时达标的分数。依次替换各件时，保留其他件已占用的分数，按真实允许档位抽取成品。
+/// 在保留其他件已占分数的条件下，按允许的强化档位逐件抽取成品，最后复核角色及账号总分。
 fn sample_allocated_scores(
     groups: &[Group],
     mut scores: Vec<Vec<f64>>,
@@ -507,25 +548,40 @@ fn sample_allocated_scores(
         .collect())
 }
 
+/// 使用显式栈和失败状态缓存执行遗器分数组合深度优先搜索。
 struct GearSearch<'a, 'b, 'rng> {
+    /// 参与搜索的角色组，顺序与账号计分保持一致。
     groups: &'a [Group],
+    /// 所有角色合计必须落入的有效词条分区间。
     overall: Bounds,
+    /// 每个角色的目标分数，用于优先探索邻近候选。
     desired: &'a [f64],
+    /// 从各角色位置起算的剩余分数可达范围。
     suffix: &'a [Bounds],
+    /// 共享随机源与候选考察预算。
     search: &'b mut Search<'rng>,
+    /// 当前路径已选的单件分数，每个角色对应一个列表。
     output: Vec<Vec<f64>>,
+    /// 已证明无解的搜索位置键，避免重复展开。
     failed: BTreeSet<(usize, usize, u64, u64)>,
 }
 
+/// 记录角色组、部位及此前已累计分数的 DFS 位置。
 #[derive(Clone, Copy, Default)]
 struct Position {
+    /// 当前角色组在 `GearSearch::groups` 中的索引。
     group: usize,
+    /// 当前角色组内遗器部位索引。
     piece: usize,
+    /// 当前角色之前各组的累计分数。
     earlier_score: f64,
+    /// 当前角色组内已选遗器的累计分数。
     group_score: f64,
 }
 
+/// 将 DFS 位置转换为失败缓存使用的精确浮点位模式键。
 impl Position {
+    /// 返回包含组索引、部位索引和累计分数位模式的缓存键。
     fn key(self) -> (usize, usize, u64, u64) {
         (
             self.group,
@@ -536,13 +592,19 @@ impl Position {
     }
 }
 
+/// 保存一个 DFS 搜索层的位置、组约束和待枚举候选。
 struct Frame<'a> {
+    /// 当前组和部位，以及抵达该层时的累计分数。
     position: Position,
+    /// 扣除其他角色后当前角色仍可使用的总分范围。
     group_bounds: Bounds,
+    /// 当前遗器部位按分数距离排列的候选迭代器。
     candidates: Candidates<'a>,
 }
 
+/// 用栈保存待检查的部位和候选迭代器，根据后缀分数范围剪枝。
 impl<'a> GearSearch<'a, '_, '_> {
+    /// 若位置尚未判定失败，生成其角色区间和单件候选帧。
     fn frame(&mut self, position: Position) -> Option<Frame<'a>> {
         if self.failed.contains(&position.key()) {
             return None;
@@ -580,6 +642,7 @@ impl<'a> GearSearch<'a, '_, '_> {
         })
     }
 
+    /// 深度优先枚举候选，找到满足全部区间的分数组合时返回 `true`。
     fn solve(&mut self) -> Result<bool, GenerationError> {
         let Some(first) = self.frame(Position::default()) else {
             return Ok(false);
@@ -631,12 +694,15 @@ impl<'a> GearSearch<'a, '_, '_> {
     }
 }
 
+/// 有效词条分的闭区间 `(下限, 上限)`。
 type Bounds = (f64, f64);
 
+/// 累加各段下限和上限，得到合计分数的范围。
 fn sum_bounds(values: impl Iterator<Item = Bounds>) -> Bounds {
     values.fold((0.0, 0.0), |(lo, hi), (min, max)| (lo + min, hi + max))
 }
 
+/// 为每个起点预计算后缀对象可贡献的最小值与最大值之和。
 fn suffix_bounds(
     values: impl DoubleEndedIterator<Item = Bounds> + ExactSizeIterator,
 ) -> Vec<Bounds> {
@@ -648,6 +714,7 @@ fn suffix_bounds(
     bounds
 }
 
+/// 将可选的显式分数上下限转换为含比较容差的区间。
 fn score_bounds(min: Option<f64>, max: Option<f64>) -> Bounds {
     (
         min.map_or(f64::NEG_INFINITY, |value| value - EPSILON),
@@ -655,11 +722,12 @@ fn score_bounds(min: Option<f64>, max: Option<f64>) -> Bounds {
     )
 }
 
+/// 返回两个闭分数区间的交集，即使结果为空也保留交叉端点。
 fn intersect(a: Bounds, b: Bounds) -> Bounds {
     (a.0.max(b.0), a.1.min(b.1))
 }
 
-// 剪枝时为减法预留舍入空间，完成后再用原始区间检查总分。
+/// 扣除已用分和后缀可达分数，再按 `EPSILON` 放宽区间。回溯完成时用原始区间核验总分。
 fn remaining_bounds(bounds: Bounds, used: f64, tail: Bounds) -> Bounds {
     (
         bounds.0 - used - tail.1 - EPSILON,
@@ -667,11 +735,12 @@ fn remaining_bounds(bounds: Bounds, used: f64, tail: Bounds) -> Bounds {
     )
 }
 
+/// 判断分数是否位于闭区间内。
 fn contains(bounds: Bounds, score: f64) -> bool {
     (bounds.0..=bounds.1).contains(&score)
 }
 
-// 同一组词条分开求和与先合并强化次数再求和会相差几个浮点刻度。
+/// 按端点绝对值放宽若干浮点刻度，保留按不同顺序累加同一组词条得到的边界分数。
 fn with_roundoff((lo, hi): Bounds) -> Bounds {
     (
         lo - 8.0 * f64::EPSILON * lo.abs(),
@@ -679,6 +748,7 @@ fn with_roundoff((lo, hi): Bounds) -> Bounds {
     )
 }
 
+/// 检查区间是否在绝对容差内非空，否则返回无解错误。
 fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
     if bounds.0 > bounds.1 + EPSILON {
         Err(GenerationError::NoSolution)
@@ -687,6 +757,7 @@ fn feasible(bounds: Bounds) -> Result<(), GenerationError> {
     }
 }
 
+/// 按正的理论上限换算档位。相邻档位的分界点归入较高一档，第五档的最高分由合法成品决定。
 fn quality_bounds(tier: u8, upper: f64) -> Result<Bounds, GenerationError> {
     if upper <= 0.0 {
         return Err(GenerationError::NoSolution);
@@ -704,6 +775,7 @@ fn quality_bounds(tier: u8, upper: f64) -> Result<Bounds, GenerationError> {
     ))
 }
 
+/// 校验可选的练度档位编号是否处于 1 到 5。
 pub(super) fn validate_quality(quality: Option<u8>) -> Result<(), GenerationError> {
     if quality.is_some_and(|tier| !(1..=5).contains(&tier)) {
         Err(invalid("遗器练度档位取 1～5"))
@@ -712,6 +784,7 @@ pub(super) fn validate_quality(quality: Option<u8>) -> Result<(), GenerationErro
     }
 }
 
+/// 校验可选分数端点均为有限数，且同时给出时下限不大于上限。
 pub(super) fn validate_range(min: Option<f64>, max: Option<f64>) -> Result<(), GenerationError> {
     if [min, max]
         .into_iter()
@@ -724,6 +797,7 @@ pub(super) fn validate_range(min: Option<f64>, max: Option<f64>) -> Result<(), G
     Ok(())
 }
 
+/// 返回部位允许的套装 ID 数值范围：外圈为 101–134，内圈为 301–330。
 fn set_range(slot: RelicSlot) -> std::ops::RangeInclusive<u16> {
     if u8::from(slot) <= 4 {
         101..=134
@@ -732,6 +806,7 @@ fn set_range(slot: RelicSlot) -> std::ops::RangeInclusive<u16> {
     }
 }
 
+/// 判断套装 ID 是否为规范十进制形式且属于指定部位的套装范围。
 pub(super) fn supports_set(slot: RelicSlot, id: &str) -> bool {
     id.parse::<u16>()
         .is_ok_and(|set| set_range(slot).contains(&set) && set.to_string() == id)

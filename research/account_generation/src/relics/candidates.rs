@@ -1,3 +1,5 @@
+//! 建立遗器主副词条组合，并计算分数范围内的候选概率。
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat as Main, RelicSlot, RelicSubStat as Sub};
@@ -6,8 +8,10 @@ use crate::{GenerationError, Search};
 
 use super::{Bounds, EPSILON, RelicRequest, RelicSpec, contains, feasible, intersect, set_range};
 
+/// 按强化档位的多项分布进行条件抽样。
 mod sampling;
 
+/// 全部可作为遗器副词条的十二种属性。
 const STATS: [Sub; 12] = [
     Sub::Hp,
     Sub::Atk,
@@ -23,6 +27,7 @@ const STATS: [Sub; 12] = [
     Sub::BreakEffect,
 ];
 
+/// 遗器生成器支持的十九种主词条属性。
 const MAIN_STATS: [Main; 19] = [
     Main::Hp,
     Main::Atk,
@@ -45,6 +50,7 @@ const MAIN_STATS: [Main; 19] = [
     Main::ImaginaryDmgBoost,
 ];
 
+/// 返回副词条低、中、高三档单次强化值；百分比属性以比例值表示。
 pub(super) fn rolls(stat: Sub) -> [f64; 3] {
     match stat {
         Sub::Hp => [33.87004, 38.103798, 42.33755],
@@ -59,6 +65,7 @@ pub(super) fn rolls(stat: Sub) -> [f64; 3] {
     }
 }
 
+/// 返回与给定主词条同属性、不能同时出现在副词条中的属性。
 fn excluded(main: Main) -> Option<Sub> {
     match main {
         Main::Hp => Some(Sub::Hp),
@@ -75,27 +82,39 @@ fn excluded(main: Main) -> Option<Sub> {
     }
 }
 
+/// 已完成的主词条、副词条数值和有效分候选。
 #[derive(Clone, Copy)]
 pub(super) struct Candidate {
+    /// 该成品的主词条属性。
     main: Main,
+    /// 四种互异副词条，位置与 `values` 对应。
     stats: [Sub; 4],
+    /// 四种副词条最终数值，单位依属性而定，百分比以比例表示。
     values: [f64; 4],
+    /// 按请求权重计算的有效词条分数。
     pub(super) score: f64,
 }
 
 /// 四种互异副词条及每种词条的生成参数。
 struct Recipe {
+    /// 此组合使用的主词条。
     main: Main,
+    /// 此组合的四种副词条。
     stats: [Sub; 4],
+    /// 四种副词条各自的计分权重。
     weights: [f64; 4],
+    /// 给定主词条时，这个计分等价类占其合法四副词条组合的比例。
     mass: f64,
 }
 
+/// 计算指定强化次数和允许档位下，此组合可达到的得分范围。
 impl Recipe {
+    /// 返回四种副词条各强化一次后再分配剩余次数的完整得分范围。
     fn bounds(&self, count: u8, tiers: (usize, usize)) -> Bounds {
         self.tail_bounds(0, count - 4, tiers)
     }
 
+    /// 计算从副词条索引 `start` 起、分配 `extras` 次强化的最小和最大贡献。
     fn tail_bounds(&self, start: usize, extras: u8, tiers: (usize, usize)) -> Bounds {
         let scores = |tier: usize, opposite: usize, combine: fn(f64, f64) -> f64| {
             let mut values = (start..4).map(|index| {
@@ -119,6 +138,7 @@ impl Recipe {
     }
 }
 
+/// 求指定遗器条件和档位权重下所有合法成品的最高有效词条分。
 pub(super) fn maximum_score(
     spec: &RelicSpec,
     request: &RelicRequest,
@@ -133,6 +153,7 @@ pub(super) fn maximum_score(
     Ok(bounds.1)
 }
 
+/// 返回请求主词条候选；空列表展开为该部位支持的全部主词条。
 fn mainstats(spec: &RelicSpec) -> Vec<Main> {
     if spec.mainstat.is_empty() {
         MAIN_STATS
@@ -144,17 +165,20 @@ fn mainstats(spec: &RelicSpec) -> Vec<Main> {
     }
 }
 
+/// 返回可能的强化总次数；三条起始为八次，四条起始为九次。
 fn roll_counts(spec: &RelicSpec) -> Vec<u8> {
     spec.initial_substat_count
         .map_or_else(|| vec![8, 9], |count| vec![count + 5])
 }
 
+/// 找出非零档位的最低和最高索引，供分数上下界计算使用。
 fn extremes(tier_weights: [f64; 3]) -> (usize, usize) {
     let mut enabled = (0..3).filter(|&tier| tier_weights[tier] > 0.0);
     let first = enabled.next().expect("validated tier weights");
     (first, enabled.next_back().unwrap_or(first))
 }
 
+/// 汇总各主副词条组合及强化次数在允许档位下的整体分数边界。
 fn legal_bounds(
     recipes: &[Recipe],
     counts: &[u8],
@@ -167,6 +191,7 @@ fn legal_bounds(
         .ok_or(GenerationError::NoSolution)
 }
 
+/// 枚举符合必含属性条件的四副词条组合，并合并计分等价组合概率。
 fn recipes(
     spec: &RelicSpec,
     mains: Vec<Main>,
@@ -227,17 +252,27 @@ fn recipes(
     recipes
 }
 
+/// 针对一个部位生成、枚举并评分合法遗器。
 pub(super) struct PieceSearch {
+    /// 生成时固定选定的套装 ID 字符串。
     set: String,
+    /// 此搜索器对应的遗器部位。
     slot: RelicSlot,
+    /// 符合主词条、必含副词条和权重条件的组合配方。
     recipes: Vec<Recipe>,
+    /// 可选强化总次数；对应起始三条或四条。
     counts: Vec<u8>,
+    /// 低、中、高档抽样权重。
     pub(super) tiers: [f64; 3],
+    /// 所有合法候选的最高有效词条分。
     pub(super) upper: f64,
+    /// 单件分数条件与合法分数边界的交集。
     pub(super) bounds: Bounds,
 }
 
+/// 构造遗器候选并提供搜索、抽样和实例化操作。
 impl PieceSearch {
+    /// 固定此件套装，打乱主、副词条的遍历顺序，并将合法分数范围与请求区间取交集。
     pub(super) fn new(
         spec: &RelicSpec,
         request: &RelicRequest,
@@ -274,10 +309,12 @@ impl PieceSearch {
         })
     }
 
+    /// 判断中档数值权重是否非零，以决定能否使用纯中档网格搜索。
     pub(super) fn has_middle(&self) -> bool {
         self.tiers[1] > 0.0
     }
 
+    /// 未给目标时枚举纯中档的可达分数供网格搜索。给定目标时使用全部允许档位，优先尝试接近目标的分数。
     pub(super) fn candidates(
         &self,
         bounds: Bounds,
@@ -316,6 +353,7 @@ impl PieceSearch {
         }
     }
 
+    /// 将搜索候选转为五星 +15 遗器实例，实例 ID 留待账号组装时分配。
     pub(super) fn materialize(&self, candidate: Candidate) -> RelicInstance {
         RelicInstance {
             instance_id: String::new(),
@@ -328,6 +366,7 @@ impl PieceSearch {
         }
     }
 
+    /// 独立抽取指定属性的多次强化数值并求和；全中档时直接返回确定值。
     fn sample_rolls(tiers: [f64; 3], stat: Sub, count: u8, search: &mut Search<'_>) -> f64 {
         if tiers[0] == 0.0 && tiers[2] == 0.0 {
             return f64::from(count) * rolls(stat)[1];
@@ -352,26 +391,41 @@ impl PieceSearch {
 
 /// 逐件产生候选。待考察的分配保存在向量中，调用方可以暂停以检查后续部位。
 pub(super) struct Candidates<'a> {
+    /// 尚待展开或检查的副词条强化分配状态栈。
     pending: Vec<Assignment<'a>>,
+    /// 候选成品分数必须满足的闭区间。
     bounds: Bounds,
+    /// 当前档位配置中允许出现的最低和最高档索引。
     extremes: (usize, usize),
+    /// 可选的目标分数，用于优先枚举距离较近的分配。
     desired: Option<f64>,
+    /// 每个剩余强化次数对应的档位组合列表。
     distributions: DistributionTable,
+    /// 已返回的分数键，避免重复产生相同候选。
     examined: BTreeSet<u64>,
 }
 
+/// 一条副词条强化分配的中间状态。
 #[derive(Clone, Copy)]
 struct Assignment<'a> {
+    /// 当前分配所属的主副词条组合。
     recipe: &'a Recipe,
+    /// 下一项待分配强化的副词条索引，范围为 0 到 4。
     position: usize,
+    /// 尚未分配给四种副词条的强化次数。
     remaining: u8,
+    /// 已处理副词条贡献的累计分数。
     score: f64,
+    /// 当前分支可达区间与目标分数之间的最短距离。
     distance: f64,
 }
 
+/// 按需展开强化分配并输出去重后的可行成品分数。
 impl Iterator for Candidates<'_> {
+    /// 迭代器输出有效词条分数。
     type Item = f64;
 
+    /// 返回下一个满足区间且此前未返回的候选分数。
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(assignment) = self.pending.pop() {
             if assignment.position < 4 {
@@ -395,7 +449,9 @@ impl Iterator for Candidates<'_> {
     }
 }
 
+/// 展开候选强化分配的内部操作。
 impl<'a> Candidates<'a> {
+    /// 将一个强化分配前缀扩展为下一种副词条的合法强化次数与档位组合。
     fn expand(&mut self, assignment: Assignment<'a>) {
         let Assignment {
             recipe,
@@ -449,6 +505,7 @@ impl<'a> Candidates<'a> {
     }
 }
 
+/// 调整栈内顺序，使最近目标的分支在后续弹栈时优先展开。
 fn next_first(assignments: &mut [Assignment<'_>], ranked: bool) {
     if ranked {
         assignments.sort_by(|a, b| a.distance.total_cmp(&b.distance));
@@ -456,12 +513,15 @@ fn next_first(assignments: &mut [Assignment<'_>], ranked: bool) {
     assignments.reverse();
 }
 
+/// 返回目标分数到闭区间的距离；目标落在区间内时距离为零。
 fn distance((min, max): Bounds, goal: f64) -> f64 {
     (min - goal).max(goal - max).max(0.0)
 }
 
+/// 按强化次数索引的三档次数分布表，支持 0 到 6 次强化。
 type DistributionTable = [Vec<[u8; 3]>; 7];
 
+/// 为每种强化次数建立档位次数组合，并按抽样优先级排列。
 fn distributions(tier_weights: [f64; 3], search: &mut Search<'_>) -> DistributionTable {
     sampling::tier_outcomes(tier_weights).map(|outcomes| {
         let mut options: Vec<_> = outcomes
