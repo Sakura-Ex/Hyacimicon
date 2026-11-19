@@ -24,7 +24,7 @@ hsr-currency-wars-ai/
 
 | 目录 | 职责与依赖 |
 | --- | --- |
-| `research/account_generation/` | 根据生成条件和随机源产出原始账号配置。模块内部结构见[账号与遗器数据](../modules/account-generation/README.md)。 |
+| `research/account_generation/` | Rust crate `account-generator` 根据生成条件和随机源产出 `account-core` 的原始账号配置。详见[账号生成器](../modules/account-generation/README.md)。 |
 | `core/account/` | 维护共用账号类型和来源导入，将原始账号转换为静态配置和可用资源。接口与验证见[账号模块](../modules/account/README.md)。 |
 | `core/battle/` | `battle-core` 接收已组装的战斗输入，结算行动顺序、技能、伤害和状态，返回战斗结果与事件。CLI 调用同一战斗库，供调试、按种子回放和批量验证使用。 |
 | `core/run/` | 依据 `core/account/` 提供的配置维护整局状态，提供可见局面和合法操作。校验操作后通过战斗输入组装步骤准备参数，调用 `core/battle/`，并在满足条件时结算结果。 |
@@ -37,18 +37,18 @@ hsr-currency-wars-ai/
 
 ## Python 模拟绑定
 
-`research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
+计划在 `research/sim_native/` 维护 `sim-native` crate 的 `Cargo.toml` 和 Python 扩展 `sim_native` 的 `pyproject.toml`。扩展负责转换参数、结果和错误，模拟规则和状态由 Rust 核心维护。
 
 - `sim_native.battle` 暴露战斗接口，通过 `../../core/battle` 路径依赖 `battle-core`。
 - `sim_native.run` 暴露整局接口，通过 `../../core/run` 路径依赖整局核心。局面观测、合法操作、状态推进和结果结算由 `core/run/` 提供。
 
-两个 Python 接口共用一个 Maturin wheel。构建、安装和验证步骤见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
+两个 Python 接口计划共用一个 Maturin wheel。构建设计和实施状态见[Python 模拟绑定使用说明](../modules/sim-native/README.md)。
 
 ## 构建配置
 
-Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。
+Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
 
-Python 研究项目在根目录维护 `pyproject.toml` 和 `uv.lock`。Python 模拟扩展的构建配置由 `research/sim_native/pyproject.toml` 维护。各模块在使用说明中提供安装、运行和验证命令。
+Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 
 ## 配套目录
 
