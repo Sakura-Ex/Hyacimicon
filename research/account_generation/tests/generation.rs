@@ -71,6 +71,40 @@ fn empty_accounts_get_individual_ids_and_explicit_blank_ids_are_invalid() {
     ));
 }
 
+/// 重放角色 1204 的 JSON 存档，检查原始遗器数值及转换后的效果命中与保存前完全一致。
+#[test]
+fn saved_account_preserves_relic_values_and_effect_hit_rate() {
+    let raw = generate_character(
+        "replay",
+        "1204",
+        &CharacterSpec::default(),
+        &AccountReference::bundled().unwrap(),
+        1_000_000,
+        &mut ChaCha8Rng::seed_from_u64(42),
+    )
+    .unwrap()
+    .account;
+    let saved = serde_json::to_string_pretty(&raw).unwrap();
+    let restored: RawAccount = serde_json::from_str(&saved).unwrap();
+    let data = PlayableData::bundled().unwrap();
+    let request = ConversionRequest {
+        config_id: "playable".into(),
+        character_aliases: BTreeMap::new(),
+    };
+    let effect_hit_rate = |account: &RawAccount| {
+        convert_playable_account(account, &data, &request)
+            .unwrap()
+            .characters
+            .into_iter()
+            .find(|c| c.character_id == "1204")
+            .unwrap()
+            .panel
+            .effect_hit_rate
+    };
+    assert_eq!(effect_hit_rate(&restored), effect_hit_rate(&raw));
+    assert_eq!(restored, raw);
+}
+
 /// 验证固定种子生成精确金数账号，并可序列化后转换为可玩配置。
 #[test]
 fn sample_has_exact_gold_and_converts_with_shared_account_core() {
