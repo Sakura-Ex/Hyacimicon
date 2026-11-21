@@ -1,0 +1,23 @@
+{
+  "name": "hyacimicon-player",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "^5.3.1",
+    "@fontsource-variable/noto-serif-sc": "^5.3.1",
+    "@tauri-apps/api": "^2",
+    "lit": "^3"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "typescript": "~5.9.3",
+    "vite": "^7"
+  }
+}
