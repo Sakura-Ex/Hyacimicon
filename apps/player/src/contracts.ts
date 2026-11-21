@@ -1,5 +1,6 @@
 /** The backend supplies display values and resolved artwork keys from the bundled catalogue. */
 export interface Unit {
+  portrait?: string;
   id: string;
   name: string;
   image: string;
@@ -24,7 +25,6 @@ export interface Character extends Unit {
   level: number | null;
   ascension: number | null;
   eidolons: number | null;
-  portrait?: string;
   stats: Stat[];
   skills: Skill[];
   cone?: Item;
@@ -121,7 +121,27 @@ export interface MatchPort {
   ): Promise<Match>;
   saveFeedback(input: Feedback): Promise<Match>;
 }
+export interface StandardBattle {
+  mode: "standard";
+  allyIds: string[];
+  enemyIds: string[];
+}
+export type BattleInput =
+  | StandardBattle
+  | {
+      mode: "currencyWars";
+      matchId: string;
+      revision: number;
+    };
+export interface BattleCatalogue {
+  allies: Unit[];
+  enemies: Unit[];
+  initial: StandardBattle;
+}
+export type BattleResult =
+  { kind: "preview"; units: Combatant[] } | { kind: "replay"; frames: Frame[] };
 export interface BattlePort {
-  battle(matchId: string): Promise<Frame[]>;
+  battleCatalogue(): Promise<BattleCatalogue>;
+  battle(input: BattleInput): Promise<BattleResult>;
 }
 export type PlayerPort = AccountPort & MatchPort & BattlePort;

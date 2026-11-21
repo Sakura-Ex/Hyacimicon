@@ -2,16 +2,13 @@
   "identifier": "folio-windows",
   "description": "Local folio navigation and window controls",
   "windows": [
-    "main",
-    "battle"
+    "main"
   ],
   "permissions": [
     "core:default",
     "core:window:allow-minimize",
     "core:window:allow-toggle-maximize",
     "core:window:allow-close",
-    "core:window:allow-start-dragging",
-    "core:window:allow-set-focus",
-    "core:webview:allow-create-webview-window"
+    "core:window:allow-start-dragging"
   ]
 }

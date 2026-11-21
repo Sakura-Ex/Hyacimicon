@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 940" preserveAspectRatio="none">
+  <defs>
+    <path id="left" d="M17 9 Q19 5 30 5 C278 3 650 1 755 5 Q786 6 800 13 L800 926 Q777 921 746 920 C522 918 238 924 25 922 Q16 922 16 914 Z"/>
+    <path id="right" d="M800 13 Q817 5 854 5 C1074 0 1387 3 1575 5 Q1584 5 1584 14 L1584 913 Q1584 921 1574 921 C1344 922 1024 915 858 920 Q824 921 800 926 Z"/>
+    <g id="sheets"><use href="#left"/><use href="#right"/></g>
+    <linearGradient id="verso">
+      <stop stop-color="#f3eae7"/><stop offset=".016" stop-color="#faf5f1"/><stop offset=".7" stop-color="#fcf8f8"/>
+      <stop offset=".89" stop-color="#f9f4ef"/><stop offset=".962" stop-color="#f2eae4"/>
+      <stop offset=".991" stop-color="#e8dcd6"/><stop offset="1" stop-color="#d4c4bd"/>
+    </linearGradient>
+    <linearGradient id="recto">
+      <stop stop-color="#d4c4bd"/><stop offset=".008" stop-color="#e8ddd5"/><stop offset=".035" stop-color="#f5eee7"/>
+      <stop offset=".11" stop-color="#fcf8f7"/><stop offset=".65" stop-color="#fdf9f8"/><stop offset="1" stop-color="#fbf4f5"/>
+    </linearGradient>
+    <filter id="fibres" x="0" y="0" width="100%" height="100%">
+      <feTurbulence baseFrequency=".42 .72" numOctaves="2" stitchTiles="stitch" seed="5"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+    <pattern id="grain" width="96" height="96" patternUnits="userSpaceOnUse">
+      <rect width="96" height="96" filter="url(#fibres)" opacity=".055"/>
+    </pattern>
+  </defs>
+  <use href="#right" fill="#c6a8ac" transform="translate(6 5)"/>
+  <use href="#right" fill="#f2dddf" transform="translate(4.5 3)"/>
+  <use href="#right" fill="#d4bcbb" transform="translate(2.5 1.5)"/>
+  <g fill="#c9b9ae" transform="translate(0 8)"><use href="#sheets"/></g>
+  <g fill="#eee4d9" transform="translate(0 6.8)"><use href="#sheets"/></g>
+  <g fill="#d0c1b5" transform="translate(0 4.4)"><use href="#sheets"/></g>
+  <g fill="#f3eadf" transform="translate(0 3.3)"><use href="#sheets"/></g>
+  <g fill="#dacdc3" transform="translate(0 1.7)"><use href="#sheets"/></g>
+  <use href="#left" fill="url(#verso)"/><use href="#right" fill="url(#recto)"/>
+  <use href="#sheets" fill="url(#grain)"/>
+</svg>

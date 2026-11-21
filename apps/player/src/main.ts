@@ -1,17 +1,11 @@
 import { html, nothing, render } from "lit";
 import { accountView } from "./account";
 import { matchView } from "./match";
-import { battleView } from "./battle";
+import { battleWorkspace } from "./battle-workspace";
 import { demoPort } from "./demo";
-import type { Account, Match, Frame } from "./contracts";
+import type { Account, Match } from "./contracts";
 import { icon, type Spread } from "./folio";
-import {
-  control,
-  desktop,
-  goMain,
-  openBattle,
-  watchNavigation,
-} from "./windows";
+import { control, desktop } from "./windows";
 import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/noto-sans-sc";
 import "./style.css";
@@ -22,20 +16,16 @@ const container = root;
 const tabs = { account: "账号", match: "对局", battle: "战斗" };
 type Page = keyof typeof tabs;
 const params = new URLSearchParams(location.search);
-const battleId = params.get("battle");
-let page: Page = battleId
-  ? "battle"
-  : params.get("page") === "match"
-    ? "match"
-    : "account";
-let accounts: Account[] = [],
-  account: Account | undefined,
-  match: Match | undefined,
-  frames: Frame[] = [];
+const initialPage = params.get("page");
+let page: Page = "account";
+let accounts: Account[] | undefined;
+let account: Account | undefined;
+let match: Match | undefined;
 let busy = false,
   message = "";
 const port = demoPort();
 const accountsPage = accountView(port, draw, run, select);
+const battles = battleWorkspace(port, draw, run, loadMatch);
 const createMatch = () =>
   matchView(
     port,
@@ -45,15 +35,21 @@ const createMatch = () =>
     },
     draw,
     run,
+    () =>
+      run(async () => {
+        await battles.enter("currencyWars");
+        page = "battle";
+      }),
   );
-let matchPage = createMatch(),
-  battlePage = battleView(draw);
+let matchPage = createMatch();
 function select(a: Account) {
+  accounts ??= [];
   const index = accounts.findIndex((other) => other.id === a.id);
   if (index < 0) accounts.push(a);
   else accounts[index] = a;
   account = a;
   match = undefined;
+  battles.resetMatch();
   matchPage = createMatch();
   draw();
 }
@@ -71,26 +67,23 @@ async function run(work: () => Promise<void>) {
     draw();
   }
 }
+async function loadAccounts() {
+  if (!accounts) {
+    accounts = await port.accounts();
+    account = accounts[0];
+  }
+}
 async function loadMatch() {
+  await loadAccounts();
   if (!account) throw new Error("请先选择账号。");
   if (!match) match = await port.match(account.id);
   return match;
 }
 async function navigate(next: Page) {
-  if (battleId) {
-    if (next !== "battle") await goMain(next);
-    return;
-  }
-  if (next === "battle") {
-    await openBattle((await loadMatch()).id);
-    return;
-  }
-  if (next === "match") await loadMatch();
+  if (next === "battle") await battles.enter();
+  else if (next === "match") await loadMatch();
+  else await loadAccounts();
   page = next;
-}
-async function loadBattle(id: string) {
-  frames = await port.battle(id);
-  battlePage = battleView(draw);
 }
 function draw() {
   let spread: Spread = {
@@ -100,9 +93,9 @@ function draw() {
     left: html`<p>${busy ? "正在读取…" : "暂无记录"}</p>`,
     right: html``,
   };
-  if (page === "account") spread = accountsPage(account, accounts);
+  if (page === "account") spread = accountsPage(account, accounts ?? []);
   if (page === "match" && match) spread = matchPage(match);
-  if (page === "battle") spread = battlePage(frames);
+  if (page === "battle") spread = battles.spread();
   document.title = "Hyacimicon · " + spread.title;
   render(
     html`<div class="book">
@@ -146,16 +139,10 @@ function draw() {
     container,
   );
 }
-await run(async () => {
-  await watchNavigation(
-    (next) => run(() => navigate(next)),
-    (id) => run(() => loadBattle(id)),
-  );
-  if (battleId) {
-    await loadBattle(battleId);
-    return;
-  }
-  accounts = await port.accounts();
-  account = accounts[0];
-  if (page === "match") await loadMatch();
-});
+await run(() =>
+  navigate(
+    initialPage === "battle" || initialPage === "match"
+      ? initialPage
+      : "account",
+  ),
+);

@@ -35,16 +35,43 @@ test("a confirmed observation changes only the recorded fields and expires the o
   assert.deepEqual(saved.bench, initial.bench);
   assert.equal(initial.gold, null);
 });
-test("preview frames reference their actor and carry no invented effects or events", async () => {
+test("currency preview contains deployed units and carries no fabricated action frames", async () => {
   const port = demoPort();
   const [account] = await port.accounts();
   const match = await port.match(account.id);
-  const frames = await port.battle(match.id);
-  assert.ok(frames.length >= 2);
-  for (const frame of frames) {
-    assert.ok(frame.units.some((unit) => unit.id === frame.actorId));
-    assert.deepEqual(frame.log, []);
-    assert.deepEqual(frame.targets, []);
-  }
-  await assert.rejects(port.battle("unknown"), /找不到战斗记录/);
+  const source = {
+    mode: "currencyWars",
+    matchId: match.id,
+    revision: match.revision,
+  };
+  const result = await port.battle(source);
+  assert.equal(result.kind, "preview");
+  assert.equal(
+    result.units.filter((u) => u.side === "后台").length,
+    match.back.length,
+  );
+  assert.deepEqual(result.units[0].gear, match.front[0].gear);
+  await port.setShopLock(match.id, match.revision, true);
+  await assert.rejects(port.battle(source), /版本已更新/);
+});
+test("standard combat uses its selected lineup independently of a match", async () => {
+  const port = demoPort();
+  const { initial, enemies } = await port.battleCatalogue();
+  const input = {
+    ...initial,
+    allyIds: ["1409"],
+    enemyIds: enemies.map((u) => u.id),
+  };
+  const frame = await port.battle(input);
+  assert.equal(frame.kind, "preview");
+  assert.deepEqual(
+    frame.units.map((u) => u.id),
+    [...input.allyIds, ...input.enemyIds],
+  );
+  assert.ok(frame.units.every((u) => !u.gear.length));
+  await assert.rejects(port.battle({ ...input, allyIds: [] }), /选择参战单位/);
+  await assert.rejects(
+    port.battle({ ...input, enemyIds: ["invalid"] }),
+    /未知参战单位/,
+  );
 });

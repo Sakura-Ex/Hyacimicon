@@ -1,6 +1,5 @@
 import type {
   Account,
-  Frame,
   Item,
   Match,
   Combatant,
@@ -30,7 +29,14 @@ const names: Record<string, string> = {
   "1112": "托帕",
 };
 function unit(id: string): Unit {
-  return { id, name: names[id], image: "/avatars/head-" + id + ".png" };
+  return {
+    id,
+    name: names[id],
+    image: "/avatars/head-" + id + ".png",
+    portrait: ["1409", "1204"].includes(id)
+      ? `/portraits/${id}.png`
+      : undefined,
+  };
 }
 function item(name: string, image: string): Item {
   return { name, image, detail: "", count: 1 };
@@ -146,41 +152,35 @@ const enemies = ["1002030", "1002040"].map((id, i) => ({
   name: "敌方单位 " + (i + 1),
   image: "/enemies/Monster_" + id + ".webp",
 }));
-const order = [
-  unit("1204"),
-  unit("1310"),
-  unit("1205"),
-  enemies[0],
-  unit("1306"),
-  enemies[1],
-  unit("1203"),
-];
-const units: Combatant[] = order.map((u, i) => ({
-  ...u,
-  side: enemies.some((e) => e.id === u.id) ? "敌方" : "我方",
-  element: "",
-  hp: null,
-  maxHp: null,
-  energy: null,
-  maxEnergy: null,
-  stats: [
-    ["攻击", "—"],
-    ["防御", "—"],
-    ["当前速度", "—"],
-  ],
-  gear: i === 1 ? gear.slice(0, 2) : [],
-  buffs: [],
-  initiative: null,
-}));
-const frames: Frame[] = order.slice(0, 2).map((actor, i) => ({
-  actorId: actor.id,
-  portrait: i === 0 ? "/portraits/1204.png" : undefined,
-  skill: "",
-  kind: "行动 " + (i + 1),
-  units,
-  targets: [],
-  log: [],
-}));
+const allies = Object.keys(names).map(unit);
+function resolveUnits(ids: string[], options: Unit[]): Unit[] {
+  if (!ids.length || new Set(ids).size !== ids.length)
+    throw new Error("请为双方选择参战单位，每个单位选择一次。");
+  return ids.map((id) => {
+    const entry = options.find((u) => u.id === id);
+    if (!entry) throw new Error("未知参战单位 " + id);
+    return entry;
+  });
+}
+function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
+  return {
+    ...u,
+    side,
+    gear,
+    element: "",
+    hp: null,
+    maxHp: null,
+    energy: null,
+    maxEnergy: null,
+    stats: [
+      ["攻击", "—"],
+      ["防御", "—"],
+      ["当前速度", "—"],
+    ],
+    buffs: [],
+    initiative: null,
+  };
+}
 export function demoPort(): PlayerPort {
   let match = structuredClone(initial);
   function requireAccountService(): never {
@@ -204,9 +204,46 @@ export function demoPort(): PlayerPort {
       if (accountId !== account.id) throw new Error("找不到预览账号。");
       return match;
     },
-    async battle(matchId) {
-      if (matchId !== match.id) throw new Error("找不到战斗记录。");
-      return frames;
+    async battleCatalogue() {
+      return {
+        allies,
+        enemies,
+        initial: {
+          mode: "standard",
+          allyIds: ["1204", "1310"],
+          enemyIds: [enemies[0].id],
+        },
+      };
+    },
+    async battle(input) {
+      if (input.mode === "standard") {
+        if (input.allyIds.length > 4)
+          throw new Error("常规战斗最多选择四名角色。");
+        return {
+          kind: "preview",
+          units: [
+            ...resolveUnits(input.allyIds, allies).map((u) =>
+              combatant(u, "我方"),
+            ),
+            ...resolveUnits(input.enemyIds, enemies).map((u) =>
+              combatant(u, "敌方"),
+            ),
+          ],
+        };
+      }
+      check(input.matchId, input.revision);
+      const deployed = (pieces: Piece[], side: string) =>
+        pieces.map((p, i) =>
+          combatant({ ...p, id: side + "-" + i }, side, p.gear),
+        );
+      return {
+        kind: "preview",
+        units: [
+          ...deployed(match.front, "前台"),
+          ...deployed(match.back, "后台"),
+          ...enemies.map((u) => combatant(u, "敌方")),
+        ],
+      };
     },
     async setShopLock(id, revision, locked) {
       check(id, revision);

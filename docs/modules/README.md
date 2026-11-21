@@ -5,7 +5,7 @@
 | 模块 | 当前内容 |
 | --- | --- |
 | [对局接口](match-interface/README.md) | 开局、备战、投资、特殊节点和战斗结算的局面与动作核对 |
-| [Windows 玩家界面](player/README.md) | Tauri 2 书册界面、账号与对局流程、独立战斗回放及后端接口契约 |
+| [Windows 玩家界面](player/README.md) | Tauri 2 书册界面、账号与对局流程、常规与货币战争战斗回放及后端接口契约 |
 | [Python 模拟绑定](sim-native/README.md) | 规划中的战斗与局面模拟绑定，登记构建、安装和验证步骤 |
 | [账号生成器](account-generation/README.md) | 账号金数与统一配装、推荐关联和资源分配，角色及遗器生成接口与共用数据流 |
 | [Rust 账号数据与配置](account/README.md) | 原始账号与导入、实际游玩配置结构、文档数值 JSON、试用补齐与映射设计 |

@@ -1,6 +1,6 @@
 import { html, nothing } from "lit";
 import type { Frame, Item } from "./contracts";
-import { art, icon, stats, type Spread } from "./folio";
+import { art, stats, type Spread } from "./folio";
 
 function meter(label: string, value: number | null, max: number | null) {
   return html`<label
@@ -31,27 +31,24 @@ export function battleView(redraw: () => void) {
   return (frames: Frame[]): Spread => {
     const f = frames[index];
     const actor = f?.units.find((u) => u.id === f.actorId);
-    const unit =
-      f?.units.find((u) => u.id === inspected) ?? f?.units[1] ?? actor;
+    const unit = f?.units.find((u) => u.id === inspected) ?? actor;
     const step = (n: number) => {
       index += n;
       inspected = "";
       redraw();
     };
     const total = f?.targets.reduce((sum, t) => sum + t.damage, 0) ?? 0;
+    const hasStats =
+      unit &&
+      (unit.hp !== null ||
+        unit.energy !== null ||
+        unit.stats.some(([, value]) => value !== "—"));
+    const hasDetails =
+      unit && (hasStats || unit.gear.length || unit.buffs.length);
     return {
       title: "战斗详情",
       subtitle: "独立战斗 / 行动回放",
-      tools: html`<div class="battle-tools">
-        <button ?disabled=${index === 0} @click=${() => step(-1)}>
-          上一行动</button
-        ><button
-          ?disabled=${index + 1 >= frames.length}
-          @click=${() => step(1)}
-        >
-          ${icon("step")} 下一行动
-        </button>
-      </div>`,
+      tools: html``,
       left:
         f && actor
           ? html`<div class="combat">
@@ -81,16 +78,30 @@ export function battleView(redraw: () => void) {
                 <h1>${actor.name}</h1>
                 <p class="teal">${actor.element}</p>
                 ${art(f.portrait ?? actor.image, "portrait")}
-                <div class="damage">
-                  <small>${f.kind}</small>
-                  <h3>${f.skill}</h3>
-                  <strong
-                    >${f.targets.length ? total.toLocaleString() : "—"}</strong
+                <div class="frame-pager">
+                  <div>
+                    <small>行动回放</small
+                    ><strong
+                      >${index + 1} <small>/ ${frames.length}</small></strong
+                    >
+                  </div>
+                  <button
+                    aria-label="上一行动"
+                    ?disabled=${index === 0}
+                    @click=${() => step(-1)}
                   >
+                    ‹
+                  </button>
+                  <button
+                    aria-label="下一行动"
+                    ?disabled=${index + 1 >= frames.length}
+                    @click=${() => step(1)}
+                  >
+                    ›
+                  </button>
                 </div>
-                <p>
-                  ${f.targets.length ? `命中 ${f.targets.length} 名敌人` : "暂无命中记录"}
-                </p>
+                ${f.skill ? html`<h3>${f.skill}</h3>` : nothing}
+                ${f.targets.length ? html`<p>命中 ${f.targets.length} 名敌人 · 总伤害 ${total.toLocaleString()}</p>` : nothing}
                 <div class="targets">
                   ${f.targets.map(
                     (t) =>
@@ -107,7 +118,7 @@ export function battleView(redraw: () => void) {
             </div>`
           : html`<p>暂无战斗记录</p>`,
       right:
-        unit && f
+        unit && f && (hasDetails || inspected || f.log.length)
           ? html`<div class="inspected">
                 ${art(unit.image)}
                 <div>
@@ -117,16 +128,30 @@ export function battleView(redraw: () => void) {
                   </h3>
                 </div>
               </div>
-              <div class="meters">
-                ${meter("生命", unit.hp, unit.maxHp)}${meter("能量", unit.energy, unit.maxEnergy)}
-              </div>
-              <div class="metrics">${stats(unit.stats)}</div>
-              ${items("本场装备", unit.gear)}${items("状态效果", unit.buffs)}
-              <section>
-                <h2>全场战斗记录</h2>
-                ${f.log.length ? nothing : html`<p>暂无事件记录</p>`}${f.log.map(([time, event]) => html`<p class="log"><time>${time}</time>${event}</p>`)}
-              </section>`
-          : html``,
+              ${
+                hasStats
+                  ? html`<section class="unit-panel">
+                      <h2>单位面板</h2>
+                      <div class="meters">
+                        ${meter("生命", unit.hp, unit.maxHp)}${meter("能量", unit.energy, unit.maxEnergy)}
+                      </div>
+                      <div class="metrics">${stats(unit.stats)}</div>
+                    </section>`
+                  : nothing
+              }
+              ${inspected && !hasDetails ? html`<p class="muted">暂无单位属性记录</p>` : nothing}
+              ${unit.gear.length ? items("本场装备", unit.gear) : nothing}${unit.buffs.length ? items("状态效果", unit.buffs) : nothing}
+              ${
+                f.log.length
+                  ? html`<section>
+                      <h2>战斗记录</h2>
+                      ${f.log.map(([time, event]) => html`<p class="log"><time>${time}</time>${event}</p>`)}
+                    </section>`
+                  : nothing
+              }`
+          : html`<p class="muted replay-note">
+              暂无此行动的详细记录。
+            </p>`,
     };
   };
 }

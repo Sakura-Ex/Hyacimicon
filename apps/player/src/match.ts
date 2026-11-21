@@ -69,6 +69,7 @@ export function matchView(
   update: (m: Match) => void,
   redraw: () => void,
   run: Run,
+  openBattle: () => Promise<void>,
 ) {
   let actionId = "";
   const selectAction = (id: string) => {
@@ -196,6 +197,7 @@ export function matchView(
                 </aside>
               </div>
               <footer>
+                <button @click=${openBattle}>查看本局战斗</button>
                 ${action ? html`<button class="primary" @click=${() => open(choice?.id ?? action.id)}>${icon("check")} 记录实际操作</button>` : nothing}
               </footer>`,
     };
