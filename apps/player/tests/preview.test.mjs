@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { demoPort } from "../src/demo.ts";
 
+test("each preview character references its own full portrait", async () => {
+  const port = demoPort();
+  const { accounts: [account] } = await port.accounts();
+  const { allies } = await port.battleCatalogue();
+  assert.equal(account.characters.find(c => c.id === "1310").portrait, "/portraits/1310.png");
+  for (const character of [...account.characters, ...allies]) {
+    assert.equal(character.portrait, `/portraits/${character.id}.png`);
+  }
+});
+
 test("a confirmed observation changes only the recorded fields and expires the old revision", async () => {
   const port = demoPort();
   const { accounts: [account] } = await port.accounts();

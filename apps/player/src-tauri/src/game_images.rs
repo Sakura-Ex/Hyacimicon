@@ -161,7 +161,8 @@ pub async fn player_sync_game_images(
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
-        .timeout(Duration::from_secs(15))
+        .read_timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(60))
         .build()
         .map_err(|error| format!("无法连接 StarRailRes：{error}"))?;
     let mut downloads = stream::iter(missing)

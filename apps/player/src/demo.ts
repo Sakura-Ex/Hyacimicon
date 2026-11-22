@@ -33,9 +33,7 @@ function unit(id: string): Unit {
     id,
     name: names[id],
     image: "/avatars/head-" + id + ".png",
-    portrait: ["1409", "1204"].includes(id)
-      ? `/portraits/${id}.png`
-      : undefined,
+    portrait: `/portraits/${id}.png`,
   };
 }
 function item(name: string, image: string): Item {
@@ -71,9 +69,6 @@ const account: Account = {
     level: null,
     ascension: null,
     eidolons: null,
-    portrait: ["1409", "1204"].includes(id)
-      ? "/portraits/" + id + ".png"
-      : undefined,
     stats: [
       ["生命", "—"],
       ["速度", "—"],

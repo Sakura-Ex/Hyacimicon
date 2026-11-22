@@ -2,9 +2,13 @@ import { Channel, convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { desktop } from "./windows";
 
 let available = new Set<string>();
+const draftPortraits = new Set(["/portraits/1204.png", "/portraits/1409.png"]);
 
 export function imageUrl(source?: string): string | undefined {
-  if (!desktop || !source) return source;
+  if (!source) return;
+  if (!desktop) {
+    return source.startsWith("/portraits/") && !draftPortraits.has(source) ? undefined : source;
+  }
   const key = source.slice(1);
   return available.has(key) ? convertFileSrc(key, "game-images").replace(/%2F/g, "/") : undefined;
 }
