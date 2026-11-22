@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import { art, icon, stats, type Spread, type Run } from "./folio";
 import type { Account, PlayerPort } from "./contracts";
+import { accountImportView } from "./account-import";
 
 export function accountView(
   port: Pick<PlayerPort, "importAccount" | "generateAccount">,
@@ -11,7 +12,8 @@ export function accountView(
   let query = "",
     characterId = "",
     skillIndex = 1;
-  let dialog: "manage" | "add" | null = null;
+  let managing = false;
+  let adding: (() => Spread) | undefined;
   return (account: Account | undefined, accounts: Account[]): Spread => {
     const characters = account?.characters ?? [];
     const visible = characters.filter((c) => c.name.includes(query.trim()));
@@ -24,9 +26,17 @@ export function accountView(
     const choose = (a: Account) => {
       query = "";
       characterId = "";
-      dialog = null;
+      managing = false;
+      adding = undefined;
       select(a);
     };
+    if (adding) return adding();
+    const add = () => change(() => {
+      managing = false;
+      adding = accountImportView(port, redraw, run, choose, () =>
+        change(() => (adding = undefined)),
+      );
+    });
     return {
       title: "角色档案",
       subtitle: "账号养成与装备",
@@ -46,9 +56,9 @@ export function accountView(
             ${accounts.map((a) => html`<option value=${a.id}>${a.name}</option>`)}</select
           ><small>${account?.source ?? "添加账号"}</small></label
         >
-        <button @click=${() => change(() => (dialog = "manage"))}>管理</button
-        ><button class="primary" @click=${() => change(() => (dialog = "add"))}>
-          ${icon("plus")} 导入 / 随机生成
+        <button @click=${() => change(() => (managing = true))}>管理</button
+        ><button class="primary" @click=${add}>
+          ${icon("plus")} 添加账号
         </button>
       </div>`,
       left: html`<div class="catalog">
@@ -151,59 +161,13 @@ export function accountView(
           : nothing
       }
       ${
-        dialog
+        managing
           ? html`<dialog open aria-label="账号管理">
-              <h2>${dialog === "manage" ? "管理账号" : "导入 / 随机生成"}</h2>
-              ${
-                dialog === "manage"
-                  ? accounts.map(
-                      (a) =>
-                        html`<button @click=${() => choose(a)}>
-                          ${a.name} · ${a.source}
-                        </button>`,
-                    )
-                  : html`<label
-                        >账号 JSON<input
-                          type="file"
-                          accept=".json,application/json"
-                          @change=${(e: Event) => {
-                            const f = (e.target as HTMLInputElement).files?.[0];
-                            if (f)
-                              return run(async () =>
-                                choose(
-                                  await port.importAccount(
-                                    f.name,
-                                    await f.text(),
-                                  ),
-                                ),
-                              );
-                          }}
-                      /></label>
-                      <form
-                        @submit=${(e: SubmitEvent) => {
-                          e.preventDefault();
-                          const seed = new FormData(
-                            e.target as HTMLFormElement,
-                          ).get("seed");
-                          return run(async () =>
-                            choose(await port.generateAccount(Number(seed))),
-                          );
-                        }}
-                      >
-                        <label
-                          >随机种子<input
-                            required
-                            type="number"
-                            name="seed"
-                            value="1"
-                            min="0"
-                            max="4294967295" /></label
-                        ><button>生成账号</button>
-                      </form>`
-              }
-              <button @click=${() => change(() => (dialog = null))}>
-                关闭
-              </button>
+              <h2>管理账号</h2>
+              ${accounts.map(
+                (a) => html`<button @click=${() => choose(a)}>${a.name} · ${a.source}</button>`,
+              )}
+              <button @click=${() => change(() => (managing = false))}>关闭</button>
             </dialog>`
           : nothing
       }`,

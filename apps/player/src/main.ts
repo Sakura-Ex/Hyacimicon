@@ -13,6 +13,11 @@ import "./style.css";
 const root = document.querySelector("main");
 if (!root) throw new Error("找不到书册容器");
 const container = root;
+for (const type of ["dragover", "drop"] as const) {
+  window.addEventListener(type, (event) => {
+    if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+  });
+}
 const tabs = { account: "账号", match: "对局", battle: "战斗" };
 type Page = keyof typeof tabs;
 const params = new URLSearchParams(location.search);
@@ -100,12 +105,13 @@ function draw() {
   render(
     html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
-          <div class="brand" data-tauri-drag-region>
-            ${icon("hyacimicon")} Hyacimicon
+          <div class="titlebar-start" data-tauri-drag-region>
+            <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
+            ${spread.layout === "account-import" ? spread.tools : nothing}
           </div>
           ${desktop ? html`<div>${(["min", "max", "close"] as const).map((key, i) => html`<button aria-label=${["最小化", "最大化或还原", "关闭窗口"][i]} @click=${() => run(() => control(key))}>${icon(key)}</button>`)}</div>` : nothing}
         </div>
-        <header>
+        ${spread.layout === "account-import" ? nothing : html`<header>
           <div class="heading floral">
             <h1>${spread.title}</h1>
             ${spread.badge ? html`<b class="badge">${spread.badge}</b>` : nothing}<small
@@ -113,14 +119,14 @@ function draw() {
             >
           </div>
           <div class="tools">${spread.tools}</div>
-        </header>
-        <div class="pages" aria-busy=${busy}>
+        </header>`}
+        <div class=${spread.layout ? "pages " + spread.layout : "pages"} aria-busy=${busy}>
           <div class="page left">${spread.left}</div>
           <div class="page right">${spread.right}</div>
         </div>
       </div>
       <nav aria-label="书签">
-        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
+        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing} @click=${() => run(() => navigate(t))}>${spread.layout === "account-import" ? nothing : icon("tab-" + t)}${tabs[t]}</button>`)}
       </nav>
       ${
         message

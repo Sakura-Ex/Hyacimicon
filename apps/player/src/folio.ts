@@ -7,6 +7,7 @@ export interface Spread {
   left: TemplateResult;
   right: TemplateResult;
   badge?: string;
+  layout?: "account-import";
 }
 export const icon = (name: string) =>
   html`<img class="icon" alt="" src="/ui/${name}.svg" />`;

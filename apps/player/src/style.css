@@ -136,6 +136,11 @@ h2 small {
   margin: 0 -1rem;
   flex: none;
 }
+.titlebar-start {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
 .brand {
   display: flex;
   align-items: center;
