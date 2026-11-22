@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
 import { art, icon, stats, type Spread, type Run } from "./folio";
 import type { Account, PlayerPort } from "./contracts";
 import { accountImportView } from "./account-import";
@@ -13,7 +14,8 @@ export function accountView(
     characterId = "",
     skillIndex = 1;
   let managing = false;
-  let adding: (() => Spread) | undefined;
+  let adding: ReturnType<typeof accountImportView> | undefined;
+  const addButton = createRef<HTMLButtonElement>();
   return (account: Account | undefined, accounts: Account[]): Spread => {
     const characters = account?.characters ?? [];
     const visible = characters.filter((c) => c.name.includes(query.trim()));
@@ -29,14 +31,18 @@ export function accountView(
       managing = false;
       adding = undefined;
       select(a);
+      addButton.value?.focus({ preventScroll: true });
     };
-    if (adding) return adding();
-    const add = () => change(() => {
+    const dismiss = () => {
+      change(() => (adding = undefined));
+      addButton.value?.focus({ preventScroll: true });
+    };
+    const add = () => {
+      if (adding) return adding.close();
       managing = false;
-      adding = accountImportView(port, redraw, run, choose, () =>
-        change(() => (adding = undefined)),
-      );
-    });
+      adding = accountImportView(port, redraw, run, choose, dismiss);
+      redraw();
+    };
     return {
       title: "角色档案",
       subtitle: "账号养成与装备",
@@ -45,7 +51,7 @@ export function accountView(
         <label
           ><select
             aria-label="切换账号"
-            .value=${account?.id ?? ""}
+            ?disabled=${!!adding}
             @change=${(e: Event) => {
               const a = accounts.find(
                 (a) => a.id === (e.target as HTMLSelectElement).value,
@@ -53,13 +59,22 @@ export function accountView(
               if (a) choose(a);
             }}
           >
-            ${accounts.map((a) => html`<option value=${a.id}>${a.name}</option>`)}</select
+            ${accounts.map((a) => html`<option value=${a.id} .selected=${a.id === account?.id}>${a.name}</option>`)}</select
           ><small>${account?.source ?? "添加账号"}</small></label
         >
-        <button @click=${() => change(() => (managing = true))}>管理</button
-        ><button class="primary" @click=${add}>
-          ${icon("plus")} 添加账号
-        </button>
+        <button ?disabled=${!!adding} @click=${() => change(() => (managing = true))}>管理</button>
+        <div class="account-add" @keydown=${(event: KeyboardEvent) => {
+          if (event.key === "Escape" && adding) {
+            event.preventDefault();
+            adding.close();
+          }
+        }}>
+          <button ${ref(addButton)} class="primary" aria-expanded=${!!adding}
+            aria-controls=${adding ? "account-note" : nothing} @click=${add}>
+            ${icon("plus")} 添加账号
+          </button>
+          ${adding ? adding.render() : nothing}
+        </div>
       </div>`,
       left: html`<div class="catalog">
         <aside>

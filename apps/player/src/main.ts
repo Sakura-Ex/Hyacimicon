@@ -1,5 +1,6 @@
 import { html, nothing, render } from "lit";
 import { accountView } from "./account";
+import { desktopAccounts } from "./account-port";
 import { matchView } from "./match";
 import { battleWorkspace } from "./battle-workspace";
 import { demoPort } from "./demo";
@@ -28,7 +29,8 @@ let account: Account | undefined;
 let match: Match | undefined;
 let busy = false,
   message = "";
-const port = demoPort();
+const preview = demoPort();
+const port = desktop ? { ...preview, ...desktopAccounts(preview) } : preview;
 const accountsPage = accountView(port, draw, run, select);
 const battles = battleWorkspace(port, draw, run, loadMatch);
 const createMatch = () =>
@@ -105,13 +107,10 @@ function draw() {
   render(
     html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
-          <div class="titlebar-start" data-tauri-drag-region>
-            <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
-            ${spread.layout === "account-import" ? spread.tools : nothing}
-          </div>
+          <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
           ${desktop ? html`<div>${(["min", "max", "close"] as const).map((key, i) => html`<button aria-label=${["最小化", "最大化或还原", "关闭窗口"][i]} @click=${() => run(() => control(key))}>${icon(key)}</button>`)}</div>` : nothing}
         </div>
-        ${spread.layout === "account-import" ? nothing : html`<header>
+        <header>
           <div class="heading floral">
             <h1>${spread.title}</h1>
             ${spread.badge ? html`<b class="badge">${spread.badge}</b>` : nothing}<small
@@ -119,14 +118,14 @@ function draw() {
             >
           </div>
           <div class="tools">${spread.tools}</div>
-        </header>`}
-        <div class=${spread.layout ? "pages " + spread.layout : "pages"} aria-busy=${busy}>
+        </header>
+        <div class="pages" aria-busy=${busy}>
           <div class="page left">${spread.left}</div>
           <div class="page right">${spread.right}</div>
         </div>
       </div>
       <nav aria-label="书签">
-        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing} @click=${() => run(() => navigate(t))}>${spread.layout === "account-import" ? nothing : icon("tab-" + t)}${tabs[t]}</button>`)}
+        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
       </nav>
       ${
         message

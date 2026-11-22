@@ -1,301 +1,163 @@
-﻿.account-import .page {
-  padding-top: 2.5rem;
+﻿.account-add {
+  position: relative;
 }
 
-.book:has(.account-import),
-#app:has(.account-import)::before {
-  background: none;
+.account-add > button[aria-expanded="true"] {
+  color: var(--wine);
+  background: #f5e9ee;
+  border-color: #c9a6b6;
 }
 
-.book:has(.account-import)::before {
+.account-add > button[aria-expanded="true"] .icon {
+  filter: none;
+}
+
+.account-note {
   position: absolute;
-  z-index: -1;
-  inset: 0;
-  content: "";
-  background:
-    linear-gradient(to top, #96796a25, transparent 0.65rem),
-    linear-gradient(#fffdfd50, #fffdfd50),
-    url("/book/binding.png") center / 104% 104% no-repeat;
-  mask: url("./book-spread.svg") center / 100% 100% no-repeat;
-  pointer-events: none;
+  z-index: 3;
+  top: calc(100% + 0.85rem);
+  right: 0;
+  width: 22.5rem;
+  padding: 1.15rem 1.3rem 0.9rem;
+  color: #352b34;
+  background: #fffaf1;
+  border: 1px solid #d9c4bd;
+  border-top: 2px solid #ae8090;
+  border-radius: 0.18rem;
+  box-shadow: 0 0.28rem 0.75rem #45273a1f;
 }
 
-.import-intro {
-  max-width: 24rem;
-  margin: 10.5rem auto 0;
-}
-
-.import-intro h2 {
-  color: var(--muted);
-  font-family: "Noto Sans SC Variable", sans-serif;
-  font-size: 0.95rem;
-  font-weight: 570;
-  letter-spacing: 0.04em;
-}
-
-.titlebar .import-back {
-  border-left: 1px solid var(--line);
-  border-radius: 0;
-  color: var(--wine);
-  font-size: 0.94rem;
-  padding: 0.25rem 0 0.25rem 1rem;
-}
-
-.titlebar .import-back:hover {
-  text-decoration: underline;
-  text-underline-offset: 0.2rem;
-}
-
-.import-back span {
-  margin-right: 0.45rem;
-}
-
-.import-modes {
-  width: 100%;
-  max-width: 29rem;
-  margin: 1.4rem auto 0;
-}
-
-.import-modes button {
-  display: flex;
-  align-items: center;
-  gap: 0.7rem;
-  width: 100%;
-  text-align: left;
-  padding: 1.15rem 0.85rem 1.15rem 0;
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  color: var(--ink);
-  background: transparent;
-}
-
-.import-modes button:last-child {
-  border-bottom: 0;
-}
-
-.import-modes strong {
-  position: relative;
-  display: block;
-  font-family: "Noto Serif SC Variable", serif;
-  font-size: 1.65rem;
-  font-weight: 640;
-  margin-bottom: 0.35rem;
-}
-
-.import-modes small {
-  font-size: 0.94rem;
-}
-
-.import-modes button[aria-pressed="true"] {
-  background: transparent;
-  color: var(--wine);
-  border-bottom-color: var(--line);
-}
-
-.import-current-mark {
-  position: absolute;
-  left: -1.4rem;
-  top: 0.38rem;
-  width: 0.67rem;
-  height: 1.15rem;
-  background: #9b5373;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 73%, 0 100%);
-}
-
-.import-modes button[aria-pressed="true"] strong {
-  font-weight: 730;
-}
-
-.import-modes button:hover {
-  background: #f6edf2;
-  color: var(--wine);
-}
-
-.import-workspace {
-  max-width: 36.25rem;
-  width: 100%;
-  margin: 3.2rem auto 0;
-}
-
-.import-form h1 {
-  font-size: 3.8rem;
-  font-weight: 640;
-  letter-spacing: -0.035em;
-  margin-bottom: 0.85rem;
-}
-
-.import-form:has(.import-envelope) h1 {
-  padding-left: calc(13% - 0.35rem);
-}
-
-.import-form > p {
-  color: var(--muted);
-}
-
-.import-envelope {
-  position: relative;
-  margin: 2rem 0 0 -0.35rem;
-}
-
-.import-drop {
-  position: relative;
-  display: block;
-  cursor: pointer;
-  border-radius: 0.45rem;
-}
-
-.import-drop:focus-within {
+.account-note.dragging {
+  border-color: var(--wine);
   outline: 2px solid var(--wine);
-  outline-offset: 0.25rem;
+  outline-offset: 2px;
 }
 
-.import-art {
-  display: block;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  filter: saturate(0.82);
+.note-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
 }
 
-.import-drop:hover .import-art {
-  filter: saturate(0.95);
+.note-heading h2 {
+  margin: 0;
+  font-size: 1.62rem;
 }
 
-.import-drop input {
+.note-close {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.note-close .icon {
+  margin: 0;
+}
+
+.account-note p {
+  font-size: 0.96rem;
+  color: var(--muted);
+}
+
+.account-note .note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+
+.account-note .note-actions .primary {
+  min-width: 0;
+}
+
+.note-picker {
+  position: relative;
+  border: 1px solid #d7c0c8;
+  border-radius: 0.3rem;
+  padding: 0.45rem 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-picker.primary {
+  background: var(--wine);
+  border-color: var(--wine);
+  color: white;
+}
+
+.note-picker:has(input:focus-visible) {
+  outline: 2px solid var(--wine);
+  outline-offset: 2px;
+}
+
+.note-picker:has(input:disabled) {
+  opacity: 0.45;
+}
+
+.note-picker input {
   position: absolute;
-  z-index: 1;
   inset: 0;
   width: 100%;
   height: 100%;
   opacity: 0;
-  cursor: pointer;
+  cursor: inherit;
 }
 
-.import-drop-action {
-  position: absolute;
-  left: 13%;
-  right: 13%;
-  top: 18%;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.7rem;
-}
-
-.import-source {
-  color: var(--muted);
-  font-size: 0.93rem;
-}
-
-.import-drop-hint {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 40%;
-  text-align: center;
-  color: #4c4144;
-  font-size: 0.98rem;
-}
-
-.import-pick {
-  color: #fffcf8;
-  background: var(--wine);
-  font-family: "Noto Serif SC Variable", serif;
-  font-size: 1.38rem;
-  font-weight: 670;
-  padding: 0.6rem 1.5rem 0.72rem;
-  border-radius: 0.24rem;
-}
-
-.import-drop:hover .import-pick,
-.import-drop:focus-within .import-pick {
-  background: #68314b;
-}
-
-.import-filename {
-  max-width: 100%;
+.note-filename {
+  display: block;
+  font-weight: 600;
+  margin-top: 0.25rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink);
-  font-size: 1.2rem;
-  font-weight: 530;
 }
 
-.import-filename + .import-pick {
-  background: transparent;
-  color: var(--wine);
-  padding: 0;
-  font-family: inherit;
-  font-size: 0.96rem;
-  text-decoration: underline;
-  text-underline-offset: 0.2rem;
+.note-filename:empty {
+  margin: 0;
 }
 
-.import-drop:hover .import-filename + .import-pick,
-.import-drop:focus-within .import-filename + .import-pick {
-  background: transparent;
-  color: #68314b;
+.note-seed {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 0.55rem;
 }
 
-.import-seed {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-  margin-top: 2.6rem;
-  font-weight: 550;
+.note-seed input {
+  width: 12rem;
+  padding: 0.45rem 0.65rem;
 }
 
-.import-seed input {
-  width: 100%;
-  padding: 0.8rem 1rem;
-}
-
-.import-submit {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1.3rem;
-  margin-top: 1.15rem;
-}
-
-.import-submit button {
-  flex: none;
-}
-.import-form .import-error {
-  color: #8f3450;
-  margin-top: 0.85rem;
+.account-note .note-error {
+  color: #85324b;
+  margin-top: 0.8rem;
   overflow-wrap: anywhere;
+  max-height: 8rem;
+  overflow: auto;
 }
 
-.import-drop-selected {
-  top: 22%;
-  align-items: flex-start;
-  gap: 0.9rem;
+.note-footer {
+  position: relative;
+  margin-top: 1.2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e6d7d0;
 }
 
-.import-file-submit {
-  position: absolute;
-  z-index: 2;
-  top: 31%;
-  right: 13%;
-  margin-top: 0;
-}
-
-.book:has(.account-import) + nav button {
-  width: calc(100% - 2.3rem);
-  height: 5.65rem;
-  padding-left: 2.05rem;
-  padding-right: 0;
-  border-radius: 0 0.4rem 0.4rem 0;
-  letter-spacing: 0.22rem;
-  font-size: 1.12rem;
-  background: linear-gradient(to right, #d7cbc3 28%, #f0e8e3 71%, #f6f0eb);
-  box-shadow: inset 0 -1px #d8c8c0;
-}
-
-.book:has(.account-import) + nav button[aria-current="page"] {
-  width: calc(100% - 1.25rem);
-  box-shadow: inset -2px 0 var(--wine), inset 0 -1px #d8c8c0;
+.note-footer button {
+  padding: 0.2rem 0.15rem;
   color: var(--wine);
+  border-color: transparent;
+  background: transparent;
+  font-size: 0.91rem;
+}
+
+.note-footer button:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.16rem;
 }

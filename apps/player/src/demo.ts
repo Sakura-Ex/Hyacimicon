@@ -184,7 +184,7 @@ function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
 export function demoPort(): PlayerPort {
   let match = structuredClone(initial);
   function requireAccountService(): never {
-    throw new Error("此操作需要接入账号服务。");
+    throw new Error("请使用 Windows 桌面版导入或生成账号。");
   }
   function check(id: string, revision: number) {
     if (id !== match.id || revision !== match.revision)
@@ -201,7 +201,7 @@ export function demoPort(): PlayerPort {
       return requireAccountService();
     },
     async match(accountId) {
-      if (accountId !== account.id) throw new Error("找不到预览账号。");
+      if (accountId !== account.id) throw new Error("请切换到预览账号查看示例对局。");
       return match;
     },
     async battleCatalogue() {

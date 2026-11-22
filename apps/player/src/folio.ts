@@ -7,12 +7,11 @@ export interface Spread {
   left: TemplateResult;
   right: TemplateResult;
   badge?: string;
-  layout?: "account-import";
 }
 export const icon = (name: string) =>
   html`<img class="icon" alt="" src="/ui/${name}.svg" />`;
 export const art = (src: string, cls = "", alt = "") =>
-  html`<img class=${cls} src=${src} alt=${alt} />`;
+  src ? html`<img class=${cls} src=${src} alt=${alt} />` : nothing;
 export const itemArt = (i: Item) =>
   html`<span class="item" tabindex="0" aria-label=${i.name + " " + i.detail}
     >${art(i.image)}

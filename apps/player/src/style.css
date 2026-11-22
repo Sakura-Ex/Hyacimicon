@@ -136,11 +136,6 @@ h2 small {
   margin: 0 -1rem;
   flex: none;
 }
-.titlebar-start {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-}
 .brand {
   display: flex;
   align-items: center;
@@ -273,10 +268,12 @@ nav .icon {
   gap: 0.8rem;
   justify-content: center;
 }
-.account-tools label {
+.account-tools > label {
   min-width: 9rem;
+  max-width: 15rem;
 }
 .account-tools select {
+  max-width: 100%;
   border: 0;
   background: transparent;
   font-size: 1.25rem;
