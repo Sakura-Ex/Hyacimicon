@@ -7,7 +7,7 @@ import { demoPort } from "./demo";
 import type { Account, Match } from "./contracts";
 import { icon, type Spread } from "./folio";
 import { syncGameImages } from "./game-images";
-import { control, desktop } from "./windows";
+import { centerBook, control, desktop } from "./windows";
 import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/noto-sans-sc";
 import "./style.css";
@@ -202,7 +202,20 @@ function draw() {
     container,
   );
 }
-await Promise.all([
-  run(() => navigate(initialPage === "battle" || initialPage === "match" ? initialPage : "account")),
-  prepareImages(),
-]);
+async function openFolio() {
+  if (desktop) container.style.visibility = "hidden";
+  const opening = run(() => navigate(initialPage === "battle" || initialPage === "match" ? initialPage : "account"));
+  if (desktop) {
+    try {
+      const book = container.querySelector(".book");
+      if (book) await centerBook(book);
+    } catch (error) {
+      console.warn("无法精确居中书册，使用窗口默认位置", error);
+    } finally {
+      container.style.removeProperty("visibility");
+    }
+  }
+  await opening;
+}
+
+await Promise.all([openFolio(), prepareImages()]);

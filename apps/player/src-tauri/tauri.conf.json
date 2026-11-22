@@ -17,6 +17,7 @@
         "height": 768,
         "minWidth": 840,
         "minHeight": 540,
+        "center": true,
         "decorations": false,
         "dragDropEnabled": false,
         "transparent": true,
