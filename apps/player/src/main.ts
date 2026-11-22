@@ -106,7 +106,7 @@ function draw() {
           ${desktop ? html`<div>${(["min", "max", "close"] as const).map((key, i) => html`<button aria-label=${["最小化", "最大化或还原", "关闭窗口"][i]} @click=${() => run(() => control(key))}>${icon(key)}</button>`)}</div>` : nothing}
         </div>
         <header>
-          <div class=${page === "match" ? "heading" : "heading floral"}>
+          <div class="heading floral">
             <h1>${spread.title}</h1>
             ${spread.badge ? html`<b class="badge">${spread.badge}</b>` : nothing}<small
               >${spread.subtitle}</small

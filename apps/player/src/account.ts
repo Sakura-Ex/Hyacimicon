@@ -87,7 +87,7 @@ export function accountView(
                   等级 ${c.level ?? "—"} · 突破 ${c.ascension ?? "—"} · 星魂
                   ${c.eidolons ?? "—"}
                 </p>
-                ${art(c.portrait ?? c.image, "portrait")}
+                  ${art(c.portrait ?? c.image, c.portrait ? "portrait" : "unit-avatar")}
                 <h2>基础属性</h2>
                 ${c.stats.length ? stats(c.stats) : html`<p>暂无属性记录</p>`}
               </article>`
@@ -112,7 +112,7 @@ export function accountView(
                     skill
                       ? html`<div class="skill-detail">
                           <b>${skill.tab} / 等级 ${skill.level ?? "—"}</b>
-                          <h3>${skill.title}</h3>
+                          <h3>${skill.title ?? skill.tab + "名"}</h3>
                           <p>${skill.description || "暂无技能说明"}</p>
                           <div class="metrics">${stats(skill.scaling)}</div>
                         </div>`

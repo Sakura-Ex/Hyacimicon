@@ -1,4 +1,5 @@
 import { html, nothing } from "lit";
+import "./action-axis";
 import type { BattleResult, Item } from "./contracts";
 import { art, icon, stats, type Spread } from "./folio";
 
@@ -33,8 +34,9 @@ export function battleView(redraw: () => void) {
     const f = frames[index];
     const units = result.kind === "preview" ? result.units : (f?.units ?? []);
     const actor = f ? units.find((u) => u.id === f.actorId) : undefined;
-    const unit = units.find((u) => u.id === inspected) ?? units[1] ?? units[0];
-    const featured = actor ?? units[0];
+    const unit = units.find((u) => u.id === inspected) ?? actor ?? units[0];
+    const featured = actor ?? unit;
+    const portrait = f?.portrait ?? featured?.portrait;
     const targets = f?.targets ?? [];
     const log = f?.log ?? [];
     const step = (n: number) => {
@@ -62,55 +64,64 @@ export function battleView(redraw: () => void) {
             行动轴
             <small>${result.kind === "preview" ? "顺序待定" : "行动值"}</small>
           </h2>
-          <div class="timeline">
-            ${units.map(
-              (u) =>
-                html`<button
-                  aria-pressed=${u.id === unit?.id}
-                  class=${u.id === actor?.id ? "active" : u.id === unit?.id ? "selected" : ""}
-                  @click=${() => {
-                    inspected = u.id;
-                    redraw();
-                  }}
-                >
-                  ${art(u.image)}<strong
-                    >${u.name}<small
-                      >${u.id === actor?.id ? "当前行动" : u.id === unit?.id ? "正在查看" : u.side}</small
-                    ></strong
-                  ><b>${u.initiative ?? "—"}</b>
-                </button>`,
-            )}
-          </div>
+          <action-axis aria-label="行动轴单位" role="region"
+            ><div class="timeline">
+              ${units.map(
+                (u) =>
+                  html`<button
+                    aria-pressed=${u.id === unit?.id}
+                    class=${u.id === actor?.id ? "active" : u.id === unit?.id ? "selected" : ""}
+                    @click=${() => {
+                      inspected = u.id;
+                      redraw();
+                    }}
+                  >
+                    ${art(u.image)}<strong
+                      >${u.name}<small
+                        >${u.id === actor?.id ? "当前行动" : u.id === unit?.id ? "正在查看" : u.side}</small
+                      ></strong
+                    ><b>${u.initiative ?? "—"}</b>
+                  </button>`,
+              )}
+            </div></action-axis
+          >
         </aside>
         ${
           featured
             ? html`<article class="character">
-                <b class="badge">${f ? "当前行动" : "阵容预览"}</b>
-                <h1>${featured.name}</h1>
+                <b class="badge">${actor ? "当前行动" : "单位预览"}</b>
+                <div class="featured-name">
+                  ${portrait ? nothing : art(featured.image, "unit-avatar")}
+                  <h1>${featured.name}</h1>
+                </div>
                 <p class="teal">${featured.element}</p>
-                ${art(f?.portrait ?? featured.portrait ?? featured.image, "portrait")}
-                <div class="damage">
-                  <small>${f?.kind}</small>
-                  <h3>${f?.skill}</h3>
-                  <strong
-                    >${targets.length ? total.toLocaleString() : "—"}</strong
-                  >
-                </div>
-                <p>
-                  ${targets.length ? `命中 ${targets.length} 名敌人` : "暂无命中记录"}
-                </p>
-                <div class="targets">
-                  ${targets.map(
-                    (t) =>
-                      html`<div>
-                        ${art(t.unit.image)}<span
-                          >${t.unit.name}<b
-                            >${t.damage.toLocaleString()}</b
-                          ></span
-                        >
-                      </div>`,
-                  )}
-                </div>
+                ${portrait ? art(portrait, "portrait") : nothing}
+                ${
+                  f
+                    ? html` <div class="damage">
+                          <small>${f?.kind}</small>
+                          <h3>${f?.skill}</h3>
+                          <strong
+                            >${targets.length ? total.toLocaleString() : "—"}</strong
+                          >
+                        </div>
+                        <p>
+                          ${targets.length ? `命中 ${targets.length} 名敌人` : "暂无命中记录"}
+                        </p>
+                        <div class="targets">
+                          ${targets.map(
+                            (t) =>
+                              html`<div>
+                                ${art(t.unit.image)}<span
+                                  >${t.unit.name}<b
+                                    >${t.damage.toLocaleString()}</b
+                                  ></span
+                                >
+                              </div>`,
+                          )}
+                        </div>`
+                    : nothing
+                }
               </article>`
             : html`<p>暂无战斗记录</p>`
         }

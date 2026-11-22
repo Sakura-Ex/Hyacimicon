@@ -15,7 +15,7 @@ export type Stat = [label: string, value: string];
 export interface Skill {
   group: string;
   tab: string;
-  title: string;
+  title: string | null;
   level: number | null;
   description: string;
   scaling: Stat[];

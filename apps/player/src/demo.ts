@@ -83,7 +83,7 @@ const account: Account = {
       group: "角色技能",
       tab,
       level: null,
-      title: tab,
+      title: null,
       description: "",
       scaling: [],
     })),

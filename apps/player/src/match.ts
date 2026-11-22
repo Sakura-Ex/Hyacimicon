@@ -43,7 +43,7 @@ function feedback(
     <b>节点 ${m.node} / 实战回填</b>
     <h3>记录实际操作</h3>
     <section>
-      <p>本步建议　　 <strong>${m.advice[0]?.title ?? "暂无建议"}</strong></p>
+      <p class="feedback-row"><span>本步建议</span><strong>${m.advice[0]?.title ?? "暂无建议"}</strong></p>
       <label
         >实际操作<select
           .value=${choice.id}
@@ -55,7 +55,7 @@ function feedback(
     </section>
     <section>
       <h2>核对游戏内结果</h2>
-      ${m.feedbackFields.map((f) => html`<label>${f.label}<input type="number" required step="1" name=${f.key} min=${f.min} max=${f.max ?? nothing} .value=${String(choice.expected[f.key] ?? f.current ?? "")} /><small>原为 ${f.current ?? "—"}</small></label>`)}
+      ${m.feedbackFields.map((f) => html`<label>${f.label}<input type="number" required step="1" name=${f.key} min=${f.min} max=${f.max ?? nothing} .value=${String(choice.expected[f.key] ?? f.current ?? "")} />${f.current === null ? nothing : html`<small>原为 ${f.current}</small>`}</label>`)}
     </section>
 
     <footer>
