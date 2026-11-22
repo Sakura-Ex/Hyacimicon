@@ -87,7 +87,7 @@ stateDiagram-v2
     CheckTerminal --> Boundary: 根据时序处理回合收尾、轮次和安全停止
     Boundary --> Insert: 补足敌人空槽，提供插入窗口
     Insert --> Pending: 提交插入选择后处理已排队动作
-    Pending --> ApplyEffects: 执行可直接进入的终结技或追加攻击
+    Pending --> ApplyEffects: 执行终结技、排队追加攻击或召唤物的自然回合动作
     Pending --> TurnChoice: 进入普通回合或额外回合，提供合法选项
     TurnChoice --> ApplyEffects: 提交选择后执行 Action
     ApplyEffects --> CheckTerminal: 分派动作及效果事件后回到调度边界
@@ -117,9 +117,17 @@ stateDiagram-v2
 行动窗口按照以下层级调度：
 
 - **终结技插入（Ultimate）**：可在常规回合动作的间隔插入。提交插入仅表示预排队；在终结技实际获得执行权切入 Turn 时，引擎再次校验能量并正式扣除费用。
-- **追加攻击（Follow-up）**：作为直接 Action 执行，不产生独立的 `TurnStart` 与 `TurnEnd` 回合边界。
+- **排队的追加攻击（`RequestKind::FollowUp`）**：调度器取出请求后，直接执行预选的 Action，执行边界为 `ActionStart` 和 `ActionEnd`。
 - **额外回合（Extra Turn）**：在独立回合开始（`TurnStart`）后发起选招，不推进自然 AV 时钟。
 - **同刻平局判定**：当单位行动与 Cycle 到期发生同刻时，支持通过显式策略参数 `unit_before_cycle` 控制优先处理单位回合还是优先倒计时。
+
+### 2.3 传统召唤物回合
+
+召唤物按自身行动距离和速度进入普通回合。引擎先分派 `TurnStart`，确认召唤物仍在场后自动执行配置的 `ActionKind::FollowUp`，计为一次 Action。随后回到调度边界，依轮次规则处理有限队列补位、终结技插入、已排队动作和 `TurnEnd`。终局或安全停止可在 `TurnEnd` 前结束这次回合，此时诊断回放记录 `normal_turn_interrupted`。
+
+主人即时复活后，召唤物保留原有行动距离。若主人在死亡结算后仍未存活，召唤物离场，引擎丢弃其待执行请求。若主人在召唤物的 `TurnStart` 监听中最终阵亡，该回合跳过动作。若主人在 `ActionStart` 监听中最终阵亡，已开始的 Action 继续执行其效果并分派 `ActionEnd`。
+
+全体、最低生命比例和随机等通用阵营选择器只选取存活的普通单位。仍在场的召唤物可作为自身效果 `self_unit` 的目标。我方存活判定以普通我方单位为准。配置方式见[传统召唤物示例](usage.md#传统召唤物)。
 
 ---
 

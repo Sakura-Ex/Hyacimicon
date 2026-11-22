@@ -22,7 +22,7 @@ impl State<'_> {
                     let selected = match target {
                         Target::SelfUnit => i == actor,
                         Target::AbilityTarget => Some(i) == self.bound_target,
-                        Target::AllEnemies => u.ally != self.units[actor].ally,
+                        Target::AllEnemies => u.regular_alive() && u.ally != self.units[actor].ally,
                         _ => false, // rejected by input validation
                     };
                     selected && u.alive() && u.modifiers.instances.iter().any(|m| m.state.id == *id)

@@ -82,6 +82,21 @@ pub struct Unit {
     pub actions: Vec<Action>,
 }
 
+/// An allied traditional summon created at battle start for a living owner.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+pub struct TraditionalSummon {
+    /// Stable instance ID, distinct from all units and other summons in the battle.
+    pub id: String,
+    /// Stable ID of a regular ally in the starting roster.
+    pub owner: String,
+    /// Effective panel for the summon, including its strictly positive axis speed.
+    pub stats: Stats,
+    /// Resource-free follow-up executed automatically on the summon's natural turn.
+    pub action: Action,
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]

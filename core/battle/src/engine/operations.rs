@@ -20,6 +20,9 @@ impl State<'_> {
 
     /// 登记后续动作，去重同单位终结技并限制排队工作量。
     pub(super) fn enqueue(&mut self, request: Pending) -> Result<(), String> {
+        if self.units[request.actor].summon.is_some() && request.kind != RequestKind::FollowUp {
+            return Err("traditional summons cannot request selectable turns".into());
+        }
         if request.kind == RequestKind::Ultimate
             && self
                 .pending
@@ -52,7 +55,7 @@ impl State<'_> {
     ) -> Vec<Operation> {
         let mut legal = Vec::new();
         for (i, u) in self.units.iter().enumerate() {
-            if !u.alive() || actor.is_some_and(|a| a != i) {
+            if !u.regular_alive() || actor.is_some_and(|a| a != i) {
                 continue;
             }
             if point == DecisionPoint::Insert
@@ -122,11 +125,8 @@ impl State<'_> {
             ally_skill_points: self.sp[0],
             enemy_skill_points: self.sp[1],
             axis,
-            units: self
-                .units
-                .iter()
-                .enumerate()
-                .map(|(owner, u)| u.snapshot(self.weakness_state(owner)))
+            units: (0..self.units.len())
+                .map(|index| self.unit_snapshot(index))
                 .collect(),
         };
         Decision {

@@ -72,6 +72,9 @@ impl State<'_> {
         #[cfg(not(feature = "diagnostics"))]
         let units = units.map(|unit| ((), unit));
         for (_owner, unit) in units {
+            if !unit.present() {
+                continue;
+            }
             let _expired = unit
                 .modifiers
                 .tick(event, subject_id.as_deref(), &unit.spec.id);
@@ -104,7 +107,10 @@ impl State<'_> {
             let Some(owner) = self.units.iter().position(|u| u.spec.id == t.spec.owner) else {
                 continue;
             };
-            if t.spec.expires_on == Some(event) && (event.is_global() || subject == Some(owner)) {
+            if self.units[owner].present()
+                && t.spec.expires_on == Some(event)
+                && (event.is_global() || subject == Some(owner))
+            {
                 t.duration -= 1;
                 if t.duration == 0 {
                     t.remaining = Some(0);
@@ -222,6 +228,9 @@ impl State<'_> {
                 Some(_applied),
                 None,
             );
+        }
+        if self.units[target].ally && !self.units[target].alive() {
+            self.dismiss_summons(target);
         }
         Ok(())
     }

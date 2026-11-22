@@ -34,7 +34,7 @@ impl State<'_> {
             .units
             .iter()
             .enumerate()
-            .filter(|(_, u)| u.alive() && (u.ally == side) == allies)
+            .filter(|(_, u)| u.regular_alive() && (u.ally == side) == allies)
             .map(|(i, _)| i)
             .collect();
         if candidates.is_empty() {

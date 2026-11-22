@@ -392,7 +392,14 @@ impl State<'_> {
             }
             Effect::Speed { value, target } => {
                 for recipient in self.targets(actor, target)? {
-                    self.units[recipient].spec.stats.speed = value;
+                    let unit = &mut self.units[recipient];
+                    if unit.summon.is_some() && (!value.is_finite() || value <= 0.0) {
+                        return Err(format!(
+                            "traditional summon {} needs finite positive speed",
+                            unit.spec.id
+                        ));
+                    }
+                    unit.spec.stats.speed = value;
                     trace!(
                         self,
                         "speed",

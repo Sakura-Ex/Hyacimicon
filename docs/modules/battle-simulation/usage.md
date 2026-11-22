@@ -48,6 +48,63 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCEN
 - `queue_capacity`：有限敌人队列的在场槽位数。启用时，组装方将所有敌人按入场顺序放入唯一一波 `waves[0]`。敌人阵亡并结束当前 Action 后，引擎依序补足空槽。
 - `triggers`: 战局全局或单位级事件监听器（`BattleStart`、`WaveStart`、`Hit`、`Break`、`Death`、`TurnEnd` 等）。
 
+#### 传统召唤物
+
+`mechanics.traditional_summons` 为开战时仍存活的主人配置召唤物，召唤物在 `BattleStart` 前入场。每条配置包含非空且全场唯一的 `id`、开战我方名单中的主人 `owner`、有效面板 `stats` 以及一个自动执行的 `action`。`stats.speed` 和 `stats.max_hp` 均须为有限正数。`action.kind` 设为 `follow_up`，`sp_cost`、`sp_gain`、`energy_cost` 和 `energy_gain` 均填 `0`。
+
+用 `elemental_damage` 表达元素伤害，并将 `attack_type` 设为 `pursued`，命中时会带上追击类型供监听器筛选。`mechanics.element_profiles` 以单位 ID 为键，每个可能使用的元素都需要召唤物对应的 `damage_bonus` 和每个可能命中目标对应的 `resistance`。
+
+以下 PowerShell 命令从仓库根目录运行。它读取[开战召唤物合成场景](../../../core/battle/examples/opening-summon.json)，在临时文件中将原有伤害替换为风属性追击，然后以种子 42 运行并取出召唤物的伤害事件。
+
+```powershell
+$scenario = Get-Content -Raw core/battle/examples/opening-summon.json | ConvertFrom-Json
+$scenario.mechanics.traditional_summons[0].action.effects = @(
+    @{
+        type = 'elemental_damage'
+        scale = 'attack'
+        ratio = @{ op = 'constant'; value = 0 }
+        flat = @{ op = 'constant'; value = 40 }
+        can_crit = $false
+        target = 'enemy_lowest_hp'
+        element = @{ selection = 'fixed'; element = 'wind' }
+        attack_type = 'pursued'
+    }
+)
+$scenario.mechanics | Add-Member -NotePropertyName element_profiles -NotePropertyValue @{
+    summon = @{ damage_bonus = @{ wind = 0 }; resistance = @{ wind = 0 } }
+    enemy = @{ damage_bonus = @{ wind = 0 }; resistance = @{ wind = 0 } }
+}
+
+$scenarioPath = [IO.Path]::GetTempFileName()
+try {
+    [IO.File]::WriteAllText($scenarioPath, ($scenario | ConvertTo-Json -Depth 30))
+    $reportJson = cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- simulate $scenarioPath 42
+    if ($LASTEXITCODE -ne 0) { throw "hcwa-battle exited with $LASTEXITCODE" }
+    $report = ($reportJson -join [Environment]::NewLine) | ConvertFrom-Json
+    $report.events |
+        Where-Object { $_.kind -eq 'damage' -and $_.actor -eq 'summon' } |
+        Select-Object kind, actor, target, av, amount, attack_type |
+        ConvertTo-Json
+} finally {
+    Remove-Item -LiteralPath $scenarioPath
+}
+```
+
+主人在 AV 100 行动，随后命令输出一条召唤物伤害事件。
+
+```json
+{
+  "kind": "damage",
+  "actor": "summon",
+  "target": "enemy",
+  "av": 125.0,
+  "amount": 40.0,
+  "attack_type": "pursued"
+}
+```
+
+召唤物的回合时序及输出字段见[调度设计](design.md#23-传统召唤物回合)和[分步观测](stepping.md#22-局面观测-observation)。
+
 ### 2.3 输出结果结构 (`BattleResult` 与 `BattleReport`)
 
 - **运行时原生结果 (`BattleResult`)**：
@@ -139,4 +196,5 @@ fn run_interactive_battle(scenario: &Scenario, seed: u64) -> Result<(), String> 
 - [`duel.json`](../../../core/battle/examples/duel.json)：人工单挑场景，展示基础伤害、暴击和行动顺序。
 - [`team-waves.json`](../../../core/battle/examples/team-waves.json)：多角色队伍对战两波敌人，展示波次衔接与战技点共享。
 - [`revival-budget.json`](../../../core/battle/examples/revival-budget.json)：展示复活时扣减当前轮次额度。
+- [传统召唤物](#传统召唤物)：展示开战入场、独立回合和元素追击的诊断步骤。
 - [`anaxa-s2-full-battle.json`](../../../core/battle/examples/anaxa-s2-full-battle.json)：那刻夏 S2 的部分技能链与有限队列开发样例，见[样例说明](anaxa-scenario.md)。

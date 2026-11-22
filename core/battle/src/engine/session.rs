@@ -66,6 +66,7 @@ impl<'input> BattleSession<'input> {
             #[cfg(feature = "diagnostics")]
             trace,
         );
+        state.spawn_opening_summons()?;
         state.dispatch(BattleEvent::BattleStart, None, None)?;
         state.dispatch(BattleEvent::WaveStart, None, None)?;
         Ok(Self {
@@ -215,13 +216,30 @@ impl<'input> BattleSession<'input> {
 
     /// 保存完成结果并结束本场推进。
     fn conclude(&mut self, outcome: Outcome, termination: Termination) {
+        // A terminal or safety stop can interrupt a natural turn without running TurnEnd rules.
+        #[cfg(feature = "diagnostics")]
+        if let Some(actor) = self
+            .state
+            .turn
+            .filter(|&actor| self.state.units[actor].summon.is_some())
+        {
+            trace!(
+                self.state,
+                "normal_turn_interrupted",
+                actor,
+                None,
+                None,
+                None,
+                None
+            );
+        }
         let cleared = self.state.wave + usize::from(!self.enemies_present());
         self.phase = Phase::Finished(Box::new(self.state.finish(outcome, termination, cleared)));
     }
 
     /// 清场/全灭独立触发结算；未来波次或尚未入场的队列仍参与敌方存在判断。
     fn settle_elimination(&mut self) -> bool {
-        let allies = self.state.units.iter().any(|u| u.ally && u.alive());
+        let allies = self.state.units.iter().any(|u| u.ally && u.regular_alive());
         let enemies = self.enemies_present();
         let end = match (allies, enemies) {
             (false, false) => Some((Outcome::Draw, Termination::BothDefeated)),
@@ -243,8 +261,10 @@ impl<'input> BattleSession<'input> {
     fn end_normal_turn(&mut self, actor: usize) -> Result<(), String> {
         self.state
             .dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
-        self.state.units[actor].remaining =
-            (DISTANCE - self.state.units[actor].next_shift).max(0.0);
+        if self.state.units[actor].summon.is_none() || self.state.units[actor].alive() {
+            self.state.units[actor].remaining =
+                (DISTANCE - self.state.units[actor].next_shift).max(0.0);
+        }
         self.state.units[actor].next_shift = 0.0;
         self.state.turn = None;
         trace!(
@@ -452,6 +472,13 @@ impl<'input> BattleSession<'input> {
             }
             self.state
                 .dispatch(BattleEvent::TurnStart, Some(actor), None)?;
+            if self.state.units[actor].summon.is_some() {
+                if self.state.units[actor].alive() {
+                    self.state.act(actor, 0, false)?;
+                }
+                // Resume the same refill/insert/pending/TurnEnd path as a chosen action.
+                continue;
+            }
             if !self.state.units[actor].alive() {
                 continue;
             }

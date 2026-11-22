@@ -54,7 +54,13 @@ pub struct UnitResult {
     pub shield: f64,
     /// 当前能量。
     pub energy: f64,
-    /// 当前生命值是否大于零。
+    /// Owner ID for a traditional summon. An absent summon remains in the snapshot.
+    #[cfg_attr(
+        feature = "diagnostics",
+        serde(skip_serializing_if = "Option::is_none")
+    )]
+    pub summon_owner: Option<String>,
+    /// Whether the unit is alive and present for battle rules.
     pub alive: bool,
     /// 本场剩余即时复活次数。
     pub revivals_left: u8,

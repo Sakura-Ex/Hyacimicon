@@ -7,6 +7,8 @@ pub(super) struct CombatUnit {
     pub(super) spec: Unit,
     /// 是否属于我方。
     pub(super) ally: bool,
+    /// Original ally index and whether the summon is still in battle.
+    pub(super) summon: Option<SummonPresence>,
     /// 当前生命值。
     pub(super) hp: f64,
     /// 当前护盾容量。
@@ -28,12 +30,21 @@ pub(super) struct CombatUnit {
     /// 本场剩余即时复活次数。
     pub(super) revivals_left: u8,
 }
+/// Lifecycle of an opening traditional summon.
+pub(super) struct SummonPresence {
+    /// Stable index of its owner in the starting roster.
+    pub(super) owner: usize,
+    /// False after the owner has been defeated and revival has resolved.
+    pub(super) present: bool,
+}
+
 impl CombatUnit {
     /// 按所属类型的初始配置建立独立运行状态。
     pub(super) fn new(spec: &Unit, ally: bool, mechanics: &Mechanics) -> Self {
         Self {
             spec: spec.clone(),
             ally,
+            summon: None,
             hp: spec.initial_hp,
             shield: 0.0,
             shield_turns: 0,
@@ -50,9 +61,17 @@ impl CombatUnit {
             revivals_left: spec.revival.as_ref().map_or(0, |r| r.charges),
         }
     }
-    /// 返回当前生命值是否大于零。
+    /// Departed summons remain in the unit vector only for observations and results.
+    pub(super) fn present(&self) -> bool {
+        self.summon.as_ref().is_none_or(|summon| summon.present)
+    }
+    /// A departed summon retains its last panel but cannot participate.
     pub(super) fn alive(&self) -> bool {
-        self.hp > 0.0
+        self.hp > 0.0 && self.present()
+    }
+    /// Regular living units can be selected by generic side-based selectors.
+    pub(super) fn regular_alive(&self) -> bool {
+        self.summon.is_none() && self.alive()
     }
     /// 按 scale 取得攻击、防御或生命上限，供效果合成基础量。
     pub(super) fn scale(&self, scale: Scale) -> f64 {
@@ -63,9 +82,10 @@ impl CombatUnit {
         }
     }
     /// 导出当前单位快照；观测和最终结果共用相同字段。
-    pub(super) fn snapshot(
+    fn snapshot(
         &self,
         weaknesses: Option<crate::weakness::WeaknessState>,
+        summon_owner: Option<String>,
     ) -> UnitResult {
         UnitResult {
             weaknesses,
@@ -74,6 +94,7 @@ impl CombatUnit {
             hp: self.hp,
             shield: self.shield,
             energy: self.energy,
+            summon_owner,
             alive: self.alive(),
             revivals_left: self.revivals_left,
             remaining_distance: self.remaining,
@@ -244,6 +265,122 @@ impl<'a> State<'a> {
             event_attack_type: None,
             dynamic_scopes: Default::default(),
         }
+    }
+
+    /// Instantiate opening summons after the normal roster, preserving queue slot indexes.
+    pub(super) fn spawn_opening_summons(&mut self) -> Result<(), String> {
+        let summons = &self.input.mechanics.traditional_summons;
+        if summons.is_empty() {
+            return Ok(());
+        }
+        let mut ids: std::collections::HashSet<_> = self
+            .input
+            .allies
+            .iter()
+            .chain(self.input.waves.iter().flatten())
+            .map(|unit| unit.id.as_str())
+            .collect();
+        for summon in summons {
+            let id = &summon.id;
+            if id.is_empty() || !ids.insert(id.as_str()) {
+                return Err(format!(
+                    "invalid or duplicate traditional summon ID: {id:?}"
+                ));
+            }
+            let mut matching_owners = self
+                .input
+                .allies
+                .iter()
+                .enumerate()
+                .filter(|(_, unit)| unit.id == summon.owner);
+            let (owner, _) = matching_owners.next().ok_or_else(|| {
+                format!(
+                    "traditional summon {id} has unknown ally owner {}",
+                    summon.owner
+                )
+            })?;
+            if matching_owners.next().is_some() {
+                return Err(format!(
+                    "traditional summon {id} has ambiguous ally owner {}",
+                    summon.owner
+                ));
+            }
+            let action = &summon.action;
+            if action.kind != ActionKind::FollowUp
+                || action.sp_cost != 0
+                || action.sp_gain != 0
+                || action.energy_cost != 0.0
+                || action.energy_gain != 0.0
+            {
+                return Err(format!(
+                    "traditional summon {id} needs a resource-free follow-up"
+                ));
+            }
+            let stats = &summon.stats;
+            if !stats.speed.is_finite() || stats.speed <= 0.0 {
+                return Err(format!(
+                    "traditional summon {id} needs finite positive speed"
+                ));
+            }
+            if !stats.max_hp.is_finite() || stats.max_hp <= 0.0 {
+                return Err(format!(
+                    "traditional summon {id} needs finite positive max_hp"
+                ));
+            }
+            if !self.units[owner].alive() {
+                continue;
+            }
+            let unit = Unit {
+                id: id.clone(),
+                stats: stats.clone(),
+                initial_hp: stats.max_hp,
+                initial_energy: 0.0,
+                max_energy: 0.0,
+                revival: None,
+                actions: vec![action.clone()],
+            };
+            let mut unit = CombatUnit::new(&unit, true, &self.input.mechanics);
+            unit.summon = Some(SummonPresence {
+                owner,
+                present: true,
+            });
+            let _index = self.units.len();
+            self.units.push(unit);
+            trace!(self, "summon_spawn", _index, Some(owner), None, None, None);
+        }
+        Ok(())
+    }
+
+    /// Retain departed instances for snapshots and invalidate their pending requests.
+    pub(super) fn dismiss_summons(&mut self, owner: usize) {
+        if self.input.mechanics.traditional_summons.is_empty() {
+            return;
+        }
+        for index in 0..self.units.len() {
+            let Some(summon) = &mut self.units[index].summon else {
+                continue;
+            };
+            if summon.owner == owner && summon.present {
+                summon.present = false;
+                trace!(self, "summon_despawn", index, Some(owner), None, None, None);
+            }
+        }
+        self.pending.retain(|request| {
+            self.units[request.actor]
+                .summon
+                .as_ref()
+                .is_none_or(|summon| summon.present)
+        });
+    }
+
+    /// Build the same unit view for any observation or battle result.
+    pub(super) fn unit_snapshot(&self, index: usize) -> UnitResult {
+        let unit = &self.units[index];
+        let owner = unit
+            .summon
+            .as_ref()
+            .map(|summon| self.units[summon.owner].spec.id.clone());
+        unit.snapshot(self.weakness_state(index), owner)
     }
 
     /// Reuse slots only after the previous complete Action. Revival has already resolved.

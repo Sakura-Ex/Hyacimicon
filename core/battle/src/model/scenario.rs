@@ -41,6 +41,12 @@ pub struct Mechanics {
         serde(default, skip_serializing_if = "Option::is_none")
     )]
     pub queue_capacity: Option<usize>,
+    /// Traditional summons configured for the starting allied roster.
+    #[cfg_attr(
+        feature = "diagnostics",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
+    pub traditional_summons: Vec<TraditionalSummon>,
     /// Explicit immutable natural weaknesses. Missing units remain unknown.
     #[cfg_attr(
         feature = "diagnostics",
@@ -97,6 +103,7 @@ impl Default for Mechanics {
     fn default() -> Self {
         Self {
             queue_capacity: None,
+            traditional_summons: vec![],
             natural_weaknesses: Default::default(),
             modifier_weaknesses: Default::default(),
             element_profiles: Default::default(),

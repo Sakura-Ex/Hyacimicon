@@ -9,9 +9,6 @@ impl State<'_> {
         termination: Termination,
         waves_cleared: usize,
     ) -> BattleResult {
-        let weaknesses: Vec<_> = (0..self.units.len())
-            .map(|i| self.weakness_state(i))
-            .collect();
         let queue = self
             .input
             .mechanics
@@ -44,10 +41,8 @@ impl State<'_> {
             waves_cleared,
             ally_skill_points: self.sp[0],
             enemy_skill_points: self.sp[1],
-            units: std::mem::take(&mut self.units)
-                .into_iter()
-                .zip(weaknesses)
-                .map(|(u, weaknesses)| u.snapshot(weaknesses))
+            units: (0..self.units.len())
+                .map(|index| self.unit_snapshot(index))
                 .collect(),
             #[cfg(feature = "diagnostics")]
             events: std::mem::take(&mut self.events),
