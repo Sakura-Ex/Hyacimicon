@@ -10,9 +10,9 @@ const kinds = {
 
 export function matchStatus(match: Match) {
   const planes = match.planes ?? [];
-  const steps = planes.flat();
-  const index = steps.findIndex((step) => step.id === match.node);
   const plane = planes.findIndex((nodes) => nodes.some((step) => step.id === match.node));
+  const steps = planes[plane] ?? [];
+  const index = steps.findIndex((step) => step.id === match.node);
   const kind = steps[index]?.kind;
   const maximum = match.maxHealth;
   const health = match.health;
@@ -28,27 +28,19 @@ export function matchStatus(match: Match) {
     </li>`;
   }
 
-  let offset = 0;
   return html`<div class="match-status" role="region" aria-label="本局进度和整局血量">
     <div class="match-route">
       <div class="match-route-heading">
         <div>
+          ${plane >= 0 ? html`<small>位面 ${plane + 1}</small>` : nothing}
           <strong>节点 ${match.node}</strong>
           ${kind ? html`<small>${kinds[kind].name}</small>` : nothing}
         </div>
         ${index >= 0 ? html`<span class="route-total">${index + 1}<small> / ${steps.length}</small></span>` : nothing}
       </div>
-      ${planes.length ? html`<div class="match-planes">
-        ${planes.map((nodes, i) => {
-          const start = offset;
-          offset += nodes.length;
-          const label = "位面 " + (i + 1);
-          return html`<div class="match-plane" ?data-active=${i === plane}>
-            <b class="match-plane-label">${label}</b>
-            <ol aria-label=${label}>${nodes.map((step, j) => mark(step, start + j < index))}</ol>
-          </div>`;
-        })}
-      </div>` : nothing}
+      ${steps.length ? html`<ol class="match-steps" aria-label=${`位面 ${plane + 1} 的节点`}>
+        ${steps.map((step, j) => mark(step, j < index))}
+      </ol>` : nothing}
     </div>
     <div class="match-health">
       <small>整局血量</small>
