@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::PathBuf, sync::OnceLock, time::Duration};
 
-use crate::game_image_cache::{CacheState, ImageCache};
+use crate::game_image_cache::{CachedImage, ImageArchive, ImageCache};
 use futures_util::{stream, StreamExt};
 use serde::Serialize;
 use tauri::{
@@ -56,6 +56,11 @@ fn cache_directory() -> Result<PathBuf, String> {
     Ok(directory.join("images").join("StarRailRes"))
 }
 
+fn archive(directory: &std::path::Path) -> &'static ImageArchive {
+    static ARCHIVE: OnceLock<ImageArchive> = OnceLock::new();
+    ARCHIVE.get_or_init(|| ImageArchive::new(directory.with_extension("pack")))
+}
+
 impl Image {
     fn cache(&self, path: PathBuf) -> ImageCache<'static> {
         ImageCache::new(path, self.bytes, self.blob)
@@ -81,29 +86,38 @@ impl Image {
     async fn prepare(
         self,
         client: reqwest::Client,
+        archive: &'static ImageArchive,
+        local: String,
         path: PathBuf,
-        state: CacheState,
+        legacy: bool,
     ) -> Result<(), String> {
         let cache = self.cache(path);
-        let downloaded = if state == CacheState::LegacyPng {
+        let downloaded = if legacy {
             None
         } else {
             Some(self.fetch(&client).await?)
         };
         tauri::async_runtime::spawn_blocking(move || {
-            let (png, already_saved) = match downloaded {
-                Some(bytes) if cache.valid_png(&bytes) => (bytes, false),
+            let image = match downloaded {
+                Some(bytes) if cache.valid_png(&bytes) => CachedImage::from_png(bytes),
                 Some(_) => return Err(format!("{} 校验失败", self.remote)),
-                None => (
-                    cache
-                        .read_png()
-                        .ok_or_else(|| format!("{} 的本地 PNG 已变更", self.remote))?,
-                    true,
-                ),
+                None => {
+                    let image = cache
+                        .read_legacy()
+                        .ok_or_else(|| format!("{} 的旧缓存已变更", self.remote))?;
+                    if image.mime == "image/png" {
+                        CachedImage::from_png(image.bytes)
+                    } else {
+                        image
+                    }
+                }
             };
+            archive
+                .store(&local, &cache, &image)
+                .map_err(|error| format!("归档 {} 失败：{error}", self.remote))?;
             cache
-                .prepare(&png, already_saved)
-                .map_err(|error| format!("保存 {} 失败：{error}", self.remote))
+                .clear_legacy()
+                .map_err(|error| format!("清理 {} 的旧缓存失败：{error}", self.remote))
         })
         .await
         .map_err(|error| error.to_string())?
@@ -124,18 +138,29 @@ pub async fn player_sync_game_images(
 ) -> Result<SyncReport, String> {
     let _guard = lock.try_lock().map_err(|_| "正在校验游戏图像")?;
     let directory = cache_directory()?;
+    let archive = archive(&directory);
     let mut available = Vec::new();
     let mut pending = Vec::new();
     for (&local, image) in images() {
-        let state = image.cache(directory.join(local)).state();
-        if state != CacheState::Missing {
+        let cache = image.cache(directory.join(local));
+        if archive
+            .read(local, &cache)
+            .map_err(|error| format!("校验图像容器失败：{error}"))?
+            .is_some()
+        {
+            cache
+                .clear_legacy()
+                .map_err(|error| format!("清理 {local} 的旧缓存失败：{error}"))?;
             available.push(local.to_owned());
-        }
-        if state != CacheState::Prepared {
-            pending.push((local.to_owned(), *image, state));
+        } else {
+            let legacy = cache.read_legacy().is_some();
+            if legacy {
+                available.push(local.to_owned());
+            }
+            pending.push((local.to_owned(), *image, legacy));
         }
     }
-    pending.sort_by_key(|(_, _, state)| *state == CacheState::Missing);
+    pending.sort_by_key(|(_, _, legacy)| !legacy);
     let mut report = SyncReport {
         available,
         missing: pending.len(),
@@ -156,18 +181,23 @@ pub async fn player_sync_game_images(
         .build()
         .map_err(|error| format!("无法连接 StarRailRes：{error}"))?;
     let mut updates = stream::iter(pending)
-        .map(|(local, image, state): (String, Image, CacheState)| {
+        .map(|(local, image, legacy): (String, Image, bool)| {
             let path = directory.join(&local);
             let client = client.clone();
-            async move { (local, state, image.prepare(client, path, state).await) }
+            async move {
+                let result = image
+                    .prepare(client, archive, local.clone(), path, legacy)
+                    .await;
+                (local, legacy, result)
+            }
         })
         .buffer_unordered(PARALLEL_IMAGES);
     let mut consecutive_failures = 0;
     let mut processed = 0;
-    while let Some((local, state, result)) = updates.next().await {
+    while let Some((local, legacy, result)) = updates.next().await {
         match result {
             Ok(()) => {
-                if state == CacheState::Missing {
+                if !legacy {
                     report.available.push(local);
                 }
                 report.missing -= 1;
@@ -182,7 +212,7 @@ pub async fn player_sync_game_images(
             Err(error) => {
                 report.error = Some(error);
                 consecutive_failures += 1;
-                if state == CacheState::Missing && consecutive_failures >= PARALLEL_IMAGES {
+                if !legacy && consecutive_failures >= PARALLEL_IMAGES {
                     break;
                 }
             }
@@ -197,7 +227,11 @@ pub fn serve(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
         .flatten()
         .and_then(|local| {
             let image = images().get(local)?;
-            image.cache(cache_directory().ok()?.join(local)).read()
+            let directory = cache_directory().ok()?;
+            let archive = archive(&directory);
+            let cache = image.cache(directory.join(local));
+            let packed = || archive.read(local, &cache).ok().flatten();
+            packed().or_else(|| cache.read_legacy()).or_else(packed)
         });
     match bytes {
         Some(image) => Response::builder()

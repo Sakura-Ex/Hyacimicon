@@ -46,11 +46,13 @@ npm run tauri dev
 
 ### 游戏图像
 
-Windows 版启动时根据[图像清单](../../../apps/player/src-tauri/star-rail-images.tsv)校验程序旁的 `images/StarRailRes/`，并从 StarRailRes 下载缺失或损坏的角色头像、角色立绘、光锥和遗器图像。清单覆盖已选版本中这四类公开文件，供所有账号共用。安装包包含路径、字节数和 Git blob 校验值，游戏美术由应用启动后写入本地。
+Windows 版启动时根据[图像清单](../../../apps/player/src-tauri/star-rail-images.tsv)校验程序旁的 `images/StarRailRes.pack`，并从 StarRailRes 下载缺失或损坏的角色头像、角色立绘、光锥和遗器图像。清单覆盖已选版本中这四类公开文件，供所有账号共用。安装包包含路径、字节数和 Git blob 校验值，游戏美术由应用启动后写入本地。
 
-Rust 校验下载的 PNG，并以无损 WebP 写入缓存，保留分辨率、像素和透明通道。现有且校验通过的 PNG 在启动后本地转换，转换结果和校验标记均写入后清理原文件。遇到无法无损转码或压缩收益不足的图片会保留 PNG。TypeScript 启动校验、显示进度，并在图片可用后刷新页面。文件齐全时可离线启动。处理期间仍可使用账号功能，失败后可从状态提示重试。
+Rust 校验下载的 PNG，优先转成无损 WebP，再按条目尝试 Zstandard 压缩并写入容器。每一步保留体积更小且像素无损的结果。启动时复用旧 `images/StarRailRes/` 中有效的 PNG 或 WebP，归档提交后清理对应散文件。窗口按需读取容器中的图片。TypeScript 启动校验并显示进度，文件齐全时可离线启动。普通页面禁止框选和全选文字、拖出图片以及默认右键菜单，编辑字段保留选择、复制和粘贴。
 
 图像来源固定为 StarRailRes 4.7.0 的 [03907e7 提交](https://github.com/Mar-7th/StarRailRes/commit/03907e798b46f9eb109a1f882055cdf49ce3d374)。清单取自该提交文件树中的角色头像、完整立绘、光锥图标和遗器图标，源 PNG 合计约 372 MiB。桌面版的账号和战斗预览也读取这套立绘。浏览器开发预览使用风堇和景元两张本地草稿立绘。该版本缺少帕姆王，以及预览所用的局内装备、羁绊和敌人图像。局内装备、羁绊和敌人的设计稿素材可在开发服务器预览。
+
+本机完整资源包含 567 张图片，实测为 316.1 MiB。离线验收用的副本保存在仓库根目录下的 `local-data/player-test-images/StarRailRes.pack`，由 Git 忽略。测试独立的 EXE 副本前，将资源包复制到该 EXE 旁的 `images/StarRailRes.pack`，启动后即可读取。容器和本机测试副本均在安装包之外。
 
 ## 战斗模式
 

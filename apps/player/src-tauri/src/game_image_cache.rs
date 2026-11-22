@@ -1,12 +1,13 @@
 use std::{
-    fs::{self, File, OpenOptions},
-    io::{self, Cursor, Read, Write},
+    fs::{self, File},
+    io::{self, Cursor, Read},
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use image_webp::{ColorType, WebPEncoder};
+use rusqlite::{params, Connection, OptionalExtension};
 use sha1::{Digest, Sha1};
-use uuid::Uuid;
 
 pub struct ImageCache<'a> {
     png: PathBuf,
@@ -19,11 +20,108 @@ pub struct CachedImage {
     pub mime: &'static str,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum CacheState {
-    Prepared,
-    LegacyPng,
-    Missing,
+pub struct ImageArchive {
+    path: PathBuf,
+    connection: Mutex<Option<Connection>>,
+}
+
+impl ImageArchive {
+    pub fn new(path: PathBuf) -> Self {
+        Self {
+            path,
+            connection: Mutex::new(None),
+        }
+    }
+
+    fn query<T>(
+        &self,
+        operation: impl FnOnce(&Connection) -> rusqlite::Result<T>,
+    ) -> Result<T, String> {
+        let mut connection = self.connection.lock().map_err(|error| error.to_string())?;
+        if connection.is_none() {
+            let folder = self.path.parent().expect("image archive directory");
+            fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+            let opened = Connection::open(&self.path).map_err(|error| error.to_string())?;
+            opened
+                .execute_batch(
+                    "CREATE TABLE IF NOT EXISTS images (
+                    name TEXT PRIMARY KEY,
+                    source_blob TEXT NOT NULL,
+                    mime TEXT NOT NULL,
+                    wrapped INTEGER NOT NULL,
+                    digest TEXT NOT NULL,
+                    payload BLOB NOT NULL
+                );",
+                )
+                .map_err(|error| error.to_string())?;
+            *connection = Some(opened);
+        }
+        operation(connection.as_ref().expect("opened image archive"))
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn read(&self, name: &str, source: &ImageCache<'_>) -> Result<Option<CachedImage>, String> {
+        let row = self.query(|db| {
+            db.query_row(
+                "SELECT mime, wrapped, digest, payload FROM images
+             WHERE name = ?1 AND source_blob = ?2 AND length(payload) <= ?3",
+                params![name, source.source_blob, source.source_bytes as i64],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, bool>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, Vec<u8>>(3)?,
+                    ))
+                },
+            )
+            .optional()
+        })?;
+        Ok(row.and_then(|(mime, wrapped, digest, payload)| {
+            let bytes = if wrapped {
+                zstd::bulk::decompress(&payload, source.source_bytes).ok()?
+            } else {
+                payload
+            };
+            if format!("{:x}", Sha1::digest(&bytes)) != digest {
+                return None;
+            }
+            let mime = match mime.as_str() {
+                "image/png" if source.valid_png(&bytes) => "image/png",
+                "image/webp" if is_webp(&bytes) => "image/webp",
+                _ => return None,
+            };
+            Some(CachedImage { bytes, mime })
+        }))
+    }
+
+    pub fn store(
+        &self,
+        name: &str,
+        source: &ImageCache<'_>,
+        image: &CachedImage,
+    ) -> Result<(), String> {
+        let compressed =
+            zstd::bulk::compress(&image.bytes, 5).map_err(|error| error.to_string())?;
+        let wrapped = compressed.len() < image.bytes.len();
+        let payload = if wrapped { &compressed } else { &image.bytes };
+        let digest = format!("{:x}", Sha1::digest(&image.bytes));
+        self.query(|db| {
+            db.execute(
+                "INSERT OR REPLACE INTO images (name, source_blob, mime, wrapped, digest, payload)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    name,
+                    source.source_blob,
+                    image.mime,
+                    wrapped,
+                    digest,
+                    payload
+                ],
+            )
+        })
+        .map(|_| ())
+    }
 }
 
 impl<'a> ImageCache<'a> {
@@ -45,7 +143,7 @@ impl<'a> ImageCache<'a> {
         format!("{:x}", hash.finalize()) == self.source_blob
     }
 
-    pub fn read_png(&self) -> Option<Vec<u8>> {
+    fn read_png(&self) -> Option<Vec<u8>> {
         let bytes = read_at_most(&self.png, self.source_bytes)?;
         self.valid_png(&bytes).then_some(bytes)
     }
@@ -67,61 +165,57 @@ impl<'a> ImageCache<'a> {
             });
         }
         let bytes = read_at_most(&self.png.with_extension("webp"), self.source_bytes)?;
-        (bytes.starts_with(b"RIFF")
-            && bytes.get(8..12) == Some(b"WEBP")
-            && format!("{:x}", Sha1::digest(&bytes)) == encoded)
-            .then_some(CachedImage {
+        (is_webp(&bytes) && format!("{:x}", Sha1::digest(&bytes)) == encoded).then_some(
+            CachedImage {
                 bytes,
                 mime: "image/webp",
-            })
+            },
+        )
     }
 
-    pub fn state(&self) -> CacheState {
-        if let Some(image) = self.read_prepared() {
-            if image.mime == "image/webp" && self.png.is_file() {
-                // A previous run may have been interrupted after committing the WebP.
-                let _ = fs::remove_file(&self.png);
+    pub fn read_legacy(&self) -> Option<CachedImage> {
+        self.read_prepared().or_else(|| {
+            Some(CachedImage {
+                bytes: self.read_png()?,
+                mime: "image/png",
+            })
+        })
+    }
+
+    pub fn clear_legacy(&self) -> io::Result<()> {
+        for path in [
+            &self.png,
+            &self.png.with_extension("webp"),
+            &self.proof_path(),
+        ] {
+            match fs::remove_file(path) {
+                Ok(()) => (),
+                Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+                Err(error) => return Err(error),
             }
-            CacheState::Prepared
-        } else if self.read_png().is_some() {
-            CacheState::LegacyPng
-        } else {
-            CacheState::Missing
-        }
-    }
-
-    pub fn read(&self) -> Option<CachedImage> {
-        self.read_prepared()
-            .or_else(|| {
-                Some(CachedImage {
-                    bytes: self.read_png()?,
-                    mime: "image/png",
-                })
-            })
-            .or_else(|| self.read_prepared())
-    }
-
-    // The caller supplies the verified upstream PNG. Keep it available until the compact file
-    // and its proof have both been committed.
-    pub fn prepare(&self, png: &[u8], already_saved: bool) -> io::Result<()> {
-        if !already_saved {
-            write_atomic(&self.png, png)?;
-        }
-        let compact = lossless_webp(png).filter(|bytes| bytes.len() + 81 < png.len());
-        let proof = if let Some(bytes) = &compact {
-            write_atomic(&self.png.with_extension("webp"), bytes)?;
-            format!("{} {:x}", self.source_blob, Sha1::digest(bytes))
-        } else {
-            format!("{} png", self.source_blob)
-        };
-        write_atomic(&self.proof_path(), proof.as_bytes())?;
-        if compact.is_some() {
-            let _ = fs::remove_file(&self.png);
-        } else {
-            let _ = fs::remove_file(self.png.with_extension("webp"));
         }
         Ok(())
     }
+}
+
+impl CachedImage {
+    pub fn from_png(png: Vec<u8>) -> Self {
+        if let Some(bytes) = lossless_webp(&png).filter(|bytes| bytes.len() < png.len()) {
+            Self {
+                bytes,
+                mime: "image/webp",
+            }
+        } else {
+            Self {
+                bytes: png,
+                mime: "image/png",
+            }
+        }
+    }
+}
+
+fn is_webp(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP")
 }
 
 fn read_at_most(path: &Path, limit: usize) -> Option<Vec<u8>> {
@@ -175,29 +269,11 @@ fn lossless_webp(input: &[u8]) -> Option<Vec<u8>> {
     Some(output)
 }
 
-fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let directory = path.parent().expect("cache subdirectory");
-    fs::create_dir_all(directory)?;
-    let temporary = directory.join(format!(".{}.tmp", Uuid::new_v4()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
-    let result = (|| {
-        file.write_all(bytes)?;
-        drop(file);
-        fs::rename(&temporary, path)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use image_webp::WebPDecoder;
+    use uuid::Uuid;
 
     #[test]
     fn migrates_verified_png_without_changing_pixels_and_detects_corruption() {
@@ -218,24 +294,57 @@ mod tests {
         hash.update(&source);
         let blob = format!("{:x}", hash.finalize());
         let cache = ImageCache::new(path.clone(), source.len(), &blob);
-        assert!(cache.read().is_none());
-        write_atomic(&path, &source).unwrap();
-        assert!(cache.state() == CacheState::LegacyPng);
-        cache.prepare(&source, true).unwrap();
+        let archive = ImageArchive::new(root.join("StarRailRes.pack"));
+        let name = "avatars/head-1.png";
+        assert!(archive.read(name, &cache).unwrap().is_none());
+        archive
+            .store(
+                "png-backup",
+                &cache,
+                &CachedImage {
+                    bytes: source.clone(),
+                    mime: "image/png",
+                },
+            )
+            .unwrap();
+        let wrapped: bool = archive
+            .query(|db| db.query_row("SELECT wrapped FROM images", [], |row| row.get(0)))
+            .unwrap();
+        assert!(wrapped);
+        assert_eq!(
+            archive.read("png-backup", &cache).unwrap().unwrap().bytes,
+            source
+        );
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, &source).unwrap();
+        let legacy = cache.read_legacy().unwrap();
+        archive
+            .store(name, &cache, &CachedImage::from_png(legacy.bytes))
+            .unwrap();
+        cache.clear_legacy().unwrap();
         assert!(!path.exists());
-        assert!(cache.state() == CacheState::Prepared);
-        let image = cache.read().unwrap();
+        let image = archive.read(name, &cache).unwrap().unwrap();
         assert_eq!(image.mime, "image/webp");
         let mut decoder = WebPDecoder::new(Cursor::new(&image.bytes)).unwrap();
         let mut decoded = vec![0; decoder.output_buffer_size().unwrap()];
         decoder.read_image(&mut decoded).unwrap();
         assert_eq!(decoded, pixels);
-        let mut corrupted = image.bytes;
-        *corrupted.last_mut().unwrap() ^= 1;
-        write_atomic(&path.with_extension("webp"), &corrupted).unwrap();
-        assert!(cache.read().is_none());
-        cache.prepare(&source, false).unwrap();
-        assert!(cache.state() == CacheState::Prepared);
+        archive
+            .query(|db| {
+                db.execute(
+                    "UPDATE images SET digest = 'corrupted' WHERE name = ?1",
+                    [name],
+                )
+            })
+            .unwrap();
+        assert!(archive.read(name, &cache).unwrap().is_none());
+        archive
+            .store(name, &cache, &CachedImage::from_png(source))
+            .unwrap();
+        drop(archive);
+        let reopened = ImageArchive::new(root.join("StarRailRes.pack"));
+        assert!(reopened.read(name, &cache).unwrap().is_some());
+        drop(reopened);
         fs::remove_dir_all(root).unwrap();
     }
 }

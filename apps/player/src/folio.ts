@@ -13,10 +13,10 @@ export interface Spread {
   headingTabs?: TemplateResult;
 }
 export const icon = (name: string) =>
-  html`<img class="icon" alt="" src="/ui/${name}.svg" />`;
+  html`<img class="icon" alt="" draggable="false" src="/ui/${name}.svg" />`;
 export function art(source: string | undefined, cls = "", alt = "") {
   const url = imageUrl(source);
-  return url ? html`<img class=${cls} src=${url} alt=${alt} />` : nothing;
+  return url ? html`<img class=${cls} src=${url} alt=${alt} draggable="false" />` : nothing;
 }
 export const itemArt = (i: Item) =>
   html`<span class="item" tabindex="0" aria-label=${i.name + " " + i.detail}

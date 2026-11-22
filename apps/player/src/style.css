@@ -19,6 +19,15 @@ body {
   min-height: 100dvh;
   display: grid;
   place-items: center;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable]:not([contenteditable="false"]) {
+  user-select: text;
+}
+img {
+  -webkit-user-drag: none;
 }
 #app {
   position: relative;
