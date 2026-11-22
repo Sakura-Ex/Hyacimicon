@@ -1,26 +1,17 @@
-use std::{
-    collections::BTreeMap,
-    fs::{self, File, OpenOptions},
-    io::{Read, Write},
-    path::{Path, PathBuf},
-    sync::OnceLock,
-    time::Duration,
-};
+use std::{collections::BTreeMap, path::PathBuf, sync::OnceLock, time::Duration};
 
+use crate::game_image_cache::{CacheState, ImageCache};
 use futures_util::{stream, StreamExt};
 use serde::Serialize;
-use sha1::{Digest, Sha1};
 use tauri::{
     async_runtime::Mutex,
     http::{Method, Request, Response},
     ipc::Channel,
     State,
 };
-use uuid::Uuid;
 
 const SOURCE: &str = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/03907e798b46f9eb109a1f882055cdf49ce3d374";
-const PARALLEL_DOWNLOADS: usize = 8;
-const PNG_HEADER: &[u8] = b"\x89PNG\r\n\x1a\n";
+const PARALLEL_IMAGES: usize = 4;
 
 pub type SyncLock = Mutex<()>;
 
@@ -66,29 +57,11 @@ fn cache_directory() -> Result<PathBuf, String> {
 }
 
 impl Image {
-    fn valid(&self, bytes: &[u8]) -> bool {
-        if bytes.len() != self.bytes || !bytes.starts_with(PNG_HEADER) {
-            return false;
-        }
-        let mut hash = Sha1::new();
-        hash.update(format!("blob {}\0", self.bytes));
-        hash.update(bytes);
-        format!("{:x}", hash.finalize()) == self.blob
+    fn cache(&self, path: PathBuf) -> ImageCache<'static> {
+        ImageCache::new(path, self.bytes, self.blob)
     }
 
-    fn read(&self, path: &Path) -> Option<Vec<u8>> {
-        let file = File::open(path).ok()?;
-        if file.metadata().ok()?.len() != self.bytes as u64 {
-            return None;
-        }
-        let mut bytes = Vec::with_capacity(self.bytes);
-        file.take(self.bytes as u64 + 1)
-            .read_to_end(&mut bytes)
-            .ok()?;
-        self.valid(&bytes).then_some(bytes)
-    }
-
-    async fn fetch(&self, client: &reqwest::Client, path: &Path) -> Result<(), String> {
+    async fn fetch(&self, client: &reqwest::Client) -> Result<Vec<u8>, String> {
         let mut response = client
             .get(format!("{SOURCE}/{}", self.remote))
             .send()
@@ -102,30 +75,39 @@ impl Image {
             }
             bytes.extend_from_slice(&chunk);
         }
-        if !self.valid(&bytes) {
-            return Err(format!("{} 校验失败", self.remote));
-        }
-        write_image(path, &bytes).map_err(|error| format!("无法写入 {}：{error}", path.display()))
+        Ok(bytes)
     }
-}
 
-fn write_image(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let directory = path.parent().expect("cache subdirectory");
-    fs::create_dir_all(directory)?;
-    let temporary = directory.join(format!(".{}.tmp", Uuid::new_v4()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
-    let result = (|| {
-        file.write_all(bytes)?;
-        drop(file);
-        fs::rename(&temporary, path)
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(temporary);
+    async fn prepare(
+        self,
+        client: reqwest::Client,
+        path: PathBuf,
+        state: CacheState,
+    ) -> Result<(), String> {
+        let cache = self.cache(path);
+        let downloaded = if state == CacheState::LegacyPng {
+            None
+        } else {
+            Some(self.fetch(&client).await?)
+        };
+        tauri::async_runtime::spawn_blocking(move || {
+            let (png, already_saved) = match downloaded {
+                Some(bytes) if cache.valid_png(&bytes) => (bytes, false),
+                Some(_) => return Err(format!("{} 校验失败", self.remote)),
+                None => (
+                    cache
+                        .read_png()
+                        .ok_or_else(|| format!("{} 的本地 PNG 已变更", self.remote))?,
+                    true,
+                ),
+            };
+            cache
+                .prepare(&png, already_saved)
+                .map_err(|error| format!("保存 {} 失败：{error}", self.remote))
+        })
+        .await
+        .map_err(|error| error.to_string())?
     }
-    result
 }
 
 #[derive(Clone, Serialize)]
@@ -142,19 +124,27 @@ pub async fn player_sync_game_images(
 ) -> Result<SyncReport, String> {
     let _guard = lock.try_lock().map_err(|_| "正在校验游戏图像")?;
     let directory = cache_directory()?;
-    let (available, missing): (Vec<_>, Vec<_>) = images()
-        .iter()
-        .map(|(&local, image)| (local.to_owned(), *image))
-        .partition(|(local, image)| image.read(&directory.join(local)).is_some());
+    let mut available = Vec::new();
+    let mut pending = Vec::new();
+    for (&local, image) in images() {
+        let state = image.cache(directory.join(local)).state();
+        if state != CacheState::Missing {
+            available.push(local.to_owned());
+        }
+        if state != CacheState::Prepared {
+            pending.push((local.to_owned(), *image, state));
+        }
+    }
+    pending.sort_by_key(|(_, _, state)| *state == CacheState::Missing);
     let mut report = SyncReport {
-        available: available.into_iter().map(|(path, _)| path).collect(),
-        missing: missing.len(),
+        available,
+        missing: pending.len(),
         error: None,
     };
     on_cached
         .send(report.clone())
         .map_err(|error| error.to_string())?;
-    if missing.is_empty() {
+    if pending.is_empty() {
         return Ok(report);
     }
 
@@ -165,21 +155,25 @@ pub async fn player_sync_game_images(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|error| format!("无法连接 StarRailRes：{error}"))?;
-    let mut downloads = stream::iter(missing)
-        .map(|(local, image): (String, Image)| {
+    let mut updates = stream::iter(pending)
+        .map(|(local, image, state): (String, Image, CacheState)| {
             let path = directory.join(&local);
             let client = client.clone();
-            async move { (local, image.fetch(&client, &path).await) }
+            async move { (local, state, image.prepare(client, path, state).await) }
         })
-        .buffer_unordered(PARALLEL_DOWNLOADS);
+        .buffer_unordered(PARALLEL_IMAGES);
     let mut consecutive_failures = 0;
-    while let Some((local, result)) = downloads.next().await {
+    let mut processed = 0;
+    while let Some((local, state, result)) = updates.next().await {
         match result {
             Ok(()) => {
-                report.available.push(local);
+                if state == CacheState::Missing {
+                    report.available.push(local);
+                }
                 report.missing -= 1;
+                processed += 1;
                 consecutive_failures = 0;
-                if report.available.len() % 24 == 0 && report.missing > 0 {
+                if processed % 24 == 0 && report.missing > 0 {
                     on_cached
                         .send(report.clone())
                         .map_err(|error| error.to_string())?;
@@ -188,7 +182,7 @@ pub async fn player_sync_game_images(
             Err(error) => {
                 report.error = Some(error);
                 consecutive_failures += 1;
-                if consecutive_failures == PARALLEL_DOWNLOADS {
+                if state == CacheState::Missing && consecutive_failures >= PARALLEL_IMAGES {
                     break;
                 }
             }
@@ -203,41 +197,18 @@ pub fn serve(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
         .flatten()
         .and_then(|local| {
             let image = images().get(local)?;
-            image.read(&cache_directory().ok()?.join(local))
+            image.cache(cache_directory().ok()?.join(local)).read()
         });
     match bytes {
-        Some(bytes) => Response::builder()
-            .header("Content-Type", "image/png")
+        Some(image) => Response::builder()
+            .header("Content-Type", image.mime)
             .header("Cache-Control", "no-store")
             .header("X-Content-Type-Options", "nosniff")
-            .body(bytes),
+            .body(image.bytes),
         None => Response::builder()
             .status(404)
             .header("Cache-Control", "no-store")
             .body(Vec::new()),
     }
     .expect("valid image response")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn validates_cached_file_and_replaces_same_size_corruption() {
-        let root = std::env::temp_dir().join(format!("hyacimicon-images-{}", Uuid::new_v4()));
-        let path = root.join("avatars/head-1.png");
-        let bytes = b"\x89PNG\r\n\x1a\nfixture";
-        let image = Image {
-            remote: "icon/character/1.png",
-            bytes: bytes.len(),
-            blob: "aa62e8baaeee255d1bbcd31e48ddb34fd7042e93",
-        };
-        assert!(image.read(&path).is_none());
-        write_image(&path, b"\x89PNG\r\n\x1a\ncorrupt").unwrap();
-        assert!(image.read(&path).is_none());
-        write_image(&path, bytes).unwrap();
-        assert_eq!(image.read(&path).as_deref(), Some(bytes.as_slice()));
-        fs::remove_dir_all(root).unwrap();
-    }
 }

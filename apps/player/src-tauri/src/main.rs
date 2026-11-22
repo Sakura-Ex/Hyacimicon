@@ -2,6 +2,7 @@
 
 mod account_storage;
 mod accounts;
+mod game_image_cache;
 mod game_images;
 
 fn main() {

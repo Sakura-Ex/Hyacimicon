@@ -113,12 +113,12 @@ async function prepareImages() {
   draw();
   try {
     const report = await syncGameImages((missing) => {
-      imageStatus = missing ? `正在补齐游戏图像，剩余 ${missing} 张…` : "";
+      imageStatus = missing ? `正在准备游戏图像，剩余 ${missing} 张…` : "";
       draw();
     });
     if (report.missing) {
-      imageStatus = `还有 ${report.missing} 张游戏图像待下载`;
-      imageError = report.error ?? "下载未完成";
+      imageStatus = `还有 ${report.missing} 张游戏图像待处理`;
+      imageError = report.error ?? "图像准备未完成";
     } else {
       imageStatus = "";
     }
