@@ -8,7 +8,7 @@ import type {
   Unit,
 } from "./contracts";
 
-// The catalogue identifies bundled artwork. Preview data contains no game descriptions or calculated values.
+// Preview data identifies local artwork and leaves game descriptions and calculated values empty.
 const names: Record<string, string> = {
   "1409": "风堇",
   "1310": "流萤",

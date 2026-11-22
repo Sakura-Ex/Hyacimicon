@@ -3,6 +3,7 @@ import { art, icon, stats, type Spread, type Run } from "./folio";
 import type { Account, AccountPort } from "./contracts";
 import { accountImportView } from "./account-import";
 import { accountManager } from "./account-manager";
+import { imageUrl } from "./game-images";
 
 export function accountView(
   port: AccountPort,
@@ -103,7 +104,7 @@ export function accountView(
                   等级 ${c.level ?? "—"} · 突破 ${c.ascension ?? "—"} · 星魂
                   ${c.eidolons ?? "—"}
                 </p>
-                  ${art(c.portrait ?? c.image, c.portrait ? "portrait" : "unit-avatar")}
+                  ${imageUrl(c.portrait) ? art(c.portrait, "portrait") : art(c.image, "unit-avatar")}
                 <h2>基础属性</h2>
                 ${c.stats.length ? stats(c.stats) : html`<p>暂无属性记录</p>`}
               </article>`

@@ -2,9 +2,12 @@
 
 mod account_storage;
 mod accounts;
+mod game_images;
 
 fn main() {
     tauri::Builder::default()
+        .register_uri_scheme_protocol("game-images", |_, request| game_images::serve(request))
+        .manage(game_images::SyncLock::default())
         .manage(accounts::AccountStore::default())
         .invoke_handler(tauri::generate_handler![
             accounts::player_accounts,
@@ -15,6 +18,7 @@ fn main() {
             accounts::player_rename_account,
             accounts::player_delete_account,
             accounts::player_export_account,
+            game_images::player_sync_game_images,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run Hyacimicon");

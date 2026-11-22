@@ -6,6 +6,7 @@ import { battleWorkspace } from "./battle-workspace";
 import { demoPort } from "./demo";
 import type { Account, Match } from "./contracts";
 import { icon, type Spread } from "./folio";
+import { syncGameImages } from "./game-images";
 import { control, desktop } from "./windows";
 import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/noto-sans-sc";
@@ -30,6 +31,9 @@ let account: Account | undefined;
 let match: Match | undefined;
 let busy = false,
   message = "";
+let syncingImages = false;
+let imageStatus = "";
+let imageError = "";
 const preview = demoPort();
 const port = desktop ? { ...preview, ...desktopAccounts(preview) } : preview;
 const accountsPage = accountView(port, draw, run, select, removeAccount);
@@ -101,6 +105,31 @@ async function navigate(next: Page) {
   else await loadAccounts();
   page = next;
 }
+async function prepareImages() {
+  if (!desktop || syncingImages) return;
+  syncingImages = true;
+  imageError = "";
+  imageStatus = "正在校验游戏图像…";
+  draw();
+  try {
+    const report = await syncGameImages((missing) => {
+      imageStatus = missing ? `正在补齐游戏图像，剩余 ${missing} 张…` : "";
+      draw();
+    });
+    if (report.missing) {
+      imageStatus = `还有 ${report.missing} 张游戏图像待下载`;
+      imageError = report.error ?? "下载未完成";
+    } else {
+      imageStatus = "";
+    }
+  } catch (error) {
+    imageStatus = "游戏图像校验失败";
+    imageError = error instanceof Error ? error.message : String(error);
+  } finally {
+    syncingImages = false;
+    draw();
+  }
+}
 function draw() {
   let spread: Spread = {
     title: tabs[page],
@@ -150,15 +179,18 @@ function draw() {
                 关闭
               </button>
             </div>`
-          : nothing
+          : imageStatus
+            ? html`<div role="status" class="notice" title=${imageError || nothing}>
+                ${imageStatus}
+                ${imageError ? html`<button @click=${prepareImages}>重试</button>
+                  <button @click=${() => { imageStatus = ""; draw(); }}>关闭</button>` : nothing}
+              </div>`
+            : nothing
       }`,
     container,
   );
 }
-await run(() =>
-  navigate(
-    initialPage === "battle" || initialPage === "match"
-      ? initialPage
-      : "account",
-  ),
-);
+await Promise.all([
+  run(() => navigate(initialPage === "battle" || initialPage === "match" ? initialPage : "account")),
+  prepareImages(),
+]);

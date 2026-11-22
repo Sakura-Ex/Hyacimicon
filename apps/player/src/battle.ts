@@ -2,6 +2,7 @@ import { html, nothing } from "lit";
 import "./action-axis";
 import type { BattleResult, Item } from "./contracts";
 import { art, icon, stats, type Spread } from "./folio";
+import { imageUrl } from "./game-images";
 
 function meter(label: string, value: number | null, max: number | null) {
   return html`<label
@@ -36,7 +37,8 @@ export function battleView(redraw: () => void) {
     const actor = f ? units.find((u) => u.id === f.actorId) : undefined;
     const unit = units.find((u) => u.id === inspected) ?? actor ?? units[0];
     const featured = actor ?? unit;
-    const portrait = f?.portrait ?? featured?.portrait;
+    const source = f?.portrait ?? featured?.portrait;
+    const portrait = imageUrl(source) ? source : undefined;
     const targets = f?.targets ?? [];
     const log = f?.log ?? [];
     const step = (n: number) => {

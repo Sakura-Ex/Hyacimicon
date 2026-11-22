@@ -50,19 +50,14 @@ impl AccountStore {
             .map_err(Clone::clone)
     }
 
-    fn save(&self, entry: StoredAccount, app: &AppHandle) -> Result<Value, String> {
-        let result = self.display(&entry, app)?;
+    fn save(&self, entry: StoredAccount) -> Result<Value, String> {
+        let result = self.display(&entry)?;
         account_files()?.save(&entry)?;
         Ok(result)
     }
 
-    fn display(&self, entry: &StoredAccount, app: &AppHandle) -> Result<Value, String> {
-        let assets = app.asset_resolver();
-        Ok(display_account(entry, self.data()?, |path| {
-            assets
-                .get(path.to_owned())
-                .is_some_and(|asset| asset.mime_type.starts_with("image/"))
-        }))
+    fn display(&self, entry: &StoredAccount) -> Result<Value, String> {
+        Ok(display_account(entry, self.data()?))
     }
 }
 
@@ -156,7 +151,7 @@ pub async fn player_accounts(app: AppHandle) -> Result<Value, String> {
         let store = app.state::<AccountStore>();
         let accounts = entries
             .iter()
-            .map(|entry| store.display(entry, &app))
+            .map(|entry| store.display(entry))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(json!({ "accounts": accounts, "warnings": warnings }))
     })
@@ -197,7 +192,6 @@ pub async fn player_import_account(
                     report,
                 },
             ),
-            &app,
         )
     })
     .await
@@ -253,7 +247,6 @@ pub async fn player_generate_account(
                     report,
                 },
             ),
-            &app,
         )
     })
     .await
@@ -284,7 +277,7 @@ pub fn player_rename_account(app: AppHandle, id: Uuid, name: String) -> Result<V
     let name = validated_name(&name)?;
     let mut entry = account_files()?.load(id)?;
     entry.name = name;
-    app.state::<AccountStore>().save(entry, &app)
+    app.state::<AccountStore>().save(entry)
 }
 
 #[tauri::command]
@@ -384,7 +377,6 @@ fn relic_art_key(slot: RelicSlot) -> (&'static str, u8) {
 fn display_account(
     entry: &StoredAccount,
     data: &PlayableData,
-    has_art: impl Fn(&str) -> bool,
 ) -> Value {
     let raw = &entry.raw;
     let artwork = |path: String| {
@@ -396,7 +388,7 @@ fn display_account(
                     .bytes()
                     .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
         });
-        (safe && has_art(&path)).then_some(path)
+        safe.then_some(path)
     };
     let characters: Vec<_> = raw.characters.iter().map(|character| {
         let id = &character.character_id;
@@ -490,9 +482,7 @@ mod tests {
                 report: Some(imported.report),
             },
         );
-        let view = display_account(&entry, &PlayableData::bundled().expect("catalogue"), |_| {
-            false
-        });
+        let view = display_account(&entry, &PlayableData::bundled().expect("catalogue"));
         assert_eq!(view["id"], id.to_string());
         let characters = view["characters"].as_array().expect("display roster");
         assert_eq!(characters.len(), 3);

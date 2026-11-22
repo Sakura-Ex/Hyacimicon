@@ -1,9 +1,26 @@
 import { defineConfig } from "vite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+const draftAssets = new URL("../../design-drafts/player-app/assets/", import.meta.url);
 
 export default defineConfig({
   plugins: [
+    {
+      name: "bundle-book-and-controls",
+      generateBundle() {
+        for (const folder of ["book", "ui"]) {
+          const directory = new URL(folder + "/", draftAssets);
+          for (const name of readdirSync(directory)) {
+            this.emitFile({
+              type: "asset",
+              fileName: folder + "/" + name,
+              source: readFileSync(new URL(name, directory)),
+            });
+          }
+        }
+      },
+    },
     {
       name: "bundle-font-licenses",
       generateBundle() {
@@ -21,7 +38,6 @@ export default defineConfig({
       },
     },
   ],
-  publicDir: fileURLToPath(
-    new URL("../../design-drafts/player-app/assets/", import.meta.url),
-  ),
+  publicDir: fileURLToPath(draftAssets),
+  build: { copyPublicDir: false, emptyOutDir: true },
 });
