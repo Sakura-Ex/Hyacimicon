@@ -4,7 +4,7 @@ import { demoPort } from "../src/demo.ts";
 
 test("a confirmed observation changes only the recorded fields and expires the old revision", async () => {
   const port = demoPort();
-  const [account] = await port.accounts();
+  const { accounts: [account] } = await port.accounts();
   const initial = await port.match(account.id);
   assert.equal(initial.gold, null);
   assert.deepEqual(initial.advice, []);
@@ -37,7 +37,7 @@ test("a confirmed observation changes only the recorded fields and expires the o
 });
 test("currency preview contains deployed units and carries no fabricated action frames", async () => {
   const port = demoPort();
-  const [account] = await port.accounts();
+  const { accounts: [account] } = await port.accounts();
   const match = await port.match(account.id);
   const source = {
     mode: "currencyWars",

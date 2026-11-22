@@ -35,6 +35,47 @@ export interface Account {
   name: string;
   source: string;
   characters: Character[];
+  summary?: AccountSummary;
+  origin?: AccountOrigin;
+}
+export interface AccountSummary {
+  characters: number;
+  lightCones: number;
+  relics: number;
+  idleLightCones: number;
+  idleRelics: number;
+}
+export interface ImportReport {
+  source: string;
+  build: string;
+  format_version: number;
+  trace_bindings_snapshot: string;
+  warnings: { path: string; message: string }[];
+}
+export interface ImportInspection {
+  name: string;
+  summary: AccountSummary;
+  report: ImportReport | null;
+}
+export interface GenerationReport {
+  goldCount: number;
+  meanEffectiveRolls: number;
+  coreCharacterIds: string[];
+  coreGoldShare: number;
+  coreRelicShare: number;
+  attempts: number;
+}
+export type AccountOrigin =
+  | { kind: "imported"; filename: string; report: ImportReport | null }
+  | { kind: "generated"; seed: string; request: Record<string, unknown>; report: GenerationReport; generatorVersion: string };
+export type AccountFileKind = "account" | "original" | "report" | "request";
+export interface AccountLibrary {
+  accounts: Account[];
+  warnings: string[];
+}
+export interface AccountCatalogue {
+  characters: { id: string; name: string }[];
+  lightCones: { id: string; name: string }[];
 }
 export interface Piece extends Unit {
   stars: number | null;
@@ -108,9 +149,14 @@ export interface Frame {
   log: Stat[];
 }
 export interface AccountPort {
-  accounts(): Promise<Account[]>;
-  importAccount(fileName: string, json: string): Promise<Account>;
-  generateAccount(seed: number): Promise<Account>;
+  accounts(): Promise<AccountLibrary>;
+  inspectAccount(fileName: string, json: string): Promise<ImportInspection>;
+  importAccount(fileName: string, json: string, name: string): Promise<Account>;
+  generateAccount(request: Record<string, unknown>, seed: string | null, name: string | null): Promise<Account>;
+  accountCatalogue(): Promise<AccountCatalogue>;
+  renameAccount(id: string, name: string): Promise<Account>;
+  deleteAccount(id: string): Promise<void>;
+  exportAccount(id: string, kind: AccountFileKind): Promise<string>;
 }
 export interface MatchPort {
   match(accountId: string): Promise<Match>;

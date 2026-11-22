@@ -192,14 +192,19 @@ export function demoPort(): PlayerPort {
   }
   return {
     async accounts() {
-      return [account];
+      return { accounts: [account], warnings: [] };
     },
+    async inspectAccount() { return requireAccountService(); },
     async importAccount() {
       return requireAccountService();
     },
     async generateAccount() {
       return requireAccountService();
     },
+    async accountCatalogue() { return requireAccountService(); },
+    async renameAccount() { return requireAccountService(); },
+    async deleteAccount() { return requireAccountService(); },
+    async exportAccount() { return requireAccountService(); },
     async match(accountId) {
       if (accountId !== account.id) throw new Error("请切换到预览账号查看示例对局。");
       return match;

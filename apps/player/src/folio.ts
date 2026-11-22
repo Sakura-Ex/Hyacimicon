@@ -7,6 +7,9 @@ export interface Spread {
   left: TemplateResult;
   right: TemplateResult;
   badge?: string;
+  workspace?: "account";
+  headingTool?: TemplateResult;
+  headingTabs?: TemplateResult;
 }
 export const icon = (name: string) =>
   html`<img class="icon" alt="" src="/ui/${name}.svg" />`;

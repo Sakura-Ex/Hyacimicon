@@ -1,22 +1,24 @@
-import { html, nothing } from "lit";
-import { createRef, ref } from "lit/directives/ref.js";
+﻿import { html, nothing } from "lit";
 import { art, icon, stats, type Spread, type Run } from "./folio";
-import type { Account, PlayerPort } from "./contracts";
+import type { Account, AccountPort } from "./contracts";
 import { accountImportView } from "./account-import";
+import { accountManager } from "./account-manager";
 
 export function accountView(
-  port: Pick<PlayerPort, "importAccount" | "generateAccount">,
+  port: AccountPort,
   redraw: () => void,
   run: Run,
   select: (a: Account) => void,
+  remove: (id: string) => void,
 ) {
   let query = "",
     characterId = "",
     skillIndex = 1;
-  let managing = false;
+  let managing: ReturnType<typeof accountManager> | undefined;
   let adding: ReturnType<typeof accountImportView> | undefined;
-  const addButton = createRef<HTMLButtonElement>();
-  return (account: Account | undefined, accounts: Account[]): Spread => {
+  return (account: Account | undefined, accounts: Account[], warnings: string[]): Spread => {
+    if (adding) return adding.render();
+    if (managing) return managing(accounts, warnings);
     const characters = account?.characters ?? [];
     const visible = characters.filter((c) => c.name.includes(query.trim()));
     const c = visible.find((c) => c.id === characterId) ?? visible[0];
@@ -28,21 +30,22 @@ export function accountView(
     const choose = (a: Account) => {
       query = "";
       characterId = "";
-      managing = false;
+      skillIndex = 1;
       adding = undefined;
       select(a);
-      addButton.value?.focus({ preventScroll: true });
     };
-    const dismiss = () => {
-      change(() => (adding = undefined));
-      addButton.value?.focus({ preventScroll: true });
-    };
-    const add = () => {
-      if (adding) return adding.close();
-      managing = false;
-      adding = accountImportView(port, redraw, run, choose, dismiss);
+    const add = async (initial?: { request: Record<string, unknown>; seed: string }) => {
+      managing = undefined;
+      const player = accountImportView(port, redraw, run, choose, () => change(() => (adding = undefined)), initial);
+      adding = player;
       redraw();
+      if (initial) await player.loadCatalogue();
     };
+    const manage = () => change(() => {
+      managing = accountManager(port, redraw, run, select, remove,
+        () => change(() => (managing = undefined)),
+        (request, seed) => add({ request, seed }), account?.id);
+    });
     return {
       title: "角色档案",
       subtitle: "账号养成与装备",
@@ -51,7 +54,6 @@ export function accountView(
         <label
           ><select
             aria-label="切换账号"
-            ?disabled=${!!adding}
             @change=${(e: Event) => {
               const a = accounts.find(
                 (a) => a.id === (e.target as HTMLSelectElement).value,
@@ -62,19 +64,8 @@ export function accountView(
             ${accounts.map((a) => html`<option value=${a.id} .selected=${a.id === account?.id}>${a.name}</option>`)}</select
           ><small>${account?.source ?? "添加账号"}</small></label
         >
-        <button ?disabled=${!!adding} @click=${() => change(() => (managing = true))}>管理</button>
-        <div class="account-add" @keydown=${(event: KeyboardEvent) => {
-          if (event.key === "Escape" && adding) {
-            event.preventDefault();
-            adding.close();
-          }
-        }}>
-          <button ${ref(addButton)} class="primary" aria-expanded=${!!adding}
-            aria-controls=${adding ? "account-note" : nothing} @click=${add}>
-            ${icon("plus")} 添加账号
-          </button>
-          ${adding ? adding.render() : nothing}
-        </div>
+        <button @click=${manage}>管理${warnings.length ? html` <span aria-label="有文件读取提示">·</span>` : nothing}</button>
+        <button class="primary" @click=${() => add()}>${icon("plus")} 添加账号</button>
       </div>`,
       left: html`<div class="catalog">
         <aside>
@@ -116,7 +107,7 @@ export function accountView(
                 <h2>基础属性</h2>
                 ${c.stats.length ? stats(c.stats) : html`<p>暂无属性记录</p>`}
               </article>`
-            : html`<p>没有匹配的角色</p>`
+            : html`<p>${account && !characters.length ? "此账号暂无角色" : "没有匹配的角色"}</p>`
         }
       </div>`,
       right: html`${
@@ -175,17 +166,7 @@ export function accountView(
               </section>`
           : nothing
       }
-      ${
-        managing
-          ? html`<dialog open aria-label="账号管理">
-              <h2>管理账号</h2>
-              ${accounts.map(
-                (a) => html`<button @click=${() => choose(a)}>${a.name} · ${a.source}</button>`,
-              )}
-              <button @click=${() => change(() => (managing = false))}>关闭</button>
-            </dialog>`
-          : nothing
-      }`,
+`,
     };
   };
 }

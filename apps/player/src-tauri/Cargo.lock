@@ -1339,9 +1339,11 @@ version = "0.1.0"
 dependencies = [
  "account-core",
  "account-generator",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+ "uuid",
 ]
 
 [[package]]
