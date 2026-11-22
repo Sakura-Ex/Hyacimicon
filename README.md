@@ -13,7 +13,7 @@ An open-source AI strategy research and assistance project for Currency Wars in 
 
 | Module | Status |
 | --- | --- |
-| [Account generator](docs/modules/account-generation/account-generation.md) | Implemented. Uses bundled game data for version 4.7 to generate sample accounts with owned characters, Light Cones, and Relics offline. |
+| [Account generator](docs/modules/account-generation/account-generation.md) | Implemented in Rust. Uses bundled 4.7 data to generate offline sample accounts that flow directly into account configuration conversion. |
 | [Account adapter and configuration conversion](docs/modules/account/README.md) | Implemented. Supports Reliquary Archiver v4 account import, trial configurations for unowned characters, progression floors, equipment mapping, and static-panel calculation. |
 | Run environment | Planned. Simulates stages, shops, investments, and resource settlement. |
 | Operations decision engine | In design. The current priority is defining observations, legal actions, and evaluation for one stage. Model training is planned. |

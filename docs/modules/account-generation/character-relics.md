@@ -1,89 +1,41 @@
 # 角色六件遗器生成
 
-状态：已实现。按角色配装需求生成六件五星 +15 遗器，同时满足单件和整套的有效词条上下限。单件接口见[单件遗器生成与评分](relic-generation.md)，属性与套装 ID 见[五星遗器数据](../../game-data/relic-data.md)。
+`generate_character_relics` 同时满足单件和整套的有效词条目标，输出六件五星 +15 成品及各件得分。指定的部位按请求顺序返回，其余部位按头、手、躯干、脚、球、绳的顺序补齐。
 
-## 在 IDE 中调用
+## 调用
 
-按单件接口页初始化 Python 环境后，打开 [character_relics.py](../../../examples/account_generation/character_relics.py)，修改部位配置和角色权重，在 `result` 处查看结果。
+```rust
+use std::collections::BTreeMap;
+use account_core::{RelicMainStat, RelicSlot, RelicSubStat};
+use account_generator::{ChaCha8Rng, RelicRequest, RelicSpec, SeedableRng, generate_character_relics};
 
-```python
-import random
-
-from research.account_generation import (
-    CharacterRelicsRequest, RelicSpec, generate_character_relics,
-)
-
-request = CharacterRelicsRequest(
-    pieces=(
-        RelicSpec(slot=4, mainstat="SPD"),
-        RelicSpec(slot=5, mainstat=("HP_", "DEF_")),
-    ),
-    effective_stat_weights={"HP_": 1, "DEF_": 1, "SPD": 1, "Effect RES_": 0.5},
-    min_total_effective_rolls=30,
-    max_total_effective_rolls=36,
-)
-result = generate_character_relics(request, rng=random.Random(42))
+let request = RelicRequest {
+    pieces: vec![RelicSpec {
+        mainstat: vec![RelicMainStat::HpPercent, RelicMainStat::DefPercent],
+        ..RelicSpec::new(RelicSlot::PlanarSphere)
+    }],
+    effective_stat_weights: BTreeMap::from([(RelicSubStat::CritRate, 1.0), (RelicSubStat::Spd, 1.0)]),
+    min_total_effective_rolls: Some(12.0),
+    max_total_effective_rolls: Some(18.0),
+    ..RelicRequest::default()
+};
+let mut rng = ChaCha8Rng::seed_from_u64(42);
+let pieces = generate_character_relics(&request, 100_000, &mut rng)?;
 ```
 
-这个请求约束脚部速度主词条、球的生命%或防御%主词条，其余部位自动补齐。每个部位都可以单独提供条件，完整传入六件时按全部指定条件生成。
-
-## 输入参数
-
-| 参数 | 含义 | 默认值 |
-| --- | --- | --- |
-| `pieces` | 需要约束的互异部位配置；缺少部位随机补齐 | `()`，生成全部六件 |
-| `effective_stat_weights` | 角色有效副词条及权重，六件共用 | 必填 |
-| `min_total_effective_rolls` | 六件合计有效词条下限 | `None` |
-| `max_total_effective_rolls` | 六件合计有效词条上限 | `None` |
-| `tier_weights` | 低／中／高档的有限非负排序权重，至少一档为正，零权重档位排除 | `(1, 1, 1)` |
-| `max_attempts` | 六件共用的搜索尝试预算 | `100000` |
-
-每个 `RelicSpec` 包含：
-
-| 字段 | 含义 | 默认值 |
-| --- | --- | --- |
-| `slot` | 部位数字 ID，取值 1～6 | 必填 |
-| `set_id` | 套装 ID；未设置时从该部位适用套装中随机选择 | `None` |
-| `mainstat` | 一个主词条键、候选键元组，或 `None` 表示不限 | `None` |
-| `initial_substat_count` | 3 或 4，分别对应八／九次总量；`None` 时以 5∶2 抽取优先候选 | `None` |
-| `required_substats` | 该件必含的副词条 | `()` |
-| `min_effective_rolls` | 该件有效词条下限 | `None` |
-| `max_effective_rolls` | 该件有效词条上限 | `None` |
-
-上下限分别设置：两端都传时形成闭区间，任意一端为 `None` 时不设该端限制，两端均为空时按其他条件生成。零是有效边界。例如每件可设置 `min_effective_rolls=4, max_effective_rolls=7`，整套再设置合计上下限 30 和 36。
-
-套装按部位分别指定，可表达四件套、两件套和散搭。随机套装按[套装 ID 与名称](../../game-data/relic-data.md#套装-id-与名称)采样，外圈部位使用外圈套装，球与绳使用位面饰品。角色 ID 由上层关联，角色需求由配装配置及权重表达。
-
-## 未指定的条件怎样生成
-
-自动补齐的部位随机选择适用套装，主词条从合法候选中搜索。初始条数留空时，按三∶四 = 5∶2 抽取优先候选，两种起始条件都可以参与整套目标搜索；高分目标可使最终结果中四词条起始的占比提高。显式传入的 `RelicSpec` 采用相同规则，指定 3 或 4 时沿用指定值。套装为 `None` 时随机选择。
-
-主词条省略或传 `None` 时，使用该部位全部合法候选；候选列表如 `("HP_", "DEF_")` 表示生命%或防御%。搜索会避开与必含副词条冲突的主词条，并共同满足副词条得分目标。结果中的套装与主词条均为实际选中的一个 ID 或属性键。
-
-输入部位按原顺序返回；补齐部位按头、手、躯干、脚、球、绳的顺序追加。后续模块按遗器的 `slot` 读取对应部位。
-
-## 怎样满足目标
-
-单件生成直接枚举四种副词条、各属性的获得次数及低／中／高档数量，求和得到最终数值。单件以初始词条数确定八／九次总量，搜索过程中使用可达到的分数范围排除无法满足目标的分配。
-
-六件套先处理范围较窄的部位，根据已分配得分和剩余部位范围，收紧当前部位的目标。后续部位无法凑出合法组合时，搜索返回前一部位尝试其他分配。设置合计目标时，各件得分可以有明显差异，各件上下限可进一步控制质量分布。
-
-搜索预算统计考察的主副词条组合及数值分配选项，六件和回溯共用一份预算。范围冲突、穷尽合法组合或预算耗尽时，抛出 `GenerationTargetNotReached` 并说明原因。预算耗尽表示本次搜索尚未找到结果。
-
-生成约束副词条的有效词条数。角色总速度、能量恢复等属性阈值随配置转换接通后加入。
-
-## 返回结果
-
-| 字段 | 含义 |
+| `RelicRequest` 字段 | 含义 |
 | --- | --- |
-| `result.relics` | 六件最终遗器，按输入部位及补齐部位的顺序排列 |
-| `result.piece_scores` | 各件有效词条数，与遗器顺序对应 |
-| `result.total_effective_rolls` | 六件得分之和 |
-| `result.mean_effective_rolls` | 合计得分除以六 |
-| `result.attempts` | 实际消耗的搜索尝试次数 |
+| `pieces` | 可选的部位列表，各部位最多出现一次。部位字段见[单件接口](relic-generation.md) |
+| `effective_stat_weights` | 六件共用的角色评分权重，范围和单位见[评分单位与数值限制](relic-generation.md#评分单位与数值限制) |
+| `tier_weights` | 低、中、高档的非负权重，默认 `[1.0; 3]`。零权重排除该档，至少一档为正 |
+| `min_total_effective_rolls`、`max_total_effective_rolls` | 六件合计分数上下限，各端可独立设置 |
 
-合计与平均值由各件得分计算。`maximum_character_relic_score(request)` 计算配装条件下的理论上限，供[完整角色生成](character-generation.md)换算五档目标。完整角色生成同时分配装备实例 ID；调用方保存生成参数和随机种子。
+上下限相等时，生成结果在 `1e-6` 的绝对容差内匹配目标总分。单件分数限制和整套限制共同生效，六件共享 `max_attempts`。调用方可按相同请求和随机源重现结果。
+
+`maximum_character_relic_score(&request)` 根据合法的部位、主副词条、起始条数和允许档位计算六件理论上限。该上限用于[五档练度](relic-quality.md)。
+
+返回值为 `Vec<(RelicInstance, f64)>`。组装进账号库存时，由调用方分配实例 ID。需要生成推荐配装和装备引用时，使用[完整角色生成](character-generation.md)。
 
 ## 验证
 
-执行 `uv run --locked python -m unittest discover -s tests -v`。测试覆盖整套四词条上限、三／四词条混合目标、部分条件与全部随机补齐、套装和主词条选择、单件及整套上下限、零边界、合法档位分解、固定种子和搜索预算。
+运行 `cargo test --locked -p account-generator`。回归用例覆盖部位顺序、空缺补齐、混合起始条数、单件和整套合计边界、精确值、不可达值及预算耗尽。

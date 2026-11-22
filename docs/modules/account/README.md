@@ -1,6 +1,6 @@
 # Rust 账号数据与配置
 
-本模块提供 `account-core` crate，供训练、评估和玩家应用共用。包括原始账号模型、reliquary-archiver v4 导入、账号静态配置转换和静态面板计算。
+本模块提供 `account-core` crate，供训练、评估和玩家应用共用。原始账号模型、reliquary-archiver v4 导入、静态配置转换和静态面板计算已实现。[Rust 账号生成器](../account-generation/account-generation.md)直接输出 `RawAccount`。Python 模拟绑定处于规划阶段。
 
 [reliquary-archiver 导入](reliquary-import.md)将来源文件转换为统一原始账号；[账号静态配置](playable-configuration.md)说明转换入口、保底规则和面板结构。整体流程见[账号数据流](../account-generation/data-flow.md)。
 
@@ -38,7 +38,7 @@ core/account/
     └── fixtures/       # 人工构造的最小样例
 ```
 
-所有 Rust crate 在根 `Cargo.toml` 中组织为 workspace，当前成员包含 `core/account` 与 `core/battle`。后续训练绑定放在 `research/sim_native/`，通过路径依赖使用账号核心。
+Rust crate 通过根 `Cargo.toml` 的 workspace 管理，当前成员为 `core/account`、`core/battle` 和 `research/account_generation`。账号生成器通过路径依赖使用账号核心。后续训练绑定放在 `research/sim_native/`。
 
 原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
 
@@ -52,7 +52,7 @@ core/account/
 | `LightConeInstance` | 实例 ID、光锥种类 ID、原始等级、突破和叠影 |
 | `RelicInstance` | 实例 ID、套装、部位、实际品质、强化等级、主词条与当前副词条 |
 | `RelicSlot` | 头、手、躯干、脚、球、绳，序列化为数字 1～6 |
-| `RelicMainStat`、`RelicSubStat` | 与现有 Python 生成器一致的属性键 |
+| `RelicMainStat`、`RelicSubStat` | 项目统一的主副词条属性键 |
 
 `schema_version` 当前为 `RAW_ACCOUNT_SCHEMA_VERSION = 1`，表示项目统一格式。来源的导出格式版本由后续适配器单独记录。`config_id` 由调用方分配；游戏版本和快照未知时保存 `None`，序列化为 `null`。
 
@@ -80,7 +80,7 @@ reliquary-archiver v4 适配器已完成主词条歧义处理、百分比换算�
 
 reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突、等级与突破范围、当前词条和行迹绑定。缺失的行迹信息保持未知并写入报告。直接构造或反序列化 `RawAccount` 时仍需由对应入口检查；转换入口核对游戏版本和资源引用，局面模拟检查实际阵容的玩法约束。
 
-导入报告在原始账号之外保存错误、缺失字段和未知编码。生成器在自己的结果中保存生成参数、随机种子、投入评分与搜索统计。`convert_playable_account` 接收 `RawAccount`，完成试用补齐、练度保底、星魂技能加级和静态面板计算。
+导入报告保存错误、缺失字段和未知编码。生成结果保存投入评分与搜索统计，调用方记录请求和随机种子。`convert_playable_account` 接收 `RawAccount`，完成试用补齐、练度保底、星魂技能加级和静态面板计算。
 
 ## 运行与验证
 

@@ -15,7 +15,7 @@ diagnostics = ["dep:serde", "dep:serde_json"]
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 sha2.workspace = true
-rand_chacha.workspace = true
+rand_chacha = { workspace = true, features = ["std"] }
 rand_core.workspace = true
 
 [[bin]]

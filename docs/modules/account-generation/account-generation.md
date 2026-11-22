@@ -1,43 +1,67 @@
 # 账号数据生成
 
-状态：已实现。日期：2026-11-11。按持有人数、金数、统一五星配装、遗器水平和投入分布生成原始账号。输出持有角色及统一的光锥、遗器库存，供后续实际配置转换使用。
+Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色、光锥、遗器和装备关系。`GeneratedAccount.account` 是 `account_core::RawAccount`，可与对应版本的转换资料和转换请求一起交给 [`convert_playable_account`](data-flow.md#调用实际配置转换)。
 
-## 在 IDE 中调用
+## 用请求文件生成账号
 
-按[单件接口页](relic-generation.md#在-ide-中调用)配置项目解释器，打开 [account.py](../../../examples/account_generation/account.py)，设置请求参数，在 `result` 处查看完整账号。
+先在[模块首页](README.md#运行默认样例)运行默认样例。要显式指定生成条件，在仓库根目录创建 `request.json`，填入以下内容：
 
-示例默认使用随模块安装的 [4.7 内置参考资料](../../../research/account_generation/data/)，可以离线运行。需要切换快照时，把 `DATA_DIR` 指向包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的资料目录。
-
-```python
-import random
-
-from research.account_generation import (
-    AccountRequest, generate_account, load_account_reference,
-)
-
-reference = load_account_reference()
-request = AccountRequest(
-    account_id="account-001",
-    character_count=12,
-    gold_count=20,
-    core_character_ids=("1310", "1225"),
-    resource_concentration=0.7,
-    teammate_bias=0.7,
-    min_mean_effective_rolls=4.5,
-    max_mean_effective_rolls=5,
-)
-result = generate_account(request, reference=reference, rng=random.Random(42))
+```json
+{
+  "character_count": 12,
+  "gold_count": 20,
+  "core_character_ids": ["1310", "1225"],
+  "resource_concentration": 0.7,
+  "min_mean_effective_rolls": 4.5,
+  "max_mean_effective_rolls": 5
+}
 ```
 
-参考资料可重复使用。使用内置资料时，调用方记录请求参数、随机种子、代码版本和游戏版本。相同输入和随机源初始状态产生相同结果。角色缺席表达未持有，试用补齐及生效数值由后续[实际配置转换](data-flow.md)处理。
+```powershell
+cargo run --locked -p account-generator --example generate_account -- request.json 42
+```
+
+## 调用 Rust 接口
+
+```rust
+use account_generator::{
+    AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, generate_account,
+};
+
+let reference = AccountReference::bundled()?;
+let mut request = AccountRequest {
+    gold_count: Some(20.0),
+    core_character_ids: vec!["1310".into(), "1225".into()],
+    resource_concentration: 0.7,
+    min_mean_effective_rolls: Some(4.5),
+    max_mean_effective_rolls: Some(5.0),
+    ..AccountRequest::with_random_id(12)
+};
+let mut rng = ChaCha8Rng::seed_from_u64(42);
+let result = generate_account(&request, &reference, &mut rng)?;
+```
+
+省略 `account_id` 时，生成器在角色和装备确定后，从同一随机源取 128 位生成 `account-<32 位十六进制数>`。实际 ID 保存在 `result.account.config_id`，也用于光锥和遗器的实例编号。使用相同请求、资料和随机源起始状态会得到相同的账号及 ID。需要固定名称时，在 JSON 中填写 `account_id`，或在 Rust 中使用 `AccountRequest::new("account-001", 12)`。
+
+### 外部参考资料
+
+`AccountReference::from_dir` 加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照，校验各角色的推荐主词条和套装，错误信息包含角色 ID。`ReferenceOverrides` 可覆盖角色和光锥分类、五星专锥及原始能力版本。五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。
+
+外部快照沿用内置 4.7 资料的行迹格式。每个节点在第一级的 `pre_point` 列出解锁所需的前置节点，后续等级填 `[]`。加载器用第一级的前置关系检查缺失节点和循环。生成器按该关系解锁节点，再按各级的角色等级和突破要求选择行迹等级。高等级单独声明的前置条件会被忽略。
+
+### 复现生成结果
+
+记录项目的 Git 提交、完整生成请求、实际使用的参考文件和 `ReferenceOverrides`。参考文件可用唯一快照 ID 或内容哈希标识。
+
+每次用新随机源生成时，记录随机源类型和本次种子，例如上例的 `ChaCha8Rng` 和 `42`。多次调用共用一个随机源时，保存目标调用开始前的随机源状态，或从原种子按原顺序重放此前所有消耗该随机源的操作。
 
 ## 生成条件
 
 | 参数 | 含义 | 默认值 |
 | --- | --- | --- |
-| `account_id` | 账号 ID，也是装备实例 ID 前缀 | 必填 |
+| `account_id` | 账号 ID，也是光锥和遗器实例 ID 的前缀。可指定非空白字符串 | 省略时随机生成 |
 | `character_count` | 持有角色总数 | 必填，允许 0 |
-| `gold_count` | 精确金数，支持 0.5 金步长 | `None`，由配装条件中的可达总量随机确定 |
+| `gold_count` | 精确金数，支持 0.5 金步长 | 从可达金额中选择 |
 | `five_star_build` | 所有持有五星的统一星魂和专锥叠影，如 `(0, 1)`、`(2, 1)` | `None` |
 | `character_pool` | 允许持有的常规角色 ID；数量等于候选数时选取全部 | `None`，使用全部参考角色 |
 | `core_character_ids` | 指定核心角色，保证持有 | `()` |
@@ -59,6 +83,17 @@ result = generate_account(request, reference=reference, rng=random.Random(42))
 
 每名持有角色生成一个光锥实例和六件五星 +15 遗器。金数容量由持有人数、星魂上限、光锥叠影及显式覆盖共同决定。
 
+## 参数如何共同生效
+
+| 同时设置 | 处理顺序与结果 |
+| --- | --- |
+| 候选池、核心角色、角色覆盖 | `character_pool` 限定可持有的角色。指定核心和覆盖角色都必须在池内，并占用 `character_count` 名额。显式核心名单决定核心角色，省略时才用 `core_count` 自动选择。筛选后若某个必须持有的角色没有任何可用光锥，则返回 `InvalidRequest` |
+| 角色覆盖、统一五星配装 | `character_overrides` 为对应角色提供完整配置。其他五星按 `five_star_build` 配装。覆盖里的显式光锥 ID 可超出自动光锥池或跨命途，仍受唯一实例限制 |
+| 自动光锥池、固定光锥 | `light_cone_pool` 约束自动选择的光锥。统一五星配装固定的专锥和角色覆盖中显式指定的光锥均可超出该池 |
+| 固定配装、精确金数 | 已确定的投入先计入预算。角色覆盖可固定星魂和叠影，同时留空光锥 ID，此时光锥类别及其金数仍由搜索决定。例如候选池只有一名限定五星，固定为 0 魂加叠影 1 的常驻五星光锥，默认口径下只能达到 1.5 金，请求 2 金时返回 `NoSolution` |
+| 共同集中程度、单项集中程度 | `gold_concentration` 和 `relic_concentration` 分别优先于 `resource_concentration`。集中程度引导可调资源分配，实际份额从结果读取 |
+| 单件目标、角色档位、账号档位与显式均分 | 各级约束同时生效。角色档位约束对应角色六件总分，账号档位约束全账号总分，显式均分上下限乘以遗器件数后约束同一总分 |
+
 ## 金数与统一五星配装
 
 五星角色每个本体及星魂对应一份，五星光锥每级叠影对应一份：
@@ -72,29 +107,16 @@ result = generate_account(request, reference=reference, rng=random.Random(42))
 
 `gold_count` 指定时，输出的实际金数与其相同。限定、常驻和免费的持有份数分别保留，常驻折算为半金。例如常驻角色 2 魂配常驻光锥叠影 1，合计四份，折算 2 金。
 
-默认分类由 `accounts/rules.py` 维护：常驻角色为 1003、1004、1101、1104、1107、1209、1211；常驻光锥为 23000、23002、23003、23004、23005、23012、23013。80xx 主角形态和 24xxx 模拟宇宙五星光锥归免费，其余五星归限定。调用 `load_account_reference` 时，可用 `character_categories`、`light_cone_categories` 覆盖具体条目的类别。
+默认分类由 [`reference.rs`](../../../research/account_generation/src/reference.rs) 维护：常驻角色为 1003、1004、1101、1104、1107、1209、1211；常驻光锥为 23000、23002、23003、23004、23005、23012、23013。80xx 主角形态和 24xxx 模拟宇宙五星光锥归免费，其余五星归限定。构造 `ReferenceOverrides` 时，可用 `character_categories`、`light_cone_categories` 覆盖具体条目的类别。
 
 统一配装可独立使用，也可与金数条件共同使用：
 
-```python
-from dataclasses import replace
-
-# 全 01：所有持有五星为 0 魂、专锥叠影 1。
-all_01 = generate_account(
-    replace(request, account_id="all-01", gold_count=None, five_star_build=(0, 1)),
-    reference=reference,
-    rng=random.Random(42),
-)
-
-# 全 21：所有持有五星为 2 魂、专锥叠影 1。
-all_21 = generate_account(
-    replace(request, account_id="all-21", gold_count=None, five_star_build=(2, 1)),
-    reference=reference,
-    rng=random.Random(42),
-)
+```rust
+let all_01 = AccountRequest { gold_count: None, five_star_build: Some((0, 1)), ..request.clone() };
+let all_21 = AccountRequest { gold_count: None, five_star_build: Some((2, 1)), ..request.clone() };
 ```
 
-四星角色按自身条件生成。统一配装优先使用加载资料时指定的 `signature_light_cones={角色ID: 光锥ID}`，默认取角色的同命途推荐光锥首项。缺少覆盖和同命途推荐时，加载报错并给出角色 ID。
+四星角色按自身条件生成。统一配装优先使用加载资料时指定的 `ReferenceOverrides.signature_light_cones`，默认取推荐列表中第一件同命途五星光锥。缺少这类推荐时，应通过覆盖设置指定同命途五星光锥。
 
 统一配装固定的投入先得到满足，集中程度再控制其他可分配投入。金数与统一配装冲突时，生成器报告条件无法同时满足。
 
@@ -102,30 +124,29 @@ all_21 = generate_account(
 
 `CharacterSpec` 与[单角色请求](character-generation.md)共用原始练度字段，包括等级、突破、星魂、行迹、光锥、遗器请求和单角色遗器档位。账号级覆盖无需填写单角色 `config_id`，实例 ID 由账号统一分配。
 
-```python
-from research.account_generation import CharacterSpec, LightConeSpec
+```rust
+use account_generator::{CharacterSpec, LightConeSpec};
 
-custom = replace(
-    request,
-    character_overrides={
-        "1310": CharacterSpec(
-            eidolons=2,
-            light_cone=LightConeSpec(light_cone_id="23025", superimposition=1),
-            relic_quality_tier=5,
-        ),
+request.character_overrides.insert("1310".into(), CharacterSpec {
+    eidolons: 2,
+    light_cone: LightConeSpec {
+        light_cone_id: Some("23025".into()),
+        ..LightConeSpec::default()
     },
-)
+    relic_quality_tier: Some(5),
+    ..CharacterSpec::default()
+});
 ```
 
 覆盖字段优先于统一五星配装，角色的星魂和光锥叠影采用覆盖值。覆盖角色与其他候选一起参与自动核心选择。覆盖中光锥 ID 留空时，仍在对应候选范围内自动选择。显式传入光锥 ID 时直接采用，支持不同命途或候选池以外的配装；该 ID 需要存在于光锥资料中，供预算统计查询。
 
 自动配装始终匹配命途，在接近投入目标的组合中优先推荐光锥，必要时采用候选池内其他同命途光锥。活动及模拟宇宙光锥每种至多分配一个实例；普通光锥允许同 ID 多个实例，见[光锥持有约定](design.md#光锥持有与装备实例)。
 
-唯一光锥冲突时，搜索继续尝试其他配装和角色名单。名单搜索对每种持有集合与核心集合的组合考察一次，并用位集记录各人数可达的半金数。候选角色全部持有时，金数可达性只需校验一次。未指定金数时，随机排列可达金额，逐个尝试满足唯一光锥约束的分配。全部搜索共用 `max_attempts` 预算。
+两人都只能使用同一件唯一光锥时，搜索直接跳过该名单。存在替代光锥时继续尝试其他配装。名单搜索对每种持有集合与核心集合的组合考察一次，并记录各人数可达的半金数。候选角色全部持有时，名单的金数可达性只需校验一次。未指定金数时，随机排列可达金额，逐个尝试满足唯一光锥约束的分配。全部搜索共用 `max_attempts` 预算。
 
 ## 推荐队友与资源集中程度
 
-推荐资料按原队伍和位置保留。选中角色后，从其固定推荐队伍中抽取一组。每名已选角色在同一支推荐队伍中最多满足一个位置，搜索优先满足尽可能多的位置。尚未满足的位置为候选首选队友加权 1，为对应替补加权 0.5。明确列出的角色 ID 参与抽取，替补分组 ID 保留在参考资料中供后续关联。
+推荐资料按原队伍和位置保留。选中角色后，从其固定推荐队伍中抽取一组。每名已选角色在同一支推荐队伍中最多满足一个位置，搜索优先满足尽可能多的位置。尚未满足的位置为候选首选队友加权 1，为对应替补加权 0.5。明确列出的角色 ID 参与抽取。
 
 `teammate_bias=0` 按可行候选等概率选择，`1` 优先从这些队友中选取；中间值混合两种分布。所有选择同时满足人数、候选范围和金数可达条件。
 
@@ -140,31 +161,27 @@ custom = replace(
 
 ## 遗器目标与返回结果
 
-平均有效词条以全部持有角色已装备的 `6 × 人数` 件遗器为范围，各件按对应角色权重评分。上下限可独立提供；两端相同时搜索精确目标。五档条件按所有角色理论上限之和换算，再与显式平均范围和角色级条件取交集。
+每名持有角色生成六件五星 +15 遗器。各件按对应角色权重评分。复算整号分数时，先按部位顺序合计每名角色的六件得分，再按 `investments` 的角色 ID 顺序累加，除以遗器件数即为平均得分。五档条件按相同顺序累加各角色理论上限，再与显式平均范围和角色级条件取交集。自定义权重与平均目标的换算见[评分单位与数值限制](relic-generation.md#评分单位与数值限制)。
 
-先在可行总分范围内选择目标，再按集中程度分配到各角色。显式设置平均词条的两端且区间宽度至多 0.02 时，优先用位集动态规划合并单件、角色和账号的全中档可达分数，再按各件的可达分数直接还原词条，每件计一次考察。分配优先接近各角色投入目标。中档分数无法达到硬性目标、档位条件禁用中档或自定义权重使整数网格过大时，转入通用搜索。
+各件可以独立生成时，按[单件抽样概率](relic-generation.md)分别生成。有角色或账号总分要求、或要把投入集中到核心角色时，分配器先确定一组可行分数。可达中档分数使用有界整数网格求解，其余情况在允许档位内回溯。生成成品时打乱部位次序，根据单件、角色与整号剩余的分数范围抽取副词条、强化次数及档位。集中投入时保留已经分配的单件目标。各条路径都使用请求允许的完整数值档位。
 
-较宽的平均范围及单边目标使用通用随机搜索。搜索优先检查各角色投入目标半条以内的成品，再检查角色配装和账号平均目标允许的完整范围。允许低档或高档时，通用中档回溯最多消耗剩余预算的一半，其余供所有允许档位使用。遗器搜索合并剩余计分属性、次数和得分等价的分配。三／四词条按 5∶2 选择优先候选，目标筛选可以提高四词条占比。
+单件在给定分数下保留副词条和强化次数的抽样概率。整号各件分数受核心投入目标和分数分配规则影响。
 
-| 返回字段 | 含义 |
+`GeneratedAccount` 保存统一原始账号、实际核心名单、逐角色投入统计、统计口径和搜索次数。用 `gold_count()`、`gold_by_category()`、`copies_by_category()`、`mean_effective_rolls()`、`core_gold_share()` 和 `core_relic_share()` 读取汇总值。五星份数按限定、常驻和免费三个类别汇总。原始账号记录游戏版本及外部资料提供的快照标识。空账号的金数和平均词条均为零。
+
+## 遇到错误时查什么
+
+| 错误 | 含义与排查 |
 | --- | --- |
-| `characters` | 实际持有角色及其原始练度、装备实例引用 |
-| `light_cones`、`relics` | 全账号统一装备库存，每份数值保存一次 |
-| `core_character_ids` | 实际采用的核心名单 |
-| `investments` | 各角色的持有份数、六件得分与理论上限 |
-| `copies_by_category` | 各类别五星持有份数，通过属性读取 |
-| `gold_by_category`、`gold_count` | 当前统计口径的分类金数与实际总金数，通过属性读取 |
-| `mean_effective_rolls` | 已装备遗器的每件平均得分，通过属性读取 |
-| `core_gold_share`、`core_relic_share` | 核心的实际金数与遗器得分占比，通过属性读取 |
-| `game_version` | 游戏资料版本 |
-| `data_snapshot` | 自选资料提供的快照标识，内置资料返回 `None` |
-| `schema_version`、`generator_version` | 输出字段及账号生成规则版本 |
-| `attempts` | 实际消耗的候选考察次数 |
-
-`dataclasses.asdict(result)` 提供角色、库存和生成统计的普通字典，属性统计可单独读取保存。角色引用的装备实例 ID 均能在对应库存中找到，每个实例分配给一个角色。角色不存在时保持缺席，空账号的金数和平均词条均为零。
+| `InvalidRequest` | 请求字段无效。根据错误消息检查取值，例如金数是否按 0.5 金递增、集中程度是否在 0～1 |
+| `Reference` | 参考资料缺失、格式错误或内部条件不一致。按错误消息检查快照文件与条目 |
+| `NoSolution` | 约束下没有可行结果。检查固定配装的可达金数、唯一光锥冲突和遗器分数范围 |
+| `BudgetExhausted { attempts }` | 搜索预算用尽时仍未找到结果，可能还有可行解。用同一请求和种子提高 `max_attempts` 后重试 |
 
 ## 验证
 
-执行 `uv run --locked python -m unittest discover -s tests -v`。测试覆盖常驻半金、全 01／全 21、组合条件冲突、显式覆盖、唯一与多实例光锥、推荐队友、投入集中、精确与单边词条范围、固定种子、空账号及搜索预算。
+```powershell
+cargo test --locked -p account-generator
+```
 
-已验证 60 人全 01、60 人 120 金的精确与窄区间平均词条目标、60 人 400 金且平均词条精确为 6.5，以及 12 人五档练度。预算耗尽表示本次尚未找到结果。生成检查核对资源条件，对局能力通过后续模拟评价。
+集成测试覆盖固定种子、全 01／全 21 配装、唯一光锥冲突、原始练度、宽区间三档抽样、精确分数与零权重词条的数值变化，以及考察上限。12 人窄区间样例与 60 人、400 金、平均词条 6.5 的精确样例均调用实际配置转换。

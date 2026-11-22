@@ -13,7 +13,7 @@
 
 | 模块 | 状态 |
 | --- | --- |
-| [账号生成器](docs/modules/account-generation/account-generation.md) | 已实现。使用随包提供的 4.7正式版游戏数据，可离线生成包含持有角色、光锥和遗器的样例账号。 |
+| [账号生成器](docs/modules/account-generation/account-generation.md) | Rust 版已实现，使用内置 4.7 数据离线生成样例账号，可直接交给实际配置转换。 |
 | [账号适配器与配置转换](docs/modules/account/README.md) | 已实现，支持 reliquary-archiver v4 账号导入、未持有角色试用补齐、练度保底、装备映射和静态面板计算。 |
 | 整局环境 | 计划中。模拟节点、商店、投资与资源结算。 |
 | 运营决策器 | 设计中。当前优先确定单个节点的可见观测、合法操作和评价方式。模型训练待实现。 |

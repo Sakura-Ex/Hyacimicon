@@ -11,6 +11,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "account-generator"
+version = "0.1.0"
+dependencies = [
+ "account-core",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "battle-core"
 version = "0.1.0"
 dependencies = [
