@@ -16,7 +16,7 @@ test("a confirmed observation changes only the recorded fields and expires the o
   const port = demoPort();
   const { accounts: [account] } = await port.accounts();
   const initial = await port.match(account.id);
-  assert.equal(initial.gold, null);
+  assert.equal(initial.gold, 37);
   assert.deepEqual(initial.advice, []);
   const locked = await port.setShopLock(initial.id, initial.revision, true);
   const input = {
@@ -37,13 +37,28 @@ test("a confirmed observation changes only the recorded fields and expires the o
   const saved = await port.saveFeedback({
     ...input,
     revision: locked.revision,
+    observed: { gold: 0, health: 64 },
   });
   assert.equal(saved.gold, 0);
   assert.equal(saved.lastAction, "hold");
   assert.equal(saved.revision, locked.revision + 1);
   assert.equal(saved.locked, true);
   assert.deepEqual(saved.bench, initial.bench);
-  assert.equal(initial.gold, null);
+  assert.equal(saved.health, 64);
+  assert.equal(saved.node, initial.node);
+  assert.deepEqual(saved.planes, initial.planes);
+  assert.equal(initial.gold, 37);
+});
+test("the deployment preview shows a route, run health, stars and equipment in all rows", async () => {
+  const match = await demoPort().match("preview");
+  const steps = match.planes.flat();
+  assert.equal(steps.length, 20);
+  assert.equal(steps[9].id, match.node);
+  assert.equal(match.maxHealth, 100);
+  for (const row of [match.front, match.back, match.bench]) {
+    assert.ok(row.every(piece => piece.stars > 0));
+    assert.ok(row.some(piece => piece.gear.length > 0));
+  }
 });
 test("currency preview contains deployed units and carries no fabricated action frames", async () => {
   const port = demoPort();

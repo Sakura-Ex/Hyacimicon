@@ -1,6 +1,7 @@
 import { html, nothing } from "lit";
 import type { ActionOption, Match, Piece, PlayerPort } from "./contracts";
 import { art, icon, itemArt, stats, type Run, type Spread } from "./folio";
+import { matchStatus } from "./match-status";
 
 function row(
   title: string,
@@ -16,12 +17,14 @@ function row(
         const p = pieces[i];
         return p
           ? html`<div class="piece">
-              ${art(p.image)}<strong
-                >${p.name}<em
-                  >${p.stars === null ? "" : "★".repeat(p.stars)}</em
-                ></strong
-              >
-              <div class="worn">${p.gear.map(itemArt)}</div>
+              <div class="piece-face">
+                ${art(p.image)}
+                <span class="piece-stars" role="img" aria-label=${p.stars === null ? "星级未知" : `${p.stars} 星`}>
+                  ${p.stars === null ? "—" : "★".repeat(p.stars)}
+                </span>
+              </div>
+              <strong title=${p.name}>${p.name}</strong>
+              <div class="worn" role="group" aria-label="已装备">${p.gear.map(itemArt)}</div>
             </div>`
           : html`<span
               class=${i < capacity ? "empty" : "locked"}
@@ -94,16 +97,8 @@ export function matchView(
     };
     return {
       title: "阵容部署",
-      subtitle: "节点 " + m.node,
-      badge: "备战中",
-      tools: html`<div class="metrics summary">
-        ${stats([
-          ["整局生命", m.health?.toString() ?? "—"],
-          ["连胜", m.streak?.toString() ?? "—"],
-          ["预计利息", m.interest?.toString() ?? "—"],
-          ["团队规模", m.front.length + m.back.length + " / " + m.capacity],
-        ])}
-      </div>`,
+      subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
+      tools: matchStatus(m),
       left: html`${row("前台", m.front, 4, 4, true)}${row("后台", m.back, m.backCapacity, 9)}${row("备战席", m.bench, 9, 9)}
         <section>
           <h2>羁绊</h2>
@@ -139,7 +134,15 @@ export function matchView(
                 });
               },
             )
-          : html`<div class="match-content scroll-area" role="region" aria-label="建议和商店" tabindex="0">${
+          : html`<div class="match-content scroll-area" role="region" aria-label="建议和商店" tabindex="0">
+              <div class="metrics match-economy">
+                ${stats([
+                  ["金币", m.gold?.toString() ?? "—"],
+                  ["预计利息", m.interest?.toString() ?? "—"],
+                  ["连胜", m.streak?.toString() ?? "—"],
+                  ["上阵人数", m.front.length + m.back.length + " / " + m.capacity],
+                ])}
+              </div>${
                 choice
                   ? html`<article class="advice">
                         <small>本步建议 <span>节点 ${m.node}</span></small>
@@ -159,7 +162,7 @@ export function matchView(
                   : html`<section>
                       <article class="advice">
                         <small>本步建议</small>
-                        <h3>暂无建议</h3>
+                        <p>暂无建议</p>
                       </article>
                       ${m.lastAction ? html`<p role="status">实际操作已记录</p>` : nothing}
                     </section>`
@@ -176,7 +179,7 @@ export function matchView(
                   </section>
                 </div>
                 <aside>
-                  <h2>商店 <span>◎　${m.gold ?? "—"}</span></h2>
+                  <h2>商店</h2>
                   <div class="offers">
                     ${m.offers.map(
                       (o) =>

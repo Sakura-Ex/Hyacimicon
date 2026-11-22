@@ -1,5 +1,6 @@
 import { html } from "lit";
 import { battleView } from "./battle";
+import { matchStatus } from "./match-status";
 import type { BattleInput, BattlePort, BattleResult, Match } from "./contracts";
 import type { Run, Spread } from "./folio";
 
@@ -45,8 +46,9 @@ export function battleWorkspace(
     const view = render();
     return {
       ...view,
-      subtitle: mode === "standard" ? "常规战斗" : "货币战争 / 当前对局",
-      tools: html`<div class="battle-controls">
+      subtitle: mode === "standard" ? "常规战斗" : currency?.match.preview ? "货币战争 · 演示对局" : "货币战争",
+      tools: html`${mode === "currencyWars" && currency ? matchStatus(currency.match) : ""}
+      <div class="battle-controls">
         <div role="group" aria-label="战斗模式">
           ${(["standard", "currencyWars"] as const).map((m) => html`<button aria-pressed=${mode === m} @click=${() => run(() => enter(m))}>${m === "standard" ? "常规战斗" : "货币战争"}</button>`)}
         </div>

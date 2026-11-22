@@ -91,11 +91,18 @@ export interface Advice extends ActionOption {
   effects: Stat[];
   image?: string;
 }
+export interface MatchStep {
+  id: string;
+  kind?: "reward" | "battle" | "encounter" | "boss";
+}
 export interface Match {
   id: string;
   revision: number;
   node: string;
   health: number | null;
+  maxHealth?: number | null;
+  planes?: MatchStep[][];
+  preview?: boolean;
   streak: number | null;
   interest: number | null;
   capacity: number;

@@ -20,7 +20,9 @@ export function art(source: string | undefined, cls = "", alt = "") {
 }
 export const itemArt = (i: Item) =>
   html`<span class="item" tabindex="0" aria-label=${i.name + " " + i.detail}
-    >${art(i.image)}
+    >${imageUrl(i.image) ? art(i.image) : html`<span class="item-mark" aria-hidden="true">
+      <span class="item-mark-initial">${i.name.slice(0, 1)}</span><span class="item-mark-name">${i.name}</span>
+    </span>`}
     ${i.count > 1 ? html`<small>×${i.count}</small>` : nothing}<span
       class="tooltip"
       >${[i.name, i.detail].filter(Boolean).join(" · ")}</span
