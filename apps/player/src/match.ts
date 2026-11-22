@@ -42,6 +42,7 @@ function feedback(
   return html`<form class="feedback" @submit=${save}>
     <b>节点 ${m.node} / 实战回填</b>
     <h3>记录实际操作</h3>
+    <div class="scroll-area" role="region" aria-label="实战回填字段" tabindex="0">
     <section>
       <p class="feedback-row"><span>本步建议</span><strong>${m.advice[0]?.title ?? "暂无建议"}</strong></p>
       <label
@@ -57,6 +58,7 @@ function feedback(
       <h2>核对游戏内结果</h2>
       ${m.feedbackFields.map((f) => html`<label>${f.label}<input type="number" required step="1" name=${f.key} min=${f.min} max=${f.max ?? nothing} .value=${String(choice.expected[f.key] ?? f.current ?? "")} />${f.current === null ? nothing : html`<small>原为 ${f.current}</small>`}</label>`)}
     </section>
+    </div>
 
     <footer>
       <button type="button" @click=${cancel}>返回</button
@@ -137,7 +139,7 @@ export function matchView(
                 });
               },
             )
-          : html`${
+          : html`<div class="match-content scroll-area" role="region" aria-label="建议和商店" tabindex="0">${
                 choice
                   ? html`<article class="advice">
                         <small>本步建议 <span>节点 ${m.node}</span></small>
@@ -196,7 +198,8 @@ export function matchView(
                   </div>
                 </aside>
               </div>
-              <footer>
+              </div>
+              <footer class="match-actions">
                 <button @click=${openBattle}>查看本局战斗</button>
                 ${action ? html`<button class="primary" @click=${() => open(choice?.id ?? action.id)}>${icon("check")} 记录实际操作</button>` : nothing}
               </footer>`,

@@ -1,5 +1,5 @@
 import { html, nothing } from "lit";
-import "./action-axis";
+import "./scroll-list";
 import type { BattleResult, Item } from "./contracts";
 import { art, icon, stats, type Spread } from "./folio";
 import { imageUrl } from "./game-images";
@@ -66,7 +66,7 @@ export function battleView(redraw: () => void) {
             行动轴
             <small>${result.kind === "preview" ? "顺序待定" : "行动值"}</small>
           </h2>
-          <action-axis aria-label="行动轴单位" role="region"
+          <scroll-list class="scroll-area" aria-label="行动轴单位" role="region" tabindex="0"
             ><div class="timeline">
               ${units.map(
                 (u) =>
@@ -85,12 +85,12 @@ export function battleView(redraw: () => void) {
                     ><b>${u.initiative ?? "—"}</b>
                   </button>`,
               )}
-            </div></action-axis
+            </div></scroll-list
           >
         </aside>
         ${
           featured
-            ? html`<article class="character">
+            ? html`<article class="character scroll-area" tabindex="0" aria-label="当前行动详情">
                 <b class="badge">${actor ? "当前行动" : "单位预览"}</b>
                 <div class="featured-name">
                   ${portrait ? nothing : art(featured.image, "unit-avatar")}
@@ -138,6 +138,7 @@ export function battleView(redraw: () => void) {
                 </h3>
               </div>
             </div>
+            <div class="battle-details scroll-area" tabindex="0" role="region" aria-label="单位详情和战斗记录">
             <div class="meters">
               ${meter("生命", unit.hp, unit.maxHp)}${meter("能量", unit.energy, unit.maxEnergy)}
             </div>
@@ -146,7 +147,7 @@ export function battleView(redraw: () => void) {
             <section>
               <h2>全场战斗记录</h2>
               ${log.length ? nothing : html`<p>暂无事件记录</p>`}${log.map(([time, event]) => html`<p class="log"><time>${time}</time>${event}</p>`)}
-            </section>`
+            </section></div>`
         : html``,
     };
   };

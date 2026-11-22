@@ -269,7 +269,7 @@ export function accountImportView(
             redraw();
           }} />
         </label>
-        <div class="account-candidates">
+        <scroll-list class="account-candidates-scroll scroll-area" role="region" aria-label="生成候选列表" tabindex="0"><div class="account-candidates">
           ${results.length ? results.map(entry => html`<button type="button" ?disabled=${pending}
             aria-pressed=${selected.has(entry.id)}
             @click=${() => {
@@ -278,7 +278,7 @@ export function accountImportView(
               redraw();
             }}>${entry.name} <small>${entry.id}</small></button>`)
             : html`<p>没有匹配的条目。</p>`}
-        </div>
+        </div></scroll-list>
       </div>
     </details>`;
   }
@@ -379,9 +379,10 @@ export function accountImportView(
         ${error && !source ? html`<p class="account-error" role="alert">${error}</p>` : nothing}
         ${pending && !source ? html`<p role="status">正在检查文件…</p>` : nothing}
       </form>
-    </div>` : html`<div class="account-workspace">
+    </div>` : html`<div class="account-workspace account-workspace-pane">
       <h2>生成条件</h2>
-      <form id=${generationForm} @submit=${submit}>
+      <form id=${generationForm} class="account-workspace-pane" @submit=${submit}>
+        <div class="scroll-area" role="region" aria-label="生成条件" tabindex="0">
         ${modeForm === "fields" ? html`<div class="account-fields">
           ${number("character_count", "角色数量（必填）", 0, 1, {
             max: catalogue?.characters.length, required: true, placeholder: "输入持有角色数",
@@ -411,20 +412,23 @@ export function accountImportView(
           </label>
         `}
         ${error ? html`<p class="account-error" role="alert">${error}</p>` : nothing}
+        </div>
         <div class="account-workspace-actions">
           <button class="primary" type="submit" ?disabled=${pending}>${pending ? "生成并保存中…" : "生成并保存"}</button>
         </div>
       </form>
     </div>`,
-    right: mode === "import" ? html`<div class="account-workspace account-review">
+    right: mode === "import" ? html`<div class="account-workspace account-review account-workspace-pane">
       <div class="account-review-heading">
         <h2>导入检查</h2>
         ${source ? html`<span class="account-status">${source.inspection.report?.warnings.length ? "已校验" : "校验通过"}</span>` : nothing}
       </div>
       ${source ? html`
+        <div class="scroll-area" role="region" aria-label="导入检查结果" tabindex="0">
         ${inventorySummary(source.inspection.summary)}
         ${source.inspection.report ? importReportView(source.inspection.report, false) : html`<p class="account-provenance">统一账号格式</p>`}
         ${error ? html`<p class="account-error" role="alert">${error}</p>` : nothing}
+        </div>
         <div class="account-workspace-actions">
           <button class="primary" form=${importForm} type="submit" ?disabled=${pending}>${pending ? "保存中…" : "导入并保存"}</button>
         </div>

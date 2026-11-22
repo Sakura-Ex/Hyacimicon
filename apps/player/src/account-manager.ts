@@ -58,9 +58,9 @@ export function accountManager(
       workspace: "account",
       headingTool: html`<button class="account-back" ?disabled=${pending} @click=${close}>← 角色档案</button>`,
       tools: html``,
-      left: html`<div class="account-workspace">
+      left: html`<div class="account-workspace account-library">
         <h2>已保存账号</h2>
-        ${local.length ? html`<div class="local-account-list">
+        ${local.length ? html`<scroll-list class="scroll-area" role="region" aria-label="已保存账号" tabindex="0"><div class="local-account-list">
           ${local.map(entry => html`<button aria-pressed=${entry === account} ?disabled=${pending}
             @click=${() => {
               selectedId = entry.id;
@@ -73,8 +73,8 @@ export function accountManager(
             <span><strong>${entry.name}</strong><small>${entry.source}</small></span>
             <small>${entry.characters.length} 名角色</small>
           </button>`)}
-        </div>` : html`<p class="account-lead">本地账号库为空。导入或生成账号后会显示在这里。</p>`}
-        ${warnings.length ? html`<details class="account-warnings">
+        </div></scroll-list>` : html`<p class="account-lead">本地账号库为空。导入或生成账号后会显示在这里。</p>`}
+        ${warnings.length ? html`<details class="account-warnings scroll-area">
           <summary>${warnings.length} 个本地文件无法读取</summary>
           <ul>${warnings.map(warning => html`<li>${warning}</li>`)}</ul>
         </details>` : nothing}

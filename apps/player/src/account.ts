@@ -1,4 +1,6 @@
 ﻿import { html, nothing } from "lit";
+import { keyed } from "lit/directives/keyed.js";
+import "./scroll-list";
 import { art, icon, stats, type Spread, type Run } from "./folio";
 import type { Account, AccountPort } from "./contracts";
 import { accountImportView } from "./account-import";
@@ -79,6 +81,7 @@ export function accountView(
               .value=${query}
               @input=${(e: Event) => change(() => (query = (e.target as HTMLInputElement).value))}
           /></label>
+          ${keyed(`${account?.id ?? ""}:${query.trim()}`, html`<scroll-list class="scroll-area" role="region" aria-label="角色列表" tabindex="0">
           <div class="roster">
             ${visible.map(
               (v) =>
@@ -93,18 +96,18 @@ export function accountView(
                   ${art(v.image)}${v.name}
                 </button>`,
             )}
-          </div>
+          </div></scroll-list>`)}
         </aside>
         ${
           c
-            ? html`<article class="character">
+            ? html`<article class="character scroll-area" tabindex="0" aria-label="角色资料">
                 <b class="teal">${c.path}</b>
                 <h1>${c.name}</h1>
                 <p>
                   等级 ${c.level ?? "—"} · 突破 ${c.ascension ?? "—"} · 星魂
                   ${c.eidolons ?? "—"}
                 </p>
-                  ${imageUrl(c.portrait) ? art(c.portrait, "portrait") : art(c.image, "unit-avatar")}
+                ${imageUrl(c.portrait) ? art(c.portrait, "portrait") : art(c.image, "unit-avatar")}
                 <h2>基础属性</h2>
                 ${c.stats.length ? stats(c.stats) : html`<p>暂无属性记录</p>`}
               </article>`

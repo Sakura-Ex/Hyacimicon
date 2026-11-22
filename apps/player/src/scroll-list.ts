@@ -1,5 +1,5 @@
-/** Scrolls the action list without moving the folio or treating a mouse drag as selection. */
-export class ActionAxis extends HTMLElement {
+/** Keeps wheel and mouse-drag scrolling within a list of selectable entries. */
+export class ScrollList extends HTMLElement {
   private drag?: { id: number; y: number; top: number; moved: boolean };
   private suppressClick = false;
   private readonly layout = new ResizeObserver(() => this.updateEdges());
@@ -94,4 +94,4 @@ export class ActionAxis extends HTMLElement {
     this.toggleAttribute("scrollable", this.scrollHeight > this.clientHeight);
   }
 }
-customElements.define("action-axis", ActionAxis);
+customElements.define("scroll-list", ScrollList);

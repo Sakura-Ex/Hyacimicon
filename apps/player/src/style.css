@@ -1,5 +1,12 @@
 * {
   box-sizing: border-box;
+  scrollbar-width: none;
+}
+::-webkit-scrollbar {
+  display: none;
+}
+html {
+  overflow: clip;
 }
 :root {
   color-scheme: light;
@@ -213,12 +220,28 @@ header::after {
 .pages {
   flex: 1;
   min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
 }
 .page {
+  min-width: 0;
+  min-height: 0;
   padding-top: 1.25rem;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #cfb9c6 transparent;
+  overflow: clip;
+}
+.scroll-area {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+}
+.scroll-area:focus-visible {
+  outline-offset: -2px;
+}
+.page-content {
+  height: 100%;
+}
+.page-content:has(> :is(.catalog, .combat, .account-library, .account-workspace-pane, .feedback, .match-content, .battle-details)) {
+  overflow: clip;
 }
 .left {
   padding-right: 2.15rem;
@@ -227,11 +250,13 @@ header::after {
   padding-left: 4.8rem;
   padding-right: 3rem;
   position: relative;
+}
+.right > .page-content {
   display: flex;
   flex-direction: column;
 }
 .page section + section,
-.right > section:not(:first-child),
+.right > .page-content > section:not(:first-child),
 .market,
 footer,
 .targets {
@@ -301,14 +326,19 @@ nav .icon {
   display: grid;
   grid-template-columns: 34% 1fr;
   gap: 1.55rem;
-  min-height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
 }
 .catalog aside,
 .combat aside {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--line);
   padding-right: 0.85rem;
 }
 .search {
+  flex: none;
   display: flex;
   align-items: center;
   background: #ffffff60;
@@ -472,7 +502,7 @@ nav .icon {
 .formation {
   padding-bottom: 0;
 }
-.left > .formation + section {
+.left > .page-content > .formation + section {
   margin-top: 0.55rem;
   padding-top: 0.6rem;
 }
@@ -716,7 +746,15 @@ dialog {
 .feedback {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
+}
+.feedback > :not(.scroll-area),
+.match-actions {
+  flex: none;
+}
+.match-content,
+.battle-details {
+  flex: 1;
 }
 .feedback h3 {
   margin: 0.85rem 0;
@@ -751,32 +789,14 @@ dialog input {
 }
 .combat {
   grid-template-columns: 28% 1fr;
-  grid-template-rows: minmax(0, 1fr);
-  min-height: 0;
-  height: 100%;
 }
-.left:has(> .combat) {
-  overflow: clip;
-  min-height: 0;
-}
-.combat aside {
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-}
-action-axis {
+scroll-list {
   display:block;
-  min-height:0;
-  overflow-y:auto;
-  overflow-x:hidden;
-  overscroll-behavior:contain;
-  scrollbar-width:none;
   user-select:none;
   mask-image:linear-gradient(to bottom,transparent,#000 min(1.6rem,var(--fade-top,0px)),#000 calc(100% - min(1.6rem,var(--fade-bottom,0px))),transparent);
 }
-action-axis::-webkit-scrollbar { display:none }
-action-axis[scrollable] { cursor:grab }
-action-axis[dragging], action-axis[dragging] button {cursor:grabbing}
+scroll-list[scrollable] { cursor:grab }
+scroll-list[dragging], scroll-list[dragging] button {cursor:grabbing}
 .unit-avatar {
   width:6.5rem;
   height:6.5rem;
@@ -853,6 +873,7 @@ action-axis[dragging], action-axis[dragging] button {cursor:grabbing}
 }
 .inspected {
   display: flex;
+  flex: none;
   align-items: center;
   gap: 0.8rem;
   background: var(--blush);

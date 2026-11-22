@@ -174,8 +174,8 @@ function draw() {
           <div class="tools">${spread.tools}</div>
         </header>
         <div class="pages" aria-busy=${busy}>
-          <div class="page left">${spread.left}</div>
-          <div class="page right">${spread.right}</div>
+          <div class="page left"><div class="page-content scroll-area">${spread.left}</div></div>
+          <div class="page right"><div class="page-content scroll-area">${spread.right}</div></div>
         </div>
       </div>
       <nav aria-label="书签">
