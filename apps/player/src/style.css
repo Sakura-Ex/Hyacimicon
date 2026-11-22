@@ -172,11 +172,12 @@ h2 small {
 header,
 .pages {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 header {
   position: relative;
-  min-height: 7.2rem;
+  height: 7.2rem;
+  flex: none;
   align-items: center;
 }
 header::after {
@@ -210,6 +211,10 @@ header::after {
 .timeline small,
 .offers small {
   display: block;
+}
+.heading > small {
+  line-height: 1.4em;
+  height: 1.4em;
 }
 .floral {
   background: url("/book/letterpress.png") right 12% center/40% 95% no-repeat;
@@ -291,7 +296,6 @@ nav button {
 nav button[aria-current] {
   background: linear-gradient(to right, #65374f, var(--wine) 33%);
   color: white;
-  width: calc(100% - .25rem);
 }
 nav .icon {
   margin: 0;
@@ -303,8 +307,17 @@ nav .icon {
   justify-content: center;
 }
 .account-tools > label {
-  min-width: 9rem;
-  max-width: 15rem;
+  width: 12rem;
+  min-width: 0;
+}
+.account-tools-avatar {
+  width: 3.7rem;
+  height: 3.7rem;
+  flex: none;
+}
+.account-tools-warning[hidden] {
+  display: inline;
+  visibility: hidden;
 }
 .account-tools select {
   max-width: 100%;
@@ -432,7 +445,7 @@ nav .icon {
 }
 .skill-detail > b,
 .feedback > b,
-.inspected b,
+.combat-unit-name b,
 .advice > small {
   color: var(--wine);
 }
@@ -543,10 +556,6 @@ nav .icon {
 }
 .match-health meter::-webkit-meter-optimum-value {
   background: var(--wine);
-}
-.match-status + .battle-controls {
-  margin-top: 0.55rem;
-  padding-bottom: 0.6rem;
 }
 .match-economy {
   margin-bottom: 0.8rem;
@@ -938,8 +947,14 @@ scroll-list[dragging], scroll-list[dragging] button {cursor:grabbing}
   object-fit:contain;
   margin:.8rem 0;
 }
-.featured-name {display:flex;align-items:center;gap:.8rem}
-.featured-name .unit-avatar {width:4.6rem;height:4.6rem}
+.battle-feature {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.battle-feature-body {
+  flex: 1;
+}
 .timeline {
   border-left: 1px solid #ad99a8;
   margin-left: 0.3rem;
@@ -950,11 +965,12 @@ scroll-list[dragging], scroll-list[dragging] button {cursor:grabbing}
 .timeline button {
   color: var(--ink);
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 2.8rem minmax(0, 1fr) 3ch;
   text-align: left;
   align-items: center;
   gap: 0.35rem;
-  min-height: 4.15rem;
+  height: 4.15rem;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -985,6 +1001,13 @@ scroll-list[dragging], scroll-list[dragging] button {cursor:grabbing}
   height: 2.8rem;
   object-fit: contain;
 }
+.timeline-name,
+.timeline small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .timeline b {
   margin-left: auto;
 }
@@ -1006,20 +1029,33 @@ scroll-list[dragging], scroll-list[dragging] button {cursor:grabbing}
   font-size: 1.5rem;
   color: var(--teal);
 }
-.inspected {
-  display: flex;
+.combat-unit-header {
+  --combat-avatar-size: 5rem;
+  display: grid;
+  grid-template-columns: var(--combat-avatar-size) minmax(0, 1fr);
+  grid-template-rows: var(--combat-avatar-size);
   flex: none;
   align-items: center;
   gap: 0.8rem;
   background: var(--blush);
   padding: 0.65rem;
 }
-.inspected img {
-  width: 5rem;
-  height: 5rem;
+.combat-unit-avatar {
+  height: 100%;
+  background: #eadce4;
 }
-.inspected h3 small {
-  margin-left: 1rem;
+.combat-unit-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.combat-unit-name h3,
+.combat-unit-name small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .meters {
   margin: 1.3rem 0;
@@ -1075,13 +1111,11 @@ dialog button {
 }
 .battle-controls {
   justify-content: space-between;
+  flex: none;
+  margin-bottom: 0.65rem;
 }
 .battle-controls button {
   white-space: nowrap;
-  padding: 0.45rem 0.6rem;
-}
-.battle-controls {
-  padding-right: 3rem;
 }
 .battle-controls [role="group"] {
   gap: 1.65rem;
@@ -1098,7 +1132,6 @@ dialog button {
 .battle-controls [role="group"] button[aria-pressed="true"] {
   color: var(--wine);
   border-bottom-color: var(--wine);
-  font-weight: 700;
 }
 .battle-tools { display:flex; align-items:center; gap:.55rem; }
 .damage { position:relative; border-top:1px solid var(--line); padding-top:.6rem; }

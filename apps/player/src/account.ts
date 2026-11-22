@@ -53,7 +53,7 @@ export function accountView(
       title: "角色档案",
       subtitle: "账号养成与装备",
       tools: html`<div class="account-tools">
-        ${characters[0] ? art(characters[0].image, "thumb") : nothing}
+        <span class="account-tools-avatar">${characters[0] ? art(characters[0].image, "thumb") : nothing}</span>
         <label
           ><select
             aria-label="切换账号"
@@ -67,7 +67,8 @@ export function accountView(
             ${accounts.map((a) => html`<option value=${a.id} .selected=${a.id === account?.id}>${a.name}</option>`)}</select
           ><small>${account?.source ?? "添加账号"}</small></label
         >
-        <button @click=${manage}>管理${warnings.length ? html` <span aria-label="有文件读取提示">·</span>` : nothing}</button>
+        <button @click=${manage}>管理<span class="account-tools-warning"
+          ?hidden=${!warnings.length} aria-label="有文件读取提示">·</span></button>
         <button class="primary" @click=${() => add()}>${icon("plus")} 添加账号</button>
       </div>`,
       left: html`<div class="catalog">

@@ -330,14 +330,12 @@ export function accountImportView(
   const render = (): Spread => ({
     title: "添加账号",
     subtitle: "",
-    workspace: "account",
-    headingTool: html`<button class="account-back" ?disabled=${pending} @click=${close}>← 角色档案</button>`,
-    tools: html``,
-    headingTabs: html`<div class="account-workspace-tools">
+    tools: html`<div class="account-workspace-tools">
       <div role="group" aria-label="添加方式">
         <button aria-pressed=${mode === "import"} ?disabled=${pending} @click=${() => changeMode("import")}>文件导入</button>
         <button aria-pressed=${mode === "generate"} ?disabled=${pending} @click=${() => changeMode("generate")}>随机生成</button>
       </div>
+      <button class="account-back" ?disabled=${pending} @click=${close}>← 返回档案</button>
     </div>`,
     left: mode === "import" ? html`<div class="account-workspace">
       <h2>账号文件</h2>

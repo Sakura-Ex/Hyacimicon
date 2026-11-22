@@ -9,12 +9,7 @@
 
 .account-workspace-tools {
   justify-content: space-between;
-  padding-right: 1.4rem;
-}
-
-.account-workspace-tools [aria-pressed="false"] {
-  border-color: transparent;
-  background: transparent;
+  padding-right: 3rem;
 }
 
 .account-workspace {
@@ -328,42 +323,9 @@
   cursor: inherit;
 }
 
-.book-account-workspace .heading.floral {
-  background-size: 30% auto;
-  background-position: 93% 50%;
-}
-
-.book-account-workspace .heading h1 {
-  margin: 0;
-}
-
-.book-account-workspace + nav {
-  gap: 0.35rem;
-}
-
-.book-account-workspace + nav button {
-  width: calc(100% - 1.35rem);
-  height: 5.65rem;
-  padding-right: 0.4rem;
-  font-size: 1.04rem;
-}
-
-.book-account-workspace + nav button[aria-current] {
-  width: calc(100% - 0.7rem);
-}
-
 .account-back {
-  display: block;
-  padding: 0.15rem 0;
-  margin-bottom: 0.4rem;
-  color: var(--wine);
-  border-color: transparent;
-  background: transparent;
-  font-size: 0.84rem;
-}
-
-.account-workspace-tools {
-  justify-content: flex-start;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .account-workspace-tools [aria-pressed] {
@@ -456,32 +418,6 @@
 .account-fold[open] > summary::after,
 .account-catalogue[open] > summary::after {
   transform: rotate(225deg);
-}
-
-#app:has(.book-account-workspace)::before {
-  filter: brightness(1.14) saturate(0.79);
-}
-
-.book-account-workspace .heading.floral {
-  background-size: 24% auto;
-  background-position: 93% 44%;
-}
-
-.book-account-workspace .heading {
-  padding-bottom: 0.45rem;
-}
-
-.book-account-workspace + nav button[aria-current] {
-  background: linear-gradient(to right, #c9a5b5, #ead9e1 48%);
-  color: #63304a;
-}
-
-.book-account-workspace + nav button[aria-current] .icon {
-  filter: none;
-}
-
-.account-workspace-tools {
-  margin-top: 0.35rem;
 }
 
 .account-workspace-tools [aria-pressed] {

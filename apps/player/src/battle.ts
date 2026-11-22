@@ -1,6 +1,6 @@
 import { html, nothing } from "lit";
 import "./scroll-list";
-import type { BattleResult, Item } from "./contracts";
+import type { BattleResult, Combatant, Item } from "./contracts";
 import { art, icon, stats, type Spread } from "./folio";
 import { imageUrl } from "./game-images";
 
@@ -27,6 +27,18 @@ function items(title: string, entries: Item[]) {
     </div>
   </section>`;
 }
+
+function unitHeader(unit: Combatant, label: string, className: string) {
+  return html`<div class="combat-unit-header ${className}">
+    <div class="combat-unit-avatar">${art(unit.image)}</div>
+    <div class="combat-unit-name">
+      <b>${label}</b>
+      <h3 title=${unit.name}>${unit.name}</h3>
+      <small>${[unit.side, unit.element].filter(Boolean).join(" · ")}</small>
+    </div>
+  </div>`;
+}
+
 export function battleView(redraw: () => void) {
   let index = 0,
     inspected = "";
@@ -78,8 +90,8 @@ export function battleView(redraw: () => void) {
                       redraw();
                     }}
                   >
-                    ${art(u.image)}<strong
-                      >${u.name}<small
+                    <span class="timeline-avatar">${art(u.image)}</span><strong
+                      ><span class="timeline-name" title=${u.name}>${u.name}</span><small
                         >${u.id === actor?.id ? "当前行动" : u.id === unit?.id ? "正在查看" : u.side}</small
                       ></strong
                     ><b>${u.initiative ?? "—"}</b>
@@ -90,13 +102,9 @@ export function battleView(redraw: () => void) {
         </aside>
         ${
           featured
-            ? html`<article class="character scroll-area" tabindex="0" aria-label="当前行动详情">
-                <b class="badge">${actor ? "当前行动" : "单位预览"}</b>
-                <div class="featured-name">
-                  ${portrait ? nothing : art(featured.image, "unit-avatar")}
-                  <h1>${featured.name}</h1>
-                </div>
-                <p class="teal">${featured.element}</p>
+            ? html`<article class="character battle-feature">
+                ${unitHeader(featured, actor ? "当前行动" : "单位预览", "featured-unit")}
+                <div class="battle-feature-body scroll-area" tabindex="0" role="region" aria-label="当前行动详情">
                 ${portrait ? art(portrait, "portrait") : nothing}
                 ${
                   f
@@ -124,20 +132,13 @@ export function battleView(redraw: () => void) {
                         </div>`
                     : nothing
                 }
+                </div>
               </article>`
             : html`<p>暂无战斗记录</p>`
         }
       </div>`,
       right: unit
-        ? html`<div class="inspected">
-              ${art(unit.image)}
-              <div>
-                <b>正在查看</b>
-                <h3>
-                  ${unit.name} <small>${unit.side} ${unit.element}</small>
-                </h3>
-              </div>
-            </div>
+        ? html`${unitHeader(unit, "正在查看", "inspected")}
             <div class="battle-details scroll-area" tabindex="0" role="region" aria-label="单位详情和战斗记录">
             <div class="meters">
               ${meter("生命", unit.hp, unit.maxHp)}${meter("能量", unit.energy, unit.maxEnergy)}

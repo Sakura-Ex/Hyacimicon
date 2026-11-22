@@ -47,13 +47,15 @@ export function battleWorkspace(
     return {
       ...view,
       subtitle: mode === "standard" ? "常规战斗" : currency?.match.preview ? "货币战争 · 演示对局" : "货币战争",
-      tools: html`${mode === "currencyWars" && currency ? matchStatus(currency.match) : ""}
-      <div class="battle-controls">
-        <div role="group" aria-label="战斗模式">
-          ${(["standard", "currencyWars"] as const).map((m) => html`<button aria-pressed=${mode === m} @click=${() => run(() => enter(m))}>${m === "standard" ? "常规战斗" : "货币战争"}</button>`)}
+      tools: mode === "currencyWars" && currency ? matchStatus(currency.match) : html``,
+      right: html`
+        <div class="battle-controls">
+          <div role="group" aria-label="战斗模式">
+            ${(["standard", "currencyWars"] as const).map((m) => html`<button aria-pressed=${mode === m} @click=${() => run(() => enter(m))}>${m === "standard" ? "常规战斗" : "货币战争"}</button>`)}
+          </div>
+          ${view.tools}
         </div>
-        ${view.tools}
-      </div>`,
+        ${view.right}`,
     };
   }
   return {

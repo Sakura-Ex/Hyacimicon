@@ -55,9 +55,9 @@ export function accountManager(
     return {
       title: "账号管理",
       subtitle: "本地账号库",
-      workspace: "account",
-      headingTool: html`<button class="account-back" ?disabled=${pending} @click=${close}>← 角色档案</button>`,
-      tools: html``,
+      tools: html`<div class="account-workspace-tools">
+        <button class="account-back" ?disabled=${pending} @click=${close}>← 返回档案</button>
+      </div>`,
       left: html`<div class="account-workspace account-library">
         <h2>已保存账号</h2>
         ${local.length ? html`<scroll-list class="scroll-area" role="region" aria-label="已保存账号" tabindex="0"><div class="local-account-list">

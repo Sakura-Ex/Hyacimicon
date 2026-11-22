@@ -157,19 +157,17 @@ function draw() {
   if (page === "battle") spread = battles.spread();
   document.title = "Hyacimicon · " + spread.title;
   render(
-    html`<div class=${spread.workspace ? "book book-account-workspace" : "book"}>
+    html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
           <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
           ${desktop ? html`<div>${(["min", "max", "close"] as const).map((key, i) => html`<button aria-label=${["最小化", "最大化或还原", "关闭窗口"][i]} @click=${() => run(() => control(key))}>${icon(key)}</button>`)}</div>` : nothing}
         </div>
         <header>
           <div class="heading floral">
-            ${spread.headingTool ?? nothing}
             <h1>${spread.title}</h1>
             ${spread.badge ? html`<b class="badge">${spread.badge}</b>` : nothing}<small
               >${spread.subtitle}</small
             >
-            ${spread.headingTabs ?? nothing}
           </div>
           <div class="tools">${spread.tools}</div>
         </header>
