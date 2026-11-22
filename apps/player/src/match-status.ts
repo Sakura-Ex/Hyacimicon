@@ -36,7 +36,6 @@ export function matchStatus(match: Match) {
           <strong>节点 ${match.node}</strong>
           ${kind ? html`<small>${kinds[kind].name}</small>` : nothing}
         </div>
-        ${index >= 0 ? html`<span class="route-total">${index + 1}<small> / ${steps.length}</small></span>` : nothing}
       </div>
       ${steps.length ? html`<ol class="match-steps" aria-label=${`位面 ${plane + 1} 的节点`}>
         ${steps.map((step, j) => mark(step, j < index))}

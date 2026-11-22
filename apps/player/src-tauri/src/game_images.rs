@@ -10,13 +10,15 @@ use tauri::{
     State,
 };
 
-const SOURCE: &str = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/03907e798b46f9eb109a1f882055cdf49ce3d374";
+const STAR_RAIL_RES: &str = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/03907e798b46f9eb109a1f882055cdf49ce3d374";
+const NANOKA_EQUIPMENT: &str = "https://static.nanoka.cc/assets/hsr/gridfight/equipment";
 const PARALLEL_IMAGES: usize = 4;
 
 pub type SyncLock = Mutex<()>;
 
 #[derive(Clone, Copy)]
 struct Image {
+    source: &'static str,
     remote: &'static str,
     bytes: usize,
     blob: &'static str,
@@ -25,9 +27,13 @@ struct Image {
 fn images() -> &'static BTreeMap<&'static str, Image> {
     static IMAGES: OnceLock<BTreeMap<&str, Image>> = OnceLock::new();
     IMAGES.get_or_init(|| {
-        include_str!("../star-rail-images.tsv")
-            .lines()
-            .map(|line| {
+        [
+            (STAR_RAIL_RES, include_str!("../star-rail-images.tsv")),
+            (NANOKA_EQUIPMENT, include_str!("../nanoka-equipment.tsv")),
+        ]
+        .into_iter()
+        .flat_map(|(source, manifest)| {
+            manifest.lines().map(move |line| {
                 let mut fields = line.split('\t');
                 let local = fields.next().expect("local image path");
                 let remote = fields.next().expect("upstream image path");
@@ -40,13 +46,15 @@ fn images() -> &'static BTreeMap<&'static str, Image> {
                 (
                     local,
                     Image {
+                        source,
                         remote,
                         bytes,
                         blob,
                     },
                 )
             })
-            .collect()
+        })
+        .collect()
     })
 }
 
@@ -68,7 +76,7 @@ impl Image {
 
     async fn fetch(&self, client: &reqwest::Client) -> Result<Vec<u8>, String> {
         let mut response = client
-            .get(format!("{SOURCE}/{}", self.remote))
+            .get(format!("{}/{}", self.source, self.remote))
             .send()
             .await
             .and_then(reqwest::Response::error_for_status)
@@ -99,18 +107,17 @@ impl Image {
         };
         tauri::async_runtime::spawn_blocking(move || {
             let image = match downloaded {
-                Some(bytes) if cache.valid_png(&bytes) => CachedImage::from_png(bytes),
-                Some(_) => return Err(format!("{} 校验失败", self.remote)),
-                None => {
-                    let image = cache
-                        .read_legacy()
-                        .ok_or_else(|| format!("{} 的旧缓存已变更", self.remote))?;
-                    if image.mime == "image/png" {
-                        CachedImage::from_png(image.bytes)
-                    } else {
-                        image
-                    }
-                }
+                Some(bytes) => cache
+                    .verify_source(bytes)
+                    .ok_or_else(|| format!("{} 校验失败", self.remote))?,
+                None => cache
+                    .read_legacy()
+                    .ok_or_else(|| format!("{} 的旧缓存已变更", self.remote))?,
+            };
+            let image = if image.mime == "image/png" {
+                CachedImage::from_png(image.bytes)
+            } else {
+                image
             };
             archive
                 .store(&local, &cache, &image)
@@ -179,7 +186,7 @@ pub async fn player_sync_game_images(
         .read_timeout(Duration::from_secs(15))
         .timeout(Duration::from_secs(60))
         .build()
-        .map_err(|error| format!("无法连接 StarRailRes：{error}"))?;
+        .map_err(|error| format!("无法连接图像来源：{error}"))?;
     let mut updates = stream::iter(pending)
         .map(|(local, image, legacy): (String, Image, bool)| {
             let path = directory.join(&local);

@@ -466,23 +466,16 @@ nav .icon {
   padding-right: 3rem;
   font-variant-numeric: tabular-nums;
 }
-.match-route-heading,
 .match-route-heading > div {
   display: flex;
   align-items: baseline;
   gap: 0.65rem;
 }
 .match-route-heading {
-  justify-content: space-between;
   margin-bottom: 0.65rem;
 }
 .match-route-heading strong {
   font-size: 1.6rem;
-  white-space: nowrap;
-}
-.route-total {
-  color: var(--wine);
-  font-weight: 700;
   white-space: nowrap;
 }
 .match-steps {

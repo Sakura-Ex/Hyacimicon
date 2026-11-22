@@ -10,7 +10,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use sha1::{Digest, Sha1};
 
 pub struct ImageCache<'a> {
-    png: PathBuf,
+    original: PathBuf,
     source_bytes: usize,
     source_blob: &'a str,
 }
@@ -87,7 +87,7 @@ impl ImageArchive {
                 return None;
             }
             let mime = match mime.as_str() {
-                "image/png" if source.valid_png(&bytes) => "image/png",
+                "image/png" if source.source_mime(&bytes) == Some("image/png") => "image/png",
                 "image/webp" if is_webp(&bytes) => "image/webp",
                 _ => return None,
             };
@@ -125,31 +125,44 @@ impl ImageArchive {
 }
 
 impl<'a> ImageCache<'a> {
-    pub fn new(png: PathBuf, source_bytes: usize, source_blob: &'a str) -> Self {
+    pub fn new(original: PathBuf, source_bytes: usize, source_blob: &'a str) -> Self {
         Self {
-            png,
+            original,
             source_bytes,
             source_blob,
         }
     }
 
-    pub fn valid_png(&self, bytes: &[u8]) -> bool {
-        if bytes.len() != self.source_bytes || !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-            return false;
+    fn source_mime(&self, bytes: &[u8]) -> Option<&'static str> {
+        if bytes.len() != self.source_bytes {
+            return None;
         }
+        let mime = if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+            "image/png"
+        } else if is_webp(bytes) {
+            "image/webp"
+        } else {
+            return None;
+        };
         let mut hash = Sha1::new();
         hash.update(format!("blob {}\0", self.source_bytes));
         hash.update(bytes);
-        format!("{:x}", hash.finalize()) == self.source_blob
+        (format!("{:x}", hash.finalize()) == self.source_blob).then_some(mime)
     }
 
-    fn read_png(&self) -> Option<Vec<u8>> {
-        let bytes = read_at_most(&self.png, self.source_bytes)?;
-        self.valid_png(&bytes).then_some(bytes)
+    pub fn verify_source(&self, bytes: Vec<u8>) -> Option<CachedImage> {
+        Some(CachedImage {
+            mime: self.source_mime(&bytes)?,
+            bytes,
+        })
+    }
+
+    fn read_original(&self) -> Option<CachedImage> {
+        self.verify_source(read_at_most(&self.original, self.source_bytes)?)
     }
 
     fn proof_path(&self) -> PathBuf {
-        self.png.with_extension("cache")
+        self.original.with_extension("cache")
     }
 
     fn read_prepared(&self) -> Option<CachedImage> {
@@ -159,12 +172,11 @@ impl<'a> ImageCache<'a> {
             return None;
         }
         if encoded == "png" {
-            return Some(CachedImage {
-                bytes: self.read_png()?,
-                mime: "image/png",
-            });
+            return self
+                .read_original()
+                .filter(|image| image.mime == "image/png");
         }
-        let bytes = read_at_most(&self.png.with_extension("webp"), self.source_bytes)?;
+        let bytes = read_at_most(&self.original.with_extension("webp"), self.source_bytes)?;
         (is_webp(&bytes) && format!("{:x}", Sha1::digest(&bytes)) == encoded).then_some(
             CachedImage {
                 bytes,
@@ -174,18 +186,13 @@ impl<'a> ImageCache<'a> {
     }
 
     pub fn read_legacy(&self) -> Option<CachedImage> {
-        self.read_prepared().or_else(|| {
-            Some(CachedImage {
-                bytes: self.read_png()?,
-                mime: "image/png",
-            })
-        })
+        self.read_prepared().or_else(|| self.read_original())
     }
 
     pub fn clear_legacy(&self) -> io::Result<()> {
         for path in [
-            &self.png,
-            &self.png.with_extension("webp"),
+            &self.original,
+            &self.original.with_extension("webp"),
             &self.proof_path(),
         ] {
             match fs::remove_file(path) {
