@@ -160,7 +160,10 @@ function draw() {
     html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
           <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
-          ${desktop ? html`<div>${(["min", "max", "close"] as const).map((key, i) => html`<button aria-label=${["最小化", "最大化或还原", "关闭窗口"][i]} @click=${() => run(() => control(key))}>${icon(key)}</button>`)}</div>` : nothing}
+          ${desktop ? html`<div>
+            <button aria-label="最小化" @click=${() => run(() => control("min"))}>${icon("min")}</button>
+            <button aria-label="关闭窗口" @click=${() => run(() => control("close"))}>${icon("close")}</button>
+          </div>` : nothing}
         </div>
         <header>
           <div class="heading floral">

@@ -19,9 +19,8 @@ export async function centerBook(book: Element) {
   ));
 }
 
-export async function control(action: "min" | "max" | "close") {
+export async function control(action: "min" | "close") {
   const win = getCurrentWindow();
   if (action === "min") await win.minimize();
-  else if (action === "max") await win.toggleMaximize();
   else await win.close();
 }
