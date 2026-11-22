@@ -33,7 +33,6 @@ export function matchStatus(match: Match) {
     <div class="match-route">
       <div class="match-route-heading">
         <div>
-          ${plane >= 0 ? html`<small>位面 ${plane + 1}</small>` : nothing}
           <strong>节点 ${match.node}</strong>
           ${kind ? html`<small>${kinds[kind].name}</small>` : nothing}
         </div>
@@ -43,8 +42,10 @@ export function matchStatus(match: Match) {
         ${planes.map((nodes, i) => {
           const start = offset;
           offset += nodes.length;
-          return html`<div class="match-plane">
-            <ol aria-label=${"位面 " + (i + 1)}>${nodes.map((step, j) => mark(step, start + j < index))}</ol>
+          const label = "位面 " + (i + 1);
+          return html`<div class="match-plane" ?data-active=${i === plane}>
+            <b class="match-plane-label">${label}</b>
+            <ol aria-label=${label}>${nodes.map((step, j) => mark(step, start + j < index))}</ol>
           </div>`;
         })}
       </div>` : nothing}
