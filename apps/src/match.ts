@@ -104,8 +104,14 @@ function slots(
         const i = start + offset;
         const p = pieces.find(piece => piece.slot === i);
         if (p) return renderPiece(p);
-        return i < capacity ? html`<span class="empty" aria-label="空位"></span>`
-          : html`<span class="empty reserved-slot" title="未解锁" aria-label="未解锁">${icon("lock")}</span>`;
+        const locked = i >= capacity;
+        return html`<span class=${locked ? "roster-slot empty reserved-slot" : "roster-slot empty"}
+            role="img" aria-label=${locked ? "未解锁" : "空位"} title=${locked ? "未解锁" : nothing}>
+          <span class="piece-main" aria-hidden="true">
+            <span class="piece-face">${locked ? icon("lock") : nothing}</span>
+          </span>
+          <span class="piece-gear" aria-hidden="true"></span>
+        </span>`;
       })}
     </div>`;
 }
@@ -272,7 +278,7 @@ export function matchView(
       const incoming = available.some(command => command.operation.kind === "equip")
         ? allItems.find(item => item.itemId === draggedItemId) : undefined;
       const label = `${p.name} · ${p.stars === null ? "星级未知" : p.stars + " 星"} · 装备 ${p.gear.length} 件`;
-      return html`<div class="piece" ?data-drop-ready=${available.length > 0}
+      return html`<div class="roster-slot piece" ?data-drop-ready=${available.length > 0}
           @dragover=${(event: DragEvent) => allowDrop(event, target)}
           @dragleave=${leaveDrop}
           @drop=${(event: DragEvent) => drop(event, target)}>
