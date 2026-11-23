@@ -9,8 +9,9 @@ export type Controller = { kind: "manual" } | { kind: "model"; modelId: string }
 export interface CreateMatchInput {
   accountId: string;
   rulesVersion: string;
+  /** Finite number strictly below 300. Validated by the service. */
   enemyDifficulty: number;
-  affixCount: number;
+  affixCount: 0 | 1 | 2 | 3 | 4;
   randomness: { kind: "automatic" } | { kind: "seeded"; seed: string };
 }
 

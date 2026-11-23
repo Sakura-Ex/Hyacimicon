@@ -12,6 +12,8 @@
 | `setController` | 对局 ID、预期版本、目标控制方 | 完成交接并返回新的快照。交接本身增加版本 |
 | `subscribeMatch` | 对局 ID | 首条消息返回当前快照，随后推送该局已提交的操作、控制权变化和战斗状态 |
 
+`createMatch` 接受小于 300 的有限敌人难度 `enemyDifficulty`，可使用小数。`affixCount` 为 0 到 4 的整数。参数超出范围时返回 `invalidInput`。
+
 对局由一个 Rust 服务实例持有。Tauri 将调用参数和返回值转发给该服务，每次调用表达一次完整的业务操作。模型在独立进程时，通过本地连接访问同一实例，具体传输方式由接入方式确定。批量训练可以让每个环境维护各自的会话。
 
 现有 Tauri `player_match` 和 `player_execute_match_command` 是桌面适配入口。接入时，账号选择页保存返回的 `matchId`，当前 `commandId` 映射到 `actionId`，`MatchPort` 将会话快照转成页面所需的显示值。模型直接读取结构化动作。现有实测反馈和常规战斗看板沿用各自的入口。
