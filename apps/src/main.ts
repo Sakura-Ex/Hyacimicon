@@ -5,9 +5,11 @@ import { matchView } from "./match";
 import { httpSessionPort, tauriSessionPort } from "./match-port";
 import { matchSession } from "./match-session";
 import { demoSessionPort } from "./demo-match";
-import { matchCatalogue, zoneNames } from "./match-catalogue";
 import { battleWorkspace } from "./battle-workspace";
-import { combatant, demoPort, demoRules } from "./demo";
+import { demoPort, demoRules } from "./demo";
+import { previewMatchBattle } from "./match-battle-preview";
+import { openDeveloperPreview, type DeveloperPreview } from "./developer-preview";
+import { playerSettings } from "./settings";
 import type { Account } from "./contracts";
 import { icon, type Spread } from "./folio";
 import { syncGameImages } from "./game-images";
@@ -52,6 +54,7 @@ let busy = false,
 let syncingImages = false;
 let imageStatus = "";
 let imageError = "";
+let developerPreview: DeveloperPreview | undefined;
 const preview = demoPort();
 const demo = demoSessionPort();
 const scenario = import.meta.env.DEV ? params.get("scenario") : null;
@@ -68,22 +71,29 @@ const session = matchSession(liveMatch ?? demo, draw, !liveMatch && scenario ? a
   accountId, rulesVersion: demoRules, enemyDifficulty: 8, affixCount: 2,
   randomness: { kind: "seeded", seed: "layout" },
 }, scenario) : undefined);
-const battles = battleWorkspace(port, draw, run, async (snapshot) => {
-  const p = snapshot.preparation;
-  if (!p) throw new Error("请先在对局中完成开局准备。");
-  const c = matchCatalogue(snapshot, account);
-  const allies = p.board.pieces.filter(piece => piece.slot.zone !== "bench").map(piece =>
-    combatant({ ...c.unit(piece.unitId), id: piece.pieceId }, zoneNames[piece.slot.zone],
-      piece.equipment.map(item => ({ ...c.item(item.definitionId), count: item.count }))));
-  const { enemies } = await port.battleCatalogue();
-  const revealed = p.revealedEnemies.map(enemy =>
-    combatant(enemies.find(unit => unit.id === enemy.id) ?? { ...enemy, image: "" }, "敌方"));
-  return { kind: "preview", units: [...allies, ...revealed] };
-}, () => liveMatch ? undefined : session.snapshot);
+const battles = battleWorkspace(port, draw, run, snapshot => previewMatchBattle(snapshot, port, account),
+  () => liveMatch ? undefined : session.snapshot);
 const matchPage = matchView(session, draw, liveMatch ? undefined : () => run(async () => {
   await battles.enter("currencyWars");
   page = "battle";
 }), liveMatch ? undefined : demoRules);
+const settings = playerSettings(draw, target => run(async () => {
+  const next = await openDeveloperPreview(target, draw, run);
+  developerPreview?.dispose();
+  developerPreview = next;
+}), leaveDeveloperPreview);
+function leaveDeveloperPreview() {
+  developerPreview?.dispose();
+  developerPreview = undefined;
+  draw();
+}
+window.addEventListener("keydown", event => {
+  if (event.ctrlKey && event.shiftKey && event.code === "KeyD" && settings.developerMode && !busy &&
+      !developerPreview?.pending && !session.pending) {
+    event.preventDefault();
+    settings.open();
+  }
+});
 function select(a: Account) {
   accounts ??= [];
   const index = accounts.findIndex((other) => other.id === a.id);
@@ -131,6 +141,7 @@ async function loadAccounts() {
   }
 }
 async function navigate(next: Page) {
+  if (developerPreview) leaveDeveloperPreview();
   if (next === "battle") await battles.enter();
   else {
     await loadAccounts();
@@ -164,25 +175,35 @@ async function prepareImages() {
   }
 }
 function draw() {
+  const visiblePage = developerPreview?.page ?? page;
+  const switchingDisabled = busy || session.pending || developerPreview?.pending === true;
   let spread: Spread = {
-    title: tabs[page],
+    title: tabs[visiblePage],
     subtitle: "",
     tools: html``,
     left: html`<p>${busy ? "正在读取…" : "暂无记录"}</p>`,
     right: html``,
   };
-  if (page === "account") spread = accountsPage(account, accounts ?? [], accountWarnings);
-  if (page === "match") spread = matchPage(account);
-  if (page === "battle") spread = battles.spread();
+  if (developerPreview) spread = developerPreview.spread();
+  else if (page === "account") spread = accountsPage(account, accounts ?? [], accountWarnings);
+  else if (page === "match") spread = matchPage(account);
+  else if (page === "battle") spread = battles.spread();
   document.title = "Hyacimicon · " + spread.title;
   render(
     html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
           <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
-          ${desktop ? html`<div>
+          <div class="titlebar-actions">
+            ${developerPreview ? html`<button type="button" class="preview-active" ?disabled=${switchingDisabled}
+              @click=${leaveDeveloperPreview}>退出预览</button>` : nothing}
+            ${settings.developerMode ? html`<button type="button" title="Ctrl+Shift+D" ?disabled=${switchingDisabled}
+              @click=${settings.open}>开发预览</button>` : nothing}
+            <button type="button" ?disabled=${switchingDisabled} @click=${settings.open}>设置</button>
+            ${desktop ? html`
             <button aria-label="最小化" @click=${() => run(() => control("min"))}>${icon("min")}</button>
             <button aria-label="关闭窗口" @click=${() => run(() => control("close"))}>${icon("close")}</button>
-          </div>` : nothing}
+            ` : nothing}
+          </div>
         </div>
         <header>
           <div class="heading floral">
@@ -200,9 +221,10 @@ function draw() {
         </div>
       </div>
       <nav aria-label="书签">
-        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing}
-          ?disabled=${busy || session.pending} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
+        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === visiblePage ? "page" : nothing}
+          ?disabled=${switchingDisabled} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
       </nav>
+      ${settings.view()}
       ${
         message
           ? html`<div role="alert" class="notice">

@@ -429,7 +429,10 @@ function stale(s: MatchSnapshot, input: MatchVersion): MatchResult<never> | unde
   if (s.revision !== input.revision) return { ok: false, error: { code: "revisionConflict", currentRevision: s.revision } };
 }
 
-export function demoSessionPort(): SessionPort & { preview(input: CreateMatchInput, scenario: string): Promise<MatchResult<MatchSnapshot>> } {
+export function demoSessionPort(): SessionPort & {
+  preview(input: CreateMatchInput, scenario: string, holdBattle?: boolean): Promise<MatchResult<MatchSnapshot>>;
+  dispose(): void;
+} {
   const sessions = new Map<string, Session>();
   let counter = 0;
   function publish(session: Session, event: MatchUpdate) {
@@ -470,7 +473,7 @@ export function demoSessionPort(): SessionPort & { preview(input: CreateMatchInp
     schedule(session);
     return ok(structuredClone(session.snapshot));
   }
-  async function create(input: CreateMatchInput, scenario?: string): Promise<MatchResult<MatchSnapshot>> {
+  async function create(input: CreateMatchInput, scenario?: string, holdBattle = false): Promise<MatchResult<MatchSnapshot>> {
     if (input.rulesVersion !== demoRules) return { ok: false, error: { code: "rulesUnavailable", message: "请选择演示规则版本。" } };
     if (!Number.isSafeInteger(input.enemyDifficulty) || input.enemyDifficulty < 1 || input.enemyDifficulty > 10 ||
         !Number.isSafeInteger(input.affixCount) || input.affixCount < 0 || input.affixCount > 3 ||
@@ -498,34 +501,48 @@ export function demoSessionPort(): SessionPort & { preview(input: CreateMatchInp
       const p = preparation(fixture);
       snapshot.preparation = p;
       snapshot.environment = options("investmentEnvironment")[0];
-      const nodeId = scenario === "aura" || scenario === "spotlight" ? "2-7" :
-        scenario === "teaBreak" || scenario === "teaBreakReward" ? "2-6" : scenario === "supply" ? "2-3" :
-        scenario === "finished" || scenario === "healthDepleted" ? "3-7" : "2-2";
+      const nodeId = scenario === "aura" || scenario === "spotlight" || scenario === "spotlightPreparation" ? "2-7" :
+        scenario === "teaBreak" || scenario === "teaBreakReward" ? "2-6" :
+        scenario === "supply" || scenario === "supplyPreparation" ? "2-3" :
+        scenario === "finished" || scenario === "healthDepleted" ? "3-7" :
+        scenario === "planeOne" ? "1-2" : scenario === "planeThree" ? "3-4" : "2-2";
       const index = route.findIndex(node => node.nodeId === nodeId);
       snapshot.position = { ...route[index - 1], index: index - 1,
         enteredTriggerNodes: route.slice(0, index).filter(node => node.kind !== "supply").length };
-      enter(session, index, scenario !== "investmentStrategy");
-      if (scenario === "aura" || scenario === "spotlight") snapshot.phase = openSpotlight(p, "aura-demo");
+      const strategy = scenario === "investmentStrategy" || scenario === "investmentStrategyPreparation";
+      enter(session, index, !strategy);
+      if (scenario === "aura" || scenario === "spotlight" || scenario === "spotlightPreparation") snapshot.phase = openSpotlight(p, "aura-demo");
       if (scenario === "teaBreakReward") apply(session, { actionId: "", action: { kind: "chooseTeaBreak", selectionId: nodeId, optionId: "tea0" } });
       if (scenario === "battle") snapshot.phase = { kind: "battle", attemptId: "attempt-" + ++session.attempt };
       if (scenario === "battleAway") snapshot.phase = { kind: "battleAway" };
       if (scenario === "battleUnavailable") snapshot.phase = { kind: "battleUnavailable", attemptId: "attempt-" + ++session.attempt, message: "演示战斗暂不可用。" };
       if (scenario === "healthDepleted") { p.resources.health = 5; session.battleRoll = 0; }
-      if (scenario === "finished" || scenario === "healthDepleted" || scenario === "investmentStrategy") {
-        if (scenario === "investmentStrategy") {
+      if (scenario === "finished" || scenario === "healthDepleted" || strategy) {
+        if (strategy) {
           snapshot.position = { ...route[index - 1], index: index - 1, enteredTriggerNodes: snapshot.position.enteredTriggerNodes };
         }
         settle(session, "battle");
       }
+      if (scenario.endsWith("Preparation") && "view" in snapshot.phase) snapshot.phase.view = "preparation";
+      if (scenario === "traitChoice") {
+        apply(session, { actionId: "", action: { kind: "openTraitChoice", mechanism: "wishPower", choiceId: "wish" } });
+      }
     }
     snapshot.legalActions = legal(snapshot);
     sessions.set(snapshot.matchId, session);
-    schedule(session);
+    if (!holdBattle || snapshot.phase.kind !== "battle") schedule(session);
     return ok(structuredClone(snapshot));
   }
   return {
     createMatch: input => create(input),
     preview: create,
+    dispose() {
+      for (const session of sessions.values()) {
+        clearTimeout(session.timer);
+        session.listeners.clear();
+      }
+      sessions.clear();
+    },
     async getMatch({ matchId }) {
       const session = sessions.get(matchId);
       return session ? ok(structuredClone(session.snapshot)) : missing();

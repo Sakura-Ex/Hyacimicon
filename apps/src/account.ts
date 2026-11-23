@@ -19,36 +19,37 @@ export function accountView(
     skillIndex = 1;
   let managing: ReturnType<typeof accountManager> | undefined;
   let adding: ReturnType<typeof accountImportView> | undefined;
-  return (account: Account | undefined, accounts: Account[], warnings: string[]): Spread => {
+  const change = (work: () => void) => {
+    work();
+    redraw();
+  };
+  const choose = (a: Account) => {
+    query = "";
+    characterId = "";
+    skillIndex = 1;
+    adding = undefined;
+    select(a);
+  };
+  const add = async (initial?: { request: Record<string, unknown>; seed: string }, mode: "import" | "generate" = "import") => {
+    managing = undefined;
+    const player = accountImportView(port, redraw, run, choose, () => change(() => (adding = undefined)), initial);
+    adding = player;
+    redraw();
+    if (initial) await player.loadCatalogue();
+    else if (mode === "generate") await player.changeMode(mode);
+  };
+  const manage = (account?: Account) => change(() => {
+    managing = accountManager(port, redraw, run, select, remove,
+      () => change(() => (managing = undefined)),
+      (request, seed) => add({ request, seed }), account?.id);
+  });
+  function view(account: Account | undefined, accounts: Account[], warnings: string[]): Spread {
     if (adding) return adding.render();
     if (managing) return managing(accounts, warnings);
     const characters = account?.characters ?? [];
     const visible = characters.filter((c) => c.name.includes(query.trim()));
     const c = visible.find((c) => c.id === characterId) ?? visible[0];
     const skill = c?.skills[skillIndex] ?? c?.skills[0];
-    const change = (work: () => void) => {
-      work();
-      redraw();
-    };
-    const choose = (a: Account) => {
-      query = "";
-      characterId = "";
-      skillIndex = 1;
-      adding = undefined;
-      select(a);
-    };
-    const add = async (initial?: { request: Record<string, unknown>; seed: string }) => {
-      managing = undefined;
-      const player = accountImportView(port, redraw, run, choose, () => change(() => (adding = undefined)), initial);
-      adding = player;
-      redraw();
-      if (initial) await player.loadCatalogue();
-    };
-    const manage = () => change(() => {
-      managing = accountManager(port, redraw, run, select, remove,
-        () => change(() => (managing = undefined)),
-        (request, seed) => add({ request, seed }), account?.id);
-    });
     return {
       title: "角色档案",
       subtitle: "账号养成与装备",
@@ -67,7 +68,7 @@ export function accountView(
             ${accounts.map((a) => html`<option value=${a.id} .selected=${a.id === account?.id}>${a.name}</option>`)}</select
           ><small>${account?.source ?? "添加账号"}</small></label
         >
-        <button @click=${manage}>管理<span class="account-tools-warning"
+        <button @click=${() => manage(account)}>管理<span class="account-tools-warning"
           ?hidden=${!warnings.length} aria-label="有文件读取提示">·</span></button>
         <button class="primary" @click=${() => add()}>${icon("plus")} 添加账号</button>
       </div>`,
@@ -173,5 +174,12 @@ export function accountView(
       }
 `,
     };
-  };
+  }
+  return Object.assign(view, {
+    async open(panel: "archive" | "import" | "generate" | "manage", account?: Account) {
+      if (panel === "manage") manage(account);
+      else if (panel !== "archive") await add(undefined, panel);
+      else change(() => { managing = undefined; adding = undefined; });
+    },
+  });
 }

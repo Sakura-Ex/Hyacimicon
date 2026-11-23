@@ -462,5 +462,5 @@ export function accountImportView(
       </div>
     </div>`,
   });
-  return { render, loadCatalogue };
+  return { render, loadCatalogue, changeMode };
 }

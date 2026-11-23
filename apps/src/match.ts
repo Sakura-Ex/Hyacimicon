@@ -116,7 +116,10 @@ function feedback(s: MatchSnapshot, insights: MatchInsights, action: ActionOptio
   </form>`;
 }
 
-export function matchView(session: MatchSession, redraw: () => void, openBattle: (() => Promise<void>) | undefined, demoVersion?: string) {
+export type MatchPreviewPanel = "piece" | "equipment" | "feedback";
+
+export function matchView(session: MatchSession, redraw: () => void, openBattle: (() => Promise<void>) | undefined,
+  demoVersion?: string, initialPanel?: MatchPreviewPanel) {
   let last: MatchSnapshot | undefined;
   let expanded = false;
   let aura: { id: string; selectionId: string } | undefined;
@@ -153,6 +156,12 @@ export function matchView(session: MatchSession, redraw: () => void, openBattle:
       editing = undefined;
       drag = undefined;
       highlight();
+      if (s?.preparation && initialPanel) {
+        const first = initialPanel === "piece" ? s.preparation.board.pieces[0]?.pieceId : s.preparation.inventory[0]?.itemId;
+        if (initialPanel === "feedback") editing = "hold";
+        else if (first) inspections.push({ entry: { kind: initialPanel === "piece" ? "piece" : "item", id: first }, trigger: null });
+        initialPanel = undefined;
+      }
       last = s;
     }
     const notice = session.notice ? html`<p class="session-notice" role="status">${session.notice}</p>` : nothing;

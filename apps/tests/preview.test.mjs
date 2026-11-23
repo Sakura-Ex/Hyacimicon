@@ -333,6 +333,26 @@ test("manual play visits all three planes in order and reaches both terminal res
   assert.equal(lost.preparation.resources.health, 0);
 });
 
+test("developer samples open restricted views directly and hold the initial battle for inspection", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const port = demoSessionPort();
+  for (const kind of ["investmentStrategy", "supply", "spotlight"]) {
+    const sample = value(await port.preview(input, kind + "Preparation", true));
+    assert.equal(sample.phase.kind, kind);
+    assert.equal(sample.phase.view, "preparation");
+    assert.deepEqual(kinds(sample), kind === "spotlight" ?
+      ["move", "openCrystal", "returnToSelection"] : ["openCrystal", "returnToSelection"]);
+  }
+  const battle = value(await port.preview(input, "battle", true));
+  t.mock.timers.tick(9000);
+  assert.equal(value(await port.getMatch(battle)).phase.attemptId, battle.phase.attemptId);
+  const restarted = await execute(port, battle, "restartBattle");
+  t.mock.timers.tick(5000);
+  assert.equal(value(await port.getMatch(restarted)).latestSettlement.source, "battle");
+  port.dispose();
+  assert.equal((await port.getMatch(restarted)).error.code, "matchNotFound");
+});
+
 test("feedback records observations for this revision and keeps simulated resources intact", async () => {
   const port = demoSessionPort();
   const snapshot = value(await port.preview(input, "preparation"));
