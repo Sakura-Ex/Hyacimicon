@@ -242,11 +242,42 @@ header::after {
 .scroll-area:focus-visible {
   outline-offset: -2px;
 }
+/* Contained lists fade out on the edge that still has hidden content. The
+   scroll timeline is inactive while nothing overflows, so both edges stay at
+   0 and the mask is fully opaque. */
+@property --edge-top {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --edge-bottom {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes edge-fade {
+  from { --edge-top: 0px; --edge-bottom: 1.4rem; }
+  8%, 92% { --edge-top: 1.4rem; --edge-bottom: 1.4rem; }
+  to { --edge-top: 1.4rem; --edge-bottom: 0px; }
+}
+.edge-fade {
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  mask-image: linear-gradient(to bottom, transparent, #000 var(--edge-top),
+    #000 calc(100% - var(--edge-bottom)), transparent);
+  animation: edge-fade linear both;
+  animation-timeline: scroll(self block);
+}
 .page-content {
   height: 100%;
 }
-.page-content:has(> :is(.catalog, .combat, .account-library, .account-workspace-pane, .feedback, .match-content, .battle-details)) {
+.page-content:has(> :is(.catalog, .combat, .account-library, .account-workspace-pane, .feedback, .match-content, .match-setup, .match-roster, .session-intel, .battle-details)) {
   overflow: clip;
+}
+.left > .page-content:has(> :is(.match-roster, .session-intel)) {
+  display: flex;
+  flex-direction: column;
 }
 .left {
   padding-right: 2.15rem;

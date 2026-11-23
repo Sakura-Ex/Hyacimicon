@@ -1,5 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
+import "./scroll-list.ts";
 import type { Unit } from "./contracts.ts";
 import type { ItemStack, MatchSnapshot, Piece, Preparation, Slot, TraitChoice, VisibleMechanism } from "./match-session-contract.ts";
 import type { DragSource, MatchDrop } from "./match-drag.ts";
@@ -34,9 +35,27 @@ function opponents(s: MatchSnapshot) {
 }
 
 export function openingIntel(s: MatchSnapshot) {
-  return html`<div class="session-intel"><section><h2>三位面对手</h2>
-    <p>进入节点后揭示本场敌人。</p>${opponents(s)}</section>
-    <section><h2>负面词条</h2>${entryList(s.affixes, "本局未选负面词条")}</section></div>`;
+  return html`<div class="session-intel">
+    <section class="intel-section intel-opponents">
+      <div class="intel-head">
+        <div><h2>三位面对手</h2><small>进入节点后揭示本场敌人</small></div>
+        ${s.rival ? html`<div class="intel-rival"><strong>${s.rival.name}</strong>${s.rival.detail ? html`<small>${s.rival.detail}</small>` : nothing}</div>` : nothing}
+      </div>
+      <div class="intel-planes">${s.opponents.map(plane => html`<article class="intel-plane">
+        <h3>位面 ${plane.plane}</h3>
+        <ul>
+          ${plane.enemies.map(enemy => html`<li><span>${enemy.name}</span></li>`)}
+          ${plane.bosses.map(boss => html`<li class="intel-boss"><small>首领</small><span>${boss.name}</span></li>`)}
+        </ul>
+      </article>`)}</div>
+    </section>
+    <section class="intel-section intel-affix-section">
+      <h2>负面词条 <small>${s.affixes.length} 项</small></h2>
+      ${s.affixes.length ? html`<scroll-list class="intel-scroll scroll-area" tabindex="0"><div class="intel-affixes">
+        ${s.affixes.map(affix => html`<article class="intel-affix"><strong>${affix.name}</strong>${affix.detail ? html`<p>${affix.detail}</p>` : nothing}</article>`)}
+      </div></scroll-list>` : html`<p class="intel-empty">本局未选负面词条</p>`}
+    </section>
+  </div>`;
 }
 
 function overview(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, controls: MatchControls) {
@@ -156,42 +175,49 @@ export function board(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, contr
       <div class="traits-panel" ?data-expanded=${expanded}><div class="traits-heading"><h3>羁绊</h3>
         <button type="button" id="match-traits-toggle" aria-expanded=${expanded} aria-controls="match-trait-list"
           @click=${() => expand(!expanded)}>${expanded ? "收起" : "展开"}${icon("chev")}</button></div>
-        <ul id="match-trait-list" class="match-trait-list" tabindex="0">
-          ${p.traits.length ? p.traits.map(trait => {
-            const info = c.trait(trait.traitId);
-            const next = trait.thresholds.find(value => value > trait.count);
-            const picture = art(info.image);
-            return html`<li ?data-active=${trait.activeThreshold !== null} ?data-near=${next === trait.count + 1}
-              title=${info.detail ? info.name + " · " + info.detail : info.name}>
-              <span class="trait-emblem" aria-hidden="true">${picture === nothing ? info.name.slice(0, 1) : picture}</span>
-              <span class="trait-copy"><strong>${info.name}</strong>${expanded ? html`
-                <small class="trait-breakpoints" aria-label="激活档位">${trait.thresholds.map(value =>
-                html`<span ?data-active=${value === trait.activeThreshold}>${value}</span>`)}</small>
-                ${info.detail ? html`<small>${info.detail}</small>` : nothing}` : nothing}</span>
-              <span class="trait-count" aria-label=${next === undefined ? `当前 ${trait.count} 人` : `当前 ${trait.count} 人，下一档 ${next} 人`}>
-                <span>${trait.count}</span>${next === undefined ? nothing : html`<small>/</small><small>${next}</small>`}
-              </span></li>`;
-          }) : html`<li class="no-traits">暂无羁绊</li>`}
-        </ul>
+        <scroll-list class="traits-scroll scroll-area" role="region" aria-label="羁绊列表" tabindex="0">
+          <ul id="match-trait-list" class="match-trait-list">
+            ${p.traits.length ? p.traits.map(trait => {
+              const info = c.trait(trait.traitId);
+              const next = trait.thresholds.find(value => value > trait.count);
+              const picture = art(info.image);
+              return html`<li ?data-active=${trait.activeThreshold !== null} ?data-near=${next === trait.count + 1}
+                title=${info.detail ? info.name + " · " + info.detail : info.name}>
+                <span class="trait-emblem" aria-hidden="true">${picture === nothing ? info.name.slice(0, 1) : picture}</span>
+                <span class="trait-copy"><strong>${info.name}</strong>${expanded ? html`
+                  <small class="trait-breakpoints" aria-label="激活档位">${trait.thresholds.map(value =>
+                  html`<span ?data-active=${value === trait.activeThreshold}>${value}</span>`)}</small>
+                  ${info.detail ? html`<small>${info.detail}</small>` : nothing}` : nothing}</span>
+                <span class="trait-count" aria-label=${next === undefined ? `当前 ${trait.count} 人` : `当前 ${trait.count} 人，下一档 ${next} 人`}>
+                  <span>${trait.count}</span>${next === undefined ? nothing : html`<small>/</small><small>${next}</small>`}
+                </span></li>`;
+            }) : html`<li class="no-traits">暂无羁绊</li>`}
+          </ul>
+        </scroll-list>
       </div>
-      ${p.mechanisms.length ? html`<section class="trait-mechanisms" aria-label="羁绊机制" tabindex="0"><h4>羁绊机制</h4>
-        ${p.mechanisms.map(m => html`<div class="mechanism-card"><strong>${mechanismNames[m.kind]}</strong>
-          ${m.counters.map(counter => html`<small>${counter.id} ${counter.value}</small>`)}
-          ${m.choices.map(choice => {
-            const current = choice.options.find(option => option.optionId === choice.selectedOptionId);
-            const open = controls.find("openTraitChoice", a => a.kind === "openTraitChoice" && a.mechanism === m.kind && a.choiceId === choice.choiceId);
-            const once = controls.find("chooseMechanism", a => a.kind === "chooseMechanism" && a.mechanism === m.kind && a.choiceId === choice.choiceId);
-            return html`<div class="mechanism-choice">${current ? html`<small>${current.name}</small>` : nothing}
-              ${choice.mode === "changeable" ? controls.button(open, "修改") : once ?
-                html`<button type="button" @click=${() => ui.inspectTrait(m, choice)}>选择</button>` : nothing}</div>`;
-          })}
-          ${controls.actions.filter(entry => entry.source?.mechanism === m.kind &&
+      ${p.mechanisms.length ? html`<section class="trait-mechanisms" aria-label="羁绊机制"><h4>羁绊机制</h4>
+        <scroll-list class="mechanisms-scroll scroll-area" tabindex="0"><div class="mechanism-list">
+          ${p.mechanisms.map(m => html`<div class="mechanism-card">
+            <div class="mechanism-head"><strong>${mechanismNames[m.kind]}</strong>
+              ${m.counters.length ? html`<span class="mechanism-counters">${m.counters.map(counter =>
+                html`<small>${counter.id} <b>${counter.value}</b></small>`)}</span>` : nothing}</div>
+            ${m.choices.map(choice => {
+              const current = choice.options.find(option => option.optionId === choice.selectedOptionId);
+              const open = controls.find("openTraitChoice", a => a.kind === "openTraitChoice" && a.mechanism === m.kind && a.choiceId === choice.choiceId);
+              const once = controls.find("chooseMechanism", a => a.kind === "chooseMechanism" && a.mechanism === m.kind && a.choiceId === choice.choiceId);
+              if (!current && !once && choice.mode !== "changeable") return nothing;
+              return html`<div class="mechanism-choice">${current ? html`<small>${current.name}</small>` : once ? html`<small class="mechanism-pending">待选择</small>` : nothing}
+                ${choice.mode === "changeable" ? controls.button(open, "修改") : once ?
+                  html`<button type="button" @click=${() => ui.inspectTrait(m, choice)}>选择</button>` : nothing}</div>`;
+            })}
+            ${controls.actions.filter(entry => entry.source?.mechanism === m.kind &&
+              !["chooseMechanism", "openTraitChoice", "selectTraitOption", "confirmTraitChoice"].includes(entry.action.kind))
+              .map(entry => controls.button(entry, controls.label(entry.action)))}
+          </div>`)}
+          ${controls.actions.filter(entry => entry.source?.kind === "trait" && entry.source.mechanism === undefined &&
             !["chooseMechanism", "openTraitChoice", "selectTraitOption", "confirmTraitChoice"].includes(entry.action.kind))
-            .map(entry => controls.button(entry, controls.label(entry.action)))}
-        </div>`)}
-        ${controls.actions.filter(entry => entry.source?.kind === "trait" && entry.source.mechanism === undefined &&
-          !["chooseMechanism", "openTraitChoice", "selectTraitOption", "confirmTraitChoice"].includes(entry.action.kind))
-          .map(entry => controls.button(entry, c.trait(entry.source?.traitId ?? "").name + " · " + controls.label(entry.action)))}
+            .map(entry => controls.button(entry, c.trait(entry.source?.traitId ?? "").name + " · " + controls.label(entry.action)))}
+        </div></scroll-list>
       </section>` : nothing}
     </aside>
   </div>`;

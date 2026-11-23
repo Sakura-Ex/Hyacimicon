@@ -29,7 +29,7 @@ export function disclosure(title: string, summary: TemplateResult, content: Temp
       }
     }}>
     <summary>${summary}${icon("chev")}</summary>
-    <div class="match-disclosure-panel"><h3>${title}</h3>${content}</div>
+    <div class="match-disclosure-panel edge-fade"><h3>${title}</h3>${content}</div>
   </details>`;
 }
 

@@ -27,8 +27,10 @@ function preparationView(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, co
   const consumables = p.inventory.filter(item => c.item(item.definitionId).kind === "consumable");
   const unclassified = p.inventory.filter(item => c.item(item.definitionId).kind === undefined);
   const choice = insights?.advice.find(a => a.id === adviceId) ?? insights?.advice[0];
+  const alternatives = insights?.advice.filter(a => a !== choice) ?? [];
+  const recorded = insights?.lastAction ? html`<span class="advice-recorded" role="status">实际操作已记录</span>` : nothing;
   function stock(label: string, items: Preparation["inventory"]) {
-    return html`<div class="match-inventory stock-window" role="region" aria-label=${label} tabindex="0">
+    return html`<div class="match-inventory stock-window edge-fade" role="region" aria-label=${label} tabindex="0">
       ${items.length ? repeat(items, item => item.itemId, item => itemCard(item, c, ui)) : html`<p>暂无${label}</p>`}</div>`;
   }
   return html`<div class="match-home">
@@ -46,10 +48,10 @@ function preparationView(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, co
         s.phase.kind === "preparation" && s.phase.spotlightAvailable ? button(find("openSpotlight"), "选择主角光环 ›", true) : nothing}
     </div>
     <section class="match-stores">
-      <div><h2 id="match-resources" tabindex="-1">装备 <small>${equipment.reduce((n, item) => n + item.count, 0)} 件待分配</small></h2>
+      <div class="match-store"><h2 id="match-resources" tabindex="-1">装备 <small>${equipment.reduce((n, item) => n + item.count, 0)} 件待分配</small></h2>
         ${stock("待分配装备", equipment)}</div>
-      <div class="match-supply-tray"><h2>消耗品</h2>${stock("消耗品", consumables)}</div>
-      ${unclassified.length ? html`<div class="match-unclassified"><h2>待识别物品</h2>${stock("待识别物品", unclassified)}</div>` : nothing}
+      <div class="match-store match-supply-tray"><h2>消耗品</h2>${stock("消耗品", consumables)}</div>
+      ${unclassified.length ? html`<div class="match-store match-unclassified"><h2>待识别物品</h2>${stock("待识别物品", unclassified)}</div>` : nothing}
     </section>
     <section class="match-shop">
       <div class="shop-heading"><h2>商店</h2><div class="shop-tools">
@@ -81,13 +83,18 @@ function preparationView(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, co
       })}</div>
     </section>
     ${choice ? html`<article class="advice">
-      <small>本步建议 <span>节点 ${s.position?.nodeId}</span></small>
-      <div>${choice.image ? art(choice.image, "thumb") : nothing}
-        <div><h3>${choice.title}</h3><p>${choice.reason}</p></div></div>
-      <div class="metrics">${stats(choice.effects)}</div></article>
-      <div class="alternatives"><small>备选</small>${insights?.advice.filter(a => a !== choice).map(advice =>
-        html`<button type="button" @click=${() => chooseAdvice(advice.id)}>${advice.title} <small>${advice.reason}</small></button>`)}</div>` : nothing}
-    ${insights?.lastAction ? html`<p role="status">实际操作已记录</p>` : nothing}
+      <div class="advice-main">
+        ${choice.image ? art(choice.image, "thumb") : nothing}
+        <div class="advice-copy">
+          <small>本步建议 · 节点 ${s.position?.nodeId}${recorded}</small>
+          <h3>${choice.title}</h3><p title=${choice.reason}>${choice.reason}</p>
+        </div>
+        ${choice.effects.length ? html`<div class="advice-effects">${stats(choice.effects)}</div>` : nothing}
+      </div>
+      ${alternatives.length ? html`<div class="alternatives" role="group" aria-label="备选建议"><small>备选</small>
+        ${alternatives.map(advice => html`<button type="button" title=${advice.reason}
+          @click=${() => chooseAdvice(advice.id)}>${advice.title}</button>`)}</div>` : nothing}
+    </article>` : insights?.lastAction ? html`<p class="advice-recorded" role="status">实际操作已记录</p>` : nothing}
   </div>`;
 }
 
@@ -264,21 +271,30 @@ export function matchView(session: MatchSession, redraw: () => void, openBattle:
       if (piece) return (a.kind === "move" || a.kind === "sell") && a.pieceId === piece.pieceId;
       return item && ("itemId" in a && a.itemId === item.itemId || a.kind === "combine" && a.otherItemId === item.itemId);
     });
+    const sellAction = piece && !current?.actionIds ? inspectionActions.find(entry => entry.action.kind === "sell") : undefined;
+    const listActions = sellAction ? inspectionActions.filter(entry => entry !== sellAction) : inspectionActions;
     const unit = piece ? c.unit(piece.unitId) : undefined;
     const itemData = item ? c.item(item.definitionId) : undefined;
     const inspector = piece && unit || item && itemData ? html`<section class="match-inspector">
-      <button type="button" class="inspector-back" @click=${closeInspection}>‹ 返回</button>
-      <div class="inspector-heading">
-        ${unit ? html`<span class="inspector-portrait">${portrait(unit)}</span>` : nothing}
-        ${itemData ? itemPicture({ ...itemData, count: item?.count }) : nothing}
-        <div><h2 tabindex="-1" id="match-inspector-title">${unit?.name ?? itemData?.name}</h2>${itemData?.detail ? html`<p>${itemData.detail}</p>` : nothing}</div>
+      <div class="inspector-top">
+        <div class="inspector-bar">
+          <button type="button" class="inspector-back" @click=${closeInspection}>‹ 返回</button>
+          ${sellAction ? button(sellAction, controls.label(sellAction.action)) : nothing}
+        </div>
+        <div class="inspector-heading">
+          ${unit ? html`<span class="inspector-portrait">${portrait(unit)}</span>` : nothing}
+          ${itemData ? itemPicture({ ...itemData, count: item?.count }) : nothing}
+          <div><h2 tabindex="-1" id="match-inspector-title">${unit?.name ?? itemData?.name}</h2>${itemData?.detail ? html`<p>${itemData.detail}</p>` : nothing}</div>
+        </div>
+        ${piece && p ? html`<h3>已装备 <small>${piece.equipment.length} / 3</small></h3>
+          <div class="match-inventory">${piece.equipment.map(item => itemCard(item, c, ui))}</div>
+          ${p.selectedAuras.some(aura => aura.pieceId === piece.pieceId) ? auraList(p, c, piece.pieceId) : nothing}` : nothing}
       </div>
-      ${piece && p ? html`<h3>已装备 <small>${piece.equipment.length} / 3</small></h3>
-        <div class="match-inventory">${piece.equipment.map(item => itemCard(item, c, ui))}</div>
-        ${p.selectedAuras.some(aura => aura.pieceId === piece.pieceId) ? auraList(p, c, piece.pieceId) : nothing}` : nothing}
-      <div class="command-list">${inspectionActions.map(entry => button(entry, controls.label(entry.action)))}</div>
+      ${listActions.length ? html`<scroll-list class="inspector-commands scroll-area" role="region" aria-label="可执行操作" tabindex="0">
+        <div class="command-list">${listActions.map(entry => button(entry, controls.label(entry.action)))}</div>
+      </scroll-list>` : nothing}
     </section>` : mechanism && choice ? html`<div class="match-inspector">
-      ${current?.kind === "trait" ? html`<button type="button" @click=${closeInspection}>‹ 返回</button>` : nothing}
+      ${current?.kind === "trait" ? html`<button type="button" class="inspector-back" @click=${closeInspection}>‹ 返回</button>` : nothing}
       ${traitChoice(mechanism, choice, controls, draft)}</div>` : nothing;
 
     const revisiting = "view" in phase && phase.view === "preparation";
@@ -297,7 +313,7 @@ export function matchView(session: MatchSession, redraw: () => void, openBattle:
       ${controller.kind === "model" ? html`<span>模型接管 · ${controller.modelId}</span>
         <button type="button" class="primary" ?disabled=${session.pending} @click=${() => session.control(s, { kind: "manual" })}>收回控制</button>` :
         html`<span>手动控制</span>${phase.kind !== "finished" && insights?.models.length ?
-          html`<details><summary>交给模型</summary><div>${insights.models.map(model =>
+          html`<details><summary><span>交给模型</span>${icon("chev")}</summary><div>${insights.models.map(model =>
             html`<button type="button" ?disabled=${!writeable} @click=${() => session.control(s, { kind: "model", modelId: model.id })}>${model.name}</button>`)}</div></details>` : nothing}`}
       ${session.disconnected ? html`<button type="button" @click=${session.reload}>连接中断 · 重连</button>` : nothing}
     </div>`;
@@ -310,11 +326,11 @@ export function matchView(session: MatchSession, redraw: () => void, openBattle:
       left: p ? board(s, p, c, controls, ui, expanded, value => { expanded = value; redraw(); }) : openingIntel(s),
       right: html`${notice}${editing && action && insights && manual ? feedback(s, insights, action, session,
         id => { editing = id; redraw(); }, closeFeedback) : html`
-        <div class="match-content scroll-area" role="region" aria-label="对局操作" tabindex="0" @keydown=${(event: KeyboardEvent) => {
+        <div class="match-content scroll-area edge-fade" role="region" aria-label="对局操作" tabindex="0" @keydown=${(event: KeyboardEvent) => {
           if (event.key === "Escape" && current) closeInspection();
         }}>
           ${controller.kind === "model" || history.length ? html`<details class="settlement model-history">
-            <summary>AI 操作流水${history.length ? html` · ${c.actionLabel(history.at(-1)?.action ?? history[0].action)}` : nothing}</summary>
+            <summary><span>AI 操作流水${history.length ? html` · ${c.actionLabel(history.at(-1)?.action ?? history[0].action)}` : nothing}</span>${icon("chev")}</summary>
             ${history.length ? html`<ol>${[...history].reverse().map(entry => html`<li>版本 ${entry.revision} · ${entry.modelId} · ${c.actionLabel(entry.action)}</li>`)}</ol>` : html`<p>等待模型操作。</p>`}
           </details>` : nothing}
           ${s.latestSettlement ? keyed(s.latestSettlement.nodeId, settlement(s.latestSettlement)) : nothing}
