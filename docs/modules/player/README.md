@@ -1,13 +1,13 @@
 # Windows 玩家界面
 
-[Hyacimicon](../../../apps/player/) 使用 Tauri 2、TypeScript 和 Lit。账号、对局和战斗在同一本书中切换。Windows 桌面版可导入、生成和管理本地账号。浏览器、对局和战斗当前使用预览数据。未接入的数据以短横线或空状态显示。
+[Hyacimicon](../../../apps/) 使用 Tauri 2、TypeScript 和 Lit。账号、对局和战斗在同一本书中切换。Windows 桌面版可导入、生成和管理本地账号。浏览器、对局和战斗当前使用预览数据。未接入的数据以短横线或空状态显示。
 
 ## 启动
 
 在 Windows 安装 Node.js 22.12 及以上版本、npm、Rust MSVC 工具链、Visual Studio C++ Build Tools 和 WebView2。在仓库根目录运行：
 
 ```powershell
-cd apps/player
+cd apps
 npm ci
 npm run tauri dev
 ```
@@ -26,12 +26,12 @@ npm run tauri dev
 
 | 模块 | 负责内容 |
 | --- | --- |
-| [应用入口](../../../apps/player/src/main.ts) 与[书册视图](../../../apps/player/src/folio.ts) | 注入数据源，协调页面切换，绘制书册、书签和公共控件 |
-| [窗口](../../../apps/player/src/windows.ts) | 启动时居中书本、最小化与关闭窗口 |
-| [账号](../../../apps/player/src/account.ts) | 搜索角色、选择行迹、切换账号、收集导入文件或生成种子 |
-| [对局](../../../apps/player/src/match.ts) | 显示可见局面、比较建议、记录实际操作和观测值 |
-| [战斗](../../../apps/player/src/battle.ts) | [战斗模式](../../../apps/player/src/battle-workspace.ts)分别维护常规配置、对局来源和回放进度，行动轴与单位快照共用视图 |
-| [契约](../../../apps/player/src/contracts.ts) 与[预览数据源](../../../apps/player/src/demo.ts) | 定义三个模块分别需要的异步接口与返回结构，提供离线预览 |
+| [应用入口](../../../apps/src/main.ts) 与[书册视图](../../../apps/src/folio.ts) | 注入数据源，协调页面切换，绘制书册、书签和公共控件 |
+| [窗口](../../../apps/src/windows.ts) | 启动时居中书本、最小化与关闭窗口 |
+| [账号](../../../apps/src/account.ts) | 搜索角色、选择行迹、切换账号、收集导入文件或生成种子 |
+| [对局](../../../apps/src/match.ts) | 显示可见局面、比较建议、记录实际操作和观测值 |
+| [战斗](../../../apps/src/battle.ts) | [战斗模式](../../../apps/src/battle-workspace.ts)分别维护常规配置、对局来源和回放进度，行动轴与单位快照共用视图 |
+| [契约](../../../apps/src/contracts.ts) 与[预览数据源](../../../apps/src/demo.ts) | 定义三个模块分别需要的异步接口与返回结构，提供离线预览 |
 
 ## 添加账号
 
@@ -48,7 +48,7 @@ npm run tauri dev
 
 ### 游戏图像
 
-Windows 版启动时校验程序旁的 `images/StarRailRes.pack`，并按清单下载缺失或损坏的图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/player/src-tauri/star-rail-images.tsv)，货币战争局内装备和消耗品来自 [Nanoka 装备清单](../../../apps/player/src-tauri/nanoka-equipment.tsv)。图像供所有账号共用。安装包包含来源、路径、字节数和 Git blob 校验值，游戏美术由应用启动后写入本地。
+Windows 版启动时校验程序旁的 `images/StarRailRes.pack`，并按清单下载缺失或损坏的图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/src-tauri/star-rail-images.tsv)，货币战争局内装备和消耗品来自 [Nanoka 装备清单](../../../apps/src-tauri/nanoka-equipment.tsv)。图像供所有账号共用。安装包包含来源、路径、字节数和 Git blob 校验值，游戏美术由应用启动后写入本地。
 
 Rust 校验下载的 PNG，优先转成无损 WebP，再按条目尝试 Zstandard 压缩并写入容器。每一步保留体积更小且像素无损的结果。启动时复用旧 `images/StarRailRes/` 中有效的 PNG 或 WebP，归档提交后清理对应散文件。窗口按需读取容器中的图片。TypeScript 启动校验并显示进度，文件齐全时可离线启动。普通页面禁止框选和全选文字、拖出图片以及默认右键菜单，编辑字段保留选择、复制和粘贴。
 

@@ -195,7 +195,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("hyacimicon-test-{}", Uuid::new_v4()));
         let directory = root.join("accounts");
         let files = AccountFiles::new(directory.clone());
-        let original = include_str!("../../../../core/account/tests/fixtures/reliquary_v4.json");
+        let original = include_str!("../../../core/account/tests/fixtures/reliquary_v4.json");
         let imported = import_reliquary_archive(original, "import").expect("valid source");
         let id = Uuid::new_v4();
         let mut account = StoredAccount::new(

@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const draftAssets = new URL("../../design-drafts/player-app/assets/", import.meta.url);
+const draftAssets = new URL("../design-drafts/player-app/assets/", import.meta.url);
 
 export default defineConfig({
   plugins: [

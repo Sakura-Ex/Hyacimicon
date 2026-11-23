@@ -10,8 +10,8 @@ license = "GPL-3.0-only"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-account-core = { path = "../../../core/account" }
-account-generator = { path = "../../../research/account_generation" }
+account-core = { path = "../../core/account" }
+account-generator = { path = "../../research/account_generation" }
 futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
 image-webp = "=0.2.4"
 png = "=0.18.1"

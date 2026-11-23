@@ -15,9 +15,9 @@ use uuid::Uuid;
 
 use crate::account_storage::{AccountFiles, Origin, StoredAccount};
 
-const CHARACTERS: &str = include_str!("../../../../docs/game-data/character-data.md");
-const CONES: &str = include_str!("../../../../docs/game-data/light-cone-data.md");
-const RELICS: &str = include_str!("../../../../docs/game-data/relic-data.md");
+const CHARACTERS: &str = include_str!("../../../docs/game-data/character-data.md");
+const CONES: &str = include_str!("../../../docs/game-data/light-cone-data.md");
+const RELICS: &str = include_str!("../../../docs/game-data/relic-data.md");
 
 #[derive(Default)]
 pub struct AccountStore {
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn raw_export_can_be_reimported_and_invalid_inventory_is_rejected() {
-        let input = include_str!("../../../../core/account/tests/fixtures/raw_account.json");
+        let input = include_str!("../../../core/account/tests/fixtures/raw_account.json");
         let expected: RawAccount = serde_json::from_str(input).expect("raw fixture");
         let (mut raw, report) = parse_import(input, "inspection").expect("reimport raw account");
         assert_eq!(raw, expected);
@@ -467,7 +467,7 @@ mod tests {
     #[test]
     fn fribbels_fixture_retains_roster_and_loadout() {
         let imported = import_reliquary_archive(
-            include_str!("../../../../core/account/tests/fixtures/reliquary_v4.json"),
+            include_str!("../../../core/account/tests/fixtures/reliquary_v4.json"),
             "fixture",
         )
         .expect("import fixture");
