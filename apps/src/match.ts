@@ -1,9 +1,11 @@
-import { html, nothing } from "lit";
+import { html, nothing, type TemplateResult } from "lit";
+import { repeat } from "lit/directives/repeat.js";
 import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece } from "./contracts";
 import { art, icon, stats, type Run, type Spread } from "./folio";
 import { matchStatus } from "./match-status";
+import { commandsForDrop, type DropTarget } from "./match-drag";
 
-type Selection = { kind: "item" | "piece" | "event"; id: string };
+type Selection = { kind: "item" | "piece" | "event"; id: string; commandIds?: Set<string> };
 
 function itemPicture(item: MatchItem) {
   const artwork = art(item.image);
@@ -14,31 +16,21 @@ function row(
   title: string,
   pieces: Piece[],
   capacity: number,
-  inspect: (piece: Piece) => void,
-  selected?: string,
-  zone: "front" | "back" | "bench" = "bench",
+  zone: "front" | "back" | "bench",
+  renderPiece: (piece: Piece) => TemplateResult,
+  extra?: TemplateResult,
 ) {
+  const slots = zone === "back" ? Math.max(9, capacity) : capacity;
   return html`<section class="formation">
     <h2>${title} <small>${pieces.length} / ${capacity}</small></h2>
-    <div class=${`slots ${zone}`} style=${`--slot-columns: ${Math.max(1, Math.min(capacity, 9))}`}>
-      ${Array.from({ length: capacity }, (_, i) => {
+    <div class=${`slots ${zone}`}>
+      ${Array.from({ length: slots }, (_, i) => {
         const p = pieces.find(piece => piece.slot === i);
-        return p
-          ? html`<button class="piece" type="button" aria-pressed=${selected === p.pieceId}
-              aria-label=${`${p.name} · ${p.stars === null ? "星级未知" : p.stars + " 星"} · 装备 ${p.gear.length} 件`} @click=${() => inspect(p)}>
-              <div class="piece-face">
-                ${art(p.image)}
-              </div>
-              <strong title=${p.name}>${p.name}</strong>
-              <span class="piece-stars" role="img" aria-label=${p.stars === null ? "星级未知" : `${p.stars} 星`}>
-                ${p.stars === null ? "—" : "★".repeat(p.stars)}
-              </span>
-              <span class="piece-gear" aria-hidden="true">
-                ${p.gear.length ? p.gear.map(itemPicture) : html`<span>—</span>`}
-              </span>
-            </button>`
-          : html`<span class="empty" aria-label="空位">·</span>`;
+        if (p) return renderPiece(p);
+        return i < capacity ? html`<span class="empty" aria-label="空位"></span>`
+          : html`<span class="empty reserved-slot" title="未解锁" aria-label="未解锁">${icon("lock")}</span>`;
       })}
+      ${extra}
     </div>
   </section>`;
 }
@@ -85,6 +77,19 @@ export function matchView(
   reload: () => Promise<void>,
 ) {
   let actionId = "";
+  let drag: { matchId: string; revision: number; itemId: string } | undefined;
+  let dropHover: HTMLElement | undefined;
+  const setDropHover = (target?: HTMLElement) => {
+    if (target === dropHover) return;
+    dropHover?.removeAttribute("data-drop-hover");
+    dropHover = target;
+    target?.setAttribute("data-drop-hover", "");
+  };
+  const leaveDrop = (event: DragEvent) => {
+    if (dropHover !== event.currentTarget) return;
+    if (event.relatedTarget instanceof Node && dropHover?.contains(event.relatedTarget)) return;
+    setDropHover();
+  };
   const inspections: { selection: Selection; revision: number; trigger: HTMLElement | null }[] = [];
   const inspect = (entry?: Selection, revision?: number) => {
     if (entry && revision !== undefined) {
@@ -123,20 +128,81 @@ export function matchView(
       const next = await port.executeMatchCommand({ matchId: m.id, revision: m.revision, commandId: command.id });
       inspections.length = 0;
       update(next);
-      document.getElementById("match-resources")?.focus();
+      document.getElementById("match-resources")?.focus({ preventScroll: true });
     });
     const commandButton = (command: MatchCommand) => html`<button type="button" @click=${() => execute(command)}>
       <span><strong>${command.label}</strong>${command.detail ? html`<small>${command.detail}</small>` : nothing}</span>
       <span aria-hidden="true">›</span>
     </button>`;
-    const itemCard = (item: MatchItem) => html`<button class="match-item" type="button"
+    const draggedItemId = drag?.matchId === m.id && drag.revision === m.revision ? drag.itemId : undefined;
+    const getDrop = (target: DropTarget) => drag?.matchId === m.id && drag.revision === m.revision
+      ? commandsForDrop(commands, drag.itemId, target) : [];
+    const allowDrop = (event: DragEvent, target: DropTarget) => {
+      if (!getDrop(target).length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setDropHover(event.currentTarget as HTMLElement);
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    };
+    const drop = (event: DragEvent, target: DropTarget) => {
+      const available = getDrop(target);
+      if (!available.length || !drag) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const itemId = drag.itemId;
+      drag = undefined;
+      setDropHover();
+      if (available.length === 1) {
+        redraw();
+        void execute(available[0]);
+      } else {
+        inspect({ kind: "item", id: itemId, commandIds: new Set(available.map(command => command.id)) }, m.revision);
+      }
+    };
+    const itemCard = (item: MatchItem, pieceId?: string) => {
+      const target = { itemId: item.itemId, pieceId };
+      const draggable = !editing && commands.some(({ operation }) =>
+        ("itemId" in operation && operation.itemId === item.itemId &&
+          (operation.kind !== "useItem" || operation.pieceId !== undefined || operation.targetItemId !== undefined)) ||
+        (operation.kind === "combine" && operation.otherItemId === item.itemId));
+      const label = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+      return html`<button class="match-item" type="button" title=${label} aria-label=${label}
+        draggable=${String(draggable)} ?data-drop-ready=${getDrop(target).length > 0}
+        ?data-drag-source=${draggedItemId === item.itemId}
+        @dragstart=${(event: DragEvent) => {
+          if (!draggable || !event.dataTransfer) return;
+          event.dataTransfer.setData("application/x-hyacimicon-item", item.itemId);
+          event.dataTransfer.effectAllowed = "move";
+          const started = { matchId: m.id, revision: m.revision, itemId: item.itemId };
+          drag = started;
+          requestAnimationFrame(() => { if (drag === started) redraw(); });
+        }}
+        @dragend=${() => { drag = undefined; setDropHover(); redraw(); }}
+        @dragover=${(event: DragEvent) => allowDrop(event, target)}
+        @dragleave=${leaveDrop}
+        @drop=${(event: DragEvent) => drop(event, target)}
         @click=${() => inspect({ kind: "item", id: item.itemId }, m.revision)}>
       <span class="item-picture">${itemPicture(item)}${item.count > 1 ? html`<small>×${item.count}</small>` : nothing}</span>
-      <span>${item.name}</span>
     </button>`;
-    const inspectPiece = (piece: Piece) => inspect({ kind: "piece", id: piece.pieceId }, m.revision);
+    };
+    const renderPiece = (p: Piece) => {
+      const target = { pieceId: p.pieceId };
+      const label = `${p.name} · ${p.stars === null ? "星级未知" : p.stars + " 星"} · 装备 ${p.gear.length} 件`;
+      return html`<div class="piece" ?data-drop-ready=${getDrop(target).length > 0}
+          @dragover=${(event: DragEvent) => allowDrop(event, target)}
+          @dragleave=${leaveDrop}
+          @drop=${(event: DragEvent) => drop(event, target)}>
+        <button class="piece-main" type="button" aria-pressed=${selectedPiece?.pieceId === p.pieceId}
+            aria-label=${label} title=${label} @click=${() => inspect({ kind: "piece", id: p.pieceId }, m.revision)}>
+          <span class="piece-face">${art(p.image)}</span>
+          <span class="piece-stars" aria-hidden="true">${p.stars === null ? "—" : "★".repeat(p.stars)}</span>
+        </button>
+        <div class="piece-gear">${repeat(p.gear, item => item.itemId, item => itemCard(item, p.pieceId))}</div>
+      </div>`;
+    };
     const lock = commands.find(command => command.operation.kind === "lockShop");
     const refresh = commands.find(command => command.operation.kind === "refreshShop");
+    const buyExperience = commands.find(command => command.operation.kind === "buyExperience");
     const choice = m.advice.find((a) => a.id === adviceId) ?? m.advice[0];
     const action = m.actions.find((a) => a.id === actionId) ?? m.actions[0];
     const open = (id: string) => {
@@ -145,8 +211,9 @@ export function matchView(
       selectAction(id);
     };
     const inspector = selectedItem ?? selectedPiece ?? selectedEvent;
-    const options = inspector ? commands.filter(({ operation }) => {
+    const options = inspector ? commands.filter(({ id, operation }) => {
       if (selectedItem) {
+        if (current?.commandIds) return current.commandIds.has(id);
         return ("itemId" in operation && operation.itemId === selectedItem.itemId) ||
           (operation.kind === "combine" && operation.otherItemId === selectedItem.itemId);
       }
@@ -156,20 +223,22 @@ export function matchView(
       }
       return "eventId" in operation && operation.eventId === selectedEvent?.id;
     }) : [];
+    const traits = html`<aside class="match-traits" aria-label="已激活羁绊">
+      <h3>羁绊</h3>
+      <div class="traits">
+        ${m.traits.map(t => html`<span title=${[t.name, t.detail].filter(Boolean).join(" · ")} aria-label=${t.name}>
+          ${art(t.image) === nothing ? t.name.slice(0, 1) : art(t.image)}
+        </span>`)}
+      </div>
+    </aside>`;
     return {
       title: "阵容部署",
       subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
       tools: matchStatus(m, true),
       left: html`<div class="match-roster">
-        ${row("前台", m.front, m.frontCapacity, inspectPiece, selectedPiece?.pieceId, "front")}
-        ${row("后台", m.back, m.backCapacity, inspectPiece, selectedPiece?.pieceId, "back")}
-        ${row("备战席", m.bench, m.benchCapacity, inspectPiece, selectedPiece?.pieceId)}
-        <section class="match-traits">
-          <h2>羁绊</h2>
-          <div class="traits">
-            ${m.traits.map((t) => html`<div>${art(t.image)}<strong>${t.name}</strong><span>${t.detail}</span></div>`)}
-          </div>
-        </section>
+        ${row("前台", m.front, m.frontCapacity, "front", renderPiece, traits)}
+        ${row("后台", m.back, m.backCapacity, "back", renderPiece)}
+        ${row("备战席", m.bench, m.benchCapacity, "bench", renderPiece)}
         </div>`,
       right:
         editing && action
@@ -213,7 +282,7 @@ export function matchView(
                   </div>
                 </div>
                 ${selectedPiece ? html`<h3>已装备 <small>${selectedPiece.gear.length} / 3</small></h3>
-                  <div class="match-inventory">${selectedPiece.gear.map(itemCard)}</div>` : nothing}
+                  <div class="match-inventory">${repeat(selectedPiece.gear, item => item.itemId, item => itemCard(item, selectedPiece.pieceId))}</div>` : nothing}
                 <div class="command-list">${options.length ? options.map(commandButton) : html`<p>当前没有可执行操作</p>`}</div>
               </section>` : html`
               <div class="metrics match-economy">
@@ -223,6 +292,12 @@ export function matchView(
                   ["连胜", m.streak?.toString() ?? "—"],
                   ["上阵人数", m.front.length + m.back.length + " / " + m.capacity],
                 ])}
+                <div class="match-training">
+                  <small>${m.experience ? `Lv.${m.experience.level}${m.experience.required === null ? "" : ` · ${m.experience.current} / ${m.experience.required}`}` : "队伍等级"}</small>
+                  <button ?disabled=${!buyExperience} title=${buyExperience?.detail ?? ""} @click=${() => buyExperience && execute(buyExperience)}>
+                    ${buyExperience?.label ?? "购买经验"}
+                  </button>
+                </div>
               </div>
               ${m.event || m.companion ? html`<section class="match-event">
                 <div><strong>${m.event?.title ?? m.companion?.name}</strong><small>${m.event?.detail || m.companion?.detail}</small>
@@ -234,9 +309,9 @@ export function matchView(
               </section>` : nothing}
               <section class="match-stores">
                 <h2 id="match-resources" tabindex="-1">装备 <small>${m.inventory.reduce((total, item) => total + item.count, 0)} 件待分配</small></h2>
-                <div class="match-inventory">${m.inventory.length ? m.inventory.map(itemCard) : html`<p>暂无待分配装备</p>`}</div>
+                <div class="match-inventory stock-window" role="region" aria-label="待分配装备" tabindex="0">${m.inventory.length ? repeat(m.inventory, item => item.itemId, item => itemCard(item)) : html`<p>暂无待分配装备</p>`}</div>
                 <h2>消耗品</h2>
-                <div class="match-inventory match-supplies">${m.consumables.length ? m.consumables.map(itemCard) : html`<p>暂无消耗品</p>`}</div>
+                <div class="match-inventory match-supplies stock-window" role="region" aria-label="消耗品" tabindex="0">${m.consumables.length ? repeat(m.consumables, item => item.itemId, item => itemCard(item)) : html`<p>暂无消耗品</p>`}</div>
               </section>
               <section class="match-shop">
                 <div class="shop-heading"><h2>商店</h2><div class="shop-tools">
@@ -249,14 +324,14 @@ export function matchView(
                 </div></div>
                 <div class="match-offers">${m.offers.map(offer => {
                   const command = commands.find(({ operation }) => operation.kind === "buy" && operation.offerId === offer.offerId);
-                  return html`<button type="button" title=${offer.note} ?disabled=${!command}
+                  return html`<button type="button" title=${[offer.unit.name, offer.note].filter(Boolean).join(" · ")} ?disabled=${!command}
                     aria-label=${command ? [command.label, command.detail].filter(Boolean).join(" · ") : offer.unit.name}
                     @click=${() => command && execute(command)}>
-                    ${art(offer.unit.image)}<strong>${offer.unit.name}</strong>
+                    ${art(offer.unit.image)}${offer.unit.image ? nothing : html`<span class="offer-initial" aria-hidden="true">${offer.unit.name.slice(0, 1)}</span>`}
                     <small>${icon("coin")}${offer.cost ?? "—"} <span aria-hidden="true">招募</span></small>
                   </button>`;
                 })}${m.offers.length ? nothing : html`<p>暂无报价</p>`}</div>
-                <div class="command-list">${commands.filter(({ operation }) => operation.kind === "buyExperience" || operation.kind === "advance").map(commandButton)}</div>
+                <div class="command-list">${commands.filter(({ operation }) => operation.kind === "advance").map(commandButton)}</div>
               </section>
               ${
                 choice

@@ -140,6 +140,7 @@ export interface Match {
   interest: number | null;
   capacity: number;
   gold: number | null;
+  experience?: { level: number; current: number; required: number | null };
   front: Piece[];
   frontCapacity: number;
   back: Piece[];

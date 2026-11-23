@@ -112,6 +112,8 @@ const routeKinds: MatchStep["kind"][][] = [
 const previewHealth = 68;
 const previewMaxHealth = 100;
 const previewGold = 37;
+const previewExperienceCost = 4;
+const previewExperienceGain = 4;
 const initial: Match = {
   id: "preview-match",
   revision: 1,
@@ -126,6 +128,7 @@ const initial: Match = {
   interest: 3,
   capacity: 8,
   gold: previewGold,
+  experience: { level: 8, current: 68, required: 72 },
   front: [
     piece("1205", 2, [gear[2]]),
     piece("1310", 2, gear.slice(0, 2)),
@@ -235,6 +238,9 @@ function previewCommands(m: Match): MatchCommand[] {
   }
   add({ kind: "lockShop", locked: !m.locked }, m.locked ? "解锁" : "锁定");
   if ((m.gold ?? 0) >= 2) add({ kind: "refreshShop" }, "刷新 2", "2 金币");
+  if ((m.gold ?? 0) >= previewExperienceCost && m.experience?.required != null) {
+    add({ kind: "buyExperience" }, `购买经验 · ${previewExperienceCost}`, `${previewExperienceCost} 金币获得 ${previewExperienceGain} 经验`);
+  }
   if (m.event?.kind === "aura") {
     for (const p of [...m.front, ...m.back]) {
       add({ kind: "chooseAura", eventId: m.event.id, pieceId: p.pieceId, optionId: "demo-aura" }, p.name, "舞台聚光 · 示例光环");
@@ -262,6 +268,8 @@ export function demoPort(scenario?: string | null): PlayerPort {
   } else if (scenario === "teaBreak") {
     match.node = "2-6";
     match.event = { id: "intermission", kind: "teaBreak", title: "幕后茶歇", detail: "绷带猫带来了随行补给。" };
+  } else if (scenario === "stock") {
+    match.inventory = matchItems("stock", Array.from({ length: 30 }, (_, i) => gear[i % gear.length]));
   }
   match.commands = previewCommands(match);
   function requireAccountService(): never {
@@ -359,6 +367,16 @@ export function demoPort(scenario?: string | null): PlayerPort {
         next.gold = (next.gold ?? 0) - 2;
         const ids = ["1308", "1309", "1409", "1205", "1310"];
         next.offers = initial.offers.map((offer, i) => ({ ...offer, unit: unit(ids[(i + revision) % ids.length]) }));
+      } else if (operation.kind === "buyExperience") {
+        const experience = next.experience!;
+        next.gold = (next.gold ?? 0) - previewExperienceCost;
+        experience.current += previewExperienceGain;
+        if (experience.required !== null && experience.current >= experience.required) {
+          experience.current -= experience.required;
+          experience.level++;
+          experience.required = experience.level === 9 ? 84 : null;
+          next.capacity++;
+        }
       } else if (operation.kind === "lockShop") {
         next.locked = operation.locked;
       } else if (operation.kind === "chooseAura") {

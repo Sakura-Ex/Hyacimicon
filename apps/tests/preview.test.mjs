@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { demoPort } from "../src/demo.ts";
 import { httpMatchPort } from "../src/match-port.ts";
+import { commandsForDrop } from "../src/match-drag.ts";
 
 function execute(port, match, kind, predicate = () => true) {
   const command = match.commands.find(({ operation }) => operation.kind === kind && predicate(operation));
@@ -104,6 +105,35 @@ test("equipment uses the instance ID when the same character appears twice", asy
   assert.equal(removed.bench.find(piece => piece.pieceId === duplicate.pieceId).gear.length, 0);
 });
 
+test("drag targets resolve by instance and only execute commands offered by the current snapshot", async () => {
+  const port = demoPort("stock");
+  const match = await port.match("preview");
+  assert.equal(match.inventory.length, 30);
+  assert.equal(new Set(match.inventory.map(item => item.itemId)).size, 30);
+  const item = match.inventory.at(-1);
+  const piece = match.bench.at(-1);
+  const [equip] = commandsForDrop(match.commands, item.itemId, { pieceId: piece.pieceId });
+  assert.equal(equip.operation.kind, "equip");
+  assert.deepEqual(commandsForDrop(match.commands, item.itemId, { pieceId: "missing" }), []);
+  const next = await port.executeMatchCommand({ matchId: match.id, revision: match.revision, commandId: equip.id });
+  assert.equal(next.inventory.length, 29);
+  assert.equal(next.bench.at(-1).gear[0].itemId, item.itemId);
+});
+
+test("drag separates equipment pairs, item-targeted consumables and character-targeted consumables", () => {
+  const commands = [
+    { id: "merge", operation: { kind: "combine", itemId: "one", otherItemId: "two" } },
+    { id: "extract", operation: { kind: "useItem", itemId: "tool", targetItemId: "two", pieceId: "a" } },
+    { id: "wrench", operation: { kind: "useItem", itemId: "tool", pieceId: "b" } },
+    { id: "use", operation: { kind: "useItem", itemId: "tool" } },
+  ];
+  assert.deepEqual(commandsForDrop(commands, "two", { itemId: "one" }).map(c => c.id), ["merge"]);
+  assert.deepEqual(commandsForDrop(commands, "tool", { itemId: "two", pieceId: "a" }).map(c => c.id), ["extract"]);
+  assert.deepEqual(commandsForDrop(commands, "tool", { pieceId: "b" }).map(c => c.id), ["wrench"]);
+  assert.deepEqual(commandsForDrop(commands, "tool", { pieceId: "a" }), []);
+  assert.deepEqual(commandsForDrop(commands, "one", { itemId: "one" }), []);
+});
+
 test("shop actions use the offer ID and the new snapshot carries the resulting price and balance", async () => {
   const port = demoPort();
   const before = await port.match("preview");
@@ -115,6 +145,16 @@ test("shop actions use the offer ID and the new snapshot carries the resulting p
   const refreshed = await execute(port, bought, "refreshShop");
   assert.equal(refreshed.gold, bought.gold - 2);
   assert.equal(refreshed.offers.length, 5);
+});
+
+test("buying experience updates the team level and balance through the command port", async () => {
+  const port = demoPort();
+  const before = await port.match("preview");
+  const next = await execute(port, before, "buyExperience");
+  assert.equal(next.gold, before.gold - 4);
+  assert.equal(next.experience.level, before.experience.level + 1);
+  assert.equal(next.capacity, before.capacity + 1);
+  assert.deepEqual(next.offers, before.offers);
 });
 
 test("aura accepts deployed instances and tea break resolves its own reward", async () => {
