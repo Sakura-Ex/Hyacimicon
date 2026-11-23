@@ -1,6 +1,6 @@
 # 对局指令契约
 
-本文记录当前玩家界面的演示和适配入口。后续对局功能按[对局会话接口设计](../match-interface/contract.md)与[共享类型声明](../match-interface/contract.d.ts)接入，`MatchPort` 将会话快照转换为页面所需的显示值。
+本文记录当前玩家界面的演示和适配入口。后续对局功能按[对局会话接口设计](../match-interface/contract.md)与[共享类型声明](../../../apps/src/match-session-contract.ts)接入，`MatchPort` 将会话快照转换为页面所需的显示值。
 
 以 [TypeScript 类型](../../../apps/src/contracts.ts)为准，接入入口见 [MatchPort 适配器](../../../apps/src/match-port.ts)。首次读取按账号获取对局。一次操作提交一条指令，成功返回完整 `Match`。前端使用返回值刷新阵容、装备、经济、商店、节点和可用指令。
 
