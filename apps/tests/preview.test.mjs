@@ -134,6 +134,18 @@ test("drag separates equipment pairs, item-targeted consumables and character-ta
   assert.deepEqual(commandsForDrop(commands, "one", { itemId: "one" }), []);
 });
 
+test("the full roster preview fills nine uniquely addressable slots in both rows and has a long trait list", async () => {
+  const match = await demoPort("full").match("preview");
+  assert.equal(match.backCapacity, 9);
+  assert.equal(match.benchCapacity, 9);
+  for (const zone of [match.back, match.bench]) {
+    assert.deepEqual(zone.map(piece => piece.slot), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    assert.equal(new Set(zone.map(piece => piece.pieceId)).size, 9);
+  }
+  assert.ok(match.traits.length > 12);
+  assert.ok(match.traits.every(trait => trait.progress?.thresholds.length));
+});
+
 test("shop actions use the offer ID and the new snapshot carries the resulting price and balance", async () => {
   const port = demoPort();
   const before = await port.match("preview");

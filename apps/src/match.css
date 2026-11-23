@@ -1,12 +1,42 @@
-.match-roster section + section,
 .match-content section + section {
   margin-top: 0.85rem;
   padding-top: 0.8rem;
 }
-.match-roster h2,
 .match-content h2 {
   font-size: 1.48rem;
   margin-bottom: 0.5rem;
+}
+.match-roster {
+  --trait-width: 8.8rem;
+  --formation-gap: 0.48rem;
+}
+.match-roster h2 {
+  font-size: 1.36rem;
+  line-height: 1.22;
+  margin-bottom: 0.38rem;
+}
+.deploy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--trait-width);
+  grid-template-rows: auto auto;
+  gap: 0.56rem var(--formation-gap);
+}
+.front-formation {
+  grid-area: 1 / 1;
+}
+.deploy-layout > .back-formation {
+  grid-area: 2 / 1;
+  border-top: 1px solid var(--line);
+  margin-top: 0;
+  padding-top: 0.5rem;
+}
+.back-tail {
+  margin-top: var(--formation-gap);
+}
+.bench-formation {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
 }
 .match-roster .piece {
   padding: 0;
@@ -38,7 +68,7 @@
 .match-roster .slots .piece-face {
   display: block;
   width: 100%;
-  height: 4.25rem;
+  height: 3.7rem;
   aspect-ratio: auto;
 }
 .match-roster .piece-stars {
@@ -93,17 +123,21 @@
 }
 .match-roster .slots,
 .match-roster .slots.front {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr)) var(--trait-width);
   grid-auto-rows: minmax(2.5rem, auto);
   justify-content: stretch;
-  gap: 0.42rem;
+  gap: var(--formation-gap);
+}
+.match-roster .slots.front,
+.match-roster .back-head {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .match-roster .front .piece,
 .match-roster .back .piece {
   border-radius: 0.4rem;
 }
 .match-roster .bench.slots .piece-face {
-  height: 3.3rem;
+  height: 2.8rem;
 }
 .match-roster .bench .piece-stars {
   position: absolute;
@@ -113,27 +147,124 @@
   border-radius: 0.25rem;
 }
 .match-traits {
-  align-self: center;
-  border-left: 1px solid var(--line);
-  padding-left: 0.55rem;
-  margin-left: 0.1rem;
+  grid-area: 1 / 2 / span 2;
+  position: relative;
+  min-width: 0;
 }
-.match-traits h3 {
-  font-size: 1rem;
-  margin-bottom: 0.35rem;
+.traits-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-height: 0;
+  padding: 0.38rem 0.44rem 0.42rem;
+  background: #f5ebef;
+  border: 1px solid #dfcfd8;
+  border-radius: 0.45rem;
 }
-.match-roster .traits {
-  display: grid;
-  grid-template-columns: repeat(3, max-content);
-  gap: 0.23rem;
+.traits-panel[data-expanded] {
+  inset-inline-start: auto;
+  inset-block-end: auto;
+  width: 17rem;
+  height: min(27rem, 58vh);
+  z-index: 4;
+  background: #fff9f7;
+  box-shadow: 0 0.55rem 1.25rem #553d5033;
 }
-.match-roster .traits img {
-  display: block;
-  width: 1.6rem;
-  background: #867383;
+.traits-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.3rem;
+  padding: 0.08rem 0.15rem 0.3rem;
+  border-bottom: 1px solid var(--line);
 }
-.match-roster .traits span {
+.traits-heading h3 {
+  font-size: 1.02rem;
+}
+.traits-heading button {
+  padding: 0.12rem 0.38rem;
+  font-size: 0.79rem;
+}
+.match-trait-list {
   margin: 0;
+  padding: 0.08rem 0.12rem;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #aa91a0 transparent;
+  list-style: none;
+}
+.match-trait-list::-webkit-scrollbar {
+  display: initial;
+  width: 0.3rem;
+}
+.match-trait-list::-webkit-scrollbar-thumb {
+  background: #aa91a0;
+  border-radius: 1rem;
+}
+.match-trait-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.46rem;
+  padding: 0.31rem 0.12rem;
+}
+.match-trait-list li + li {
+  border-top: 1px solid #e6d9df;
+}
+.trait-emblem {
+  display: grid;
+  place-items: center;
+  flex: none;
+  position: relative;
+  width: 1.57rem;
+  height: 1.57rem;
+  border-radius: 0.28rem;
+  background: #8a7786;
+  color: #fff8f3;
+  font: 0.88rem "Noto Serif SC Variable", serif;
+}
+.trait-emblem[data-active] {
+  background: #566f67;
+}
+.trait-emblem img {
+  width: 1.23rem;
+  height: 1.23rem;
+}
+.trait-emblem b {
+  position: absolute;
+  bottom: -0.17rem;
+  right: -0.18rem;
+  min-width: 0.83rem;
+  padding: 0 0.05rem;
+  text-align: center;
+  border-radius: 1rem;
+  background: #4a3647;
+  color: #fff8f3;
+  font: 700 0.66rem/1.25 "Noto Sans SC Variable", sans-serif;
+}
+.trait-copy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.trait-copy strong,
+.trait-copy small {
+  display: block;
+  line-height: 1.26;
+}
+.trait-copy strong {
+  font-size: 0.84rem;
+}
+.trait-copy small,
+.match-trait-list .no-traits {
+  font-size: 0.73rem;
+  color: var(--muted);
+}
+.trait-breakpoints [data-active] {
+  color: #34584d;
+  font-weight: 800;
 }
 .match-content .match-event {
   display: flex;

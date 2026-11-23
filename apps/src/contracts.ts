@@ -86,6 +86,9 @@ export interface Piece extends Unit {
 export interface MatchItem extends Item {
   itemId: string;
 }
+export interface MatchTrait extends Item {
+  progress?: { count: number; thresholds: number[] };
+}
 export type MatchOperation =
   | { kind: "equip"; itemId: string; pieceId: string }
   | { kind: "combine"; itemId: string; otherItemId: string }
@@ -147,7 +150,7 @@ export interface Match {
   backCapacity: number;
   bench: Piece[];
   benchCapacity: number;
-  traits: Item[];
+  traits: MatchTrait[];
   inventory: MatchItem[];
   consumables: MatchItem[];
   offers: { offerId: string; unit: Unit; cost: number | null; note: string }[];

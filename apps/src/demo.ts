@@ -254,6 +254,17 @@ function previewCommands(m: Match): MatchCommand[] {
 
 export function demoPort(scenario?: string | null): PlayerPort {
   let match = structuredClone(initial);
+  if (scenario === "full") {
+    match.backCapacity = 9;
+    match.back.push(...["1308", "1309", "1005", "1407", "1304"].map(id => piece(id, 1, gear.slice(0, 3))));
+    match.bench.push(...["1004", "1310", "1205", "1314", "1306"].map(id => piece(id, 1, gear.slice(3))));
+    match.capacity = match.front.length + match.back.length;
+    match.traits = [
+      ...match.traits,
+      ...["千星商会", "幻月游戏", "开拓银轨", "黄金大饭店", "梦境交织", "群攻", "追击", "持续伤害", "额外攻击"]
+        .map(name => item(name, "")),
+    ].map((trait, i) => ({ ...trait, progress: { count: i % 5 + 1, thresholds: [2, 4, 6] } }));
+  }
   for (const zone of zones) {
     match[zone].forEach((p, slot) => {
       p.slot = slot;

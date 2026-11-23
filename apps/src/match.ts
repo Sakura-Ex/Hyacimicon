@@ -12,27 +12,24 @@ function itemPicture(item: MatchItem) {
   return artwork === nothing ? html`<span class="item-initial">${item.name.slice(0, 1)}</span>` : artwork;
 }
 
-function row(
-  title: string,
+function slots(
   pieces: Piece[],
   capacity: number,
-  zone: "front" | "back" | "bench",
+  start: number,
+  end: number,
+  className: string,
+  label: string,
   renderPiece: (piece: Piece) => TemplateResult,
-  extra?: TemplateResult,
 ) {
-  const slots = zone === "back" ? Math.max(9, capacity) : capacity;
-  return html`<section class="formation">
-    <h2>${title} <small>${pieces.length} / ${capacity}</small></h2>
-    <div class=${`slots ${zone}`}>
-      ${Array.from({ length: slots }, (_, i) => {
+  return html`<div class=${`slots ${className}`} role="group" aria-label=${label}>
+      ${Array.from({ length: end - start }, (_, offset) => {
+        const i = start + offset;
         const p = pieces.find(piece => piece.slot === i);
         if (p) return renderPiece(p);
         return i < capacity ? html`<span class="empty" aria-label="空位"></span>`
           : html`<span class="empty reserved-slot" title="未解锁" aria-label="未解锁">${icon("lock")}</span>`;
       })}
-      ${extra}
-    </div>
-  </section>`;
+    </div>`;
 }
 function feedback(
   m: Match,
@@ -77,6 +74,12 @@ export function matchView(
   reload: () => Promise<void>,
 ) {
   let actionId = "";
+  let traitsExpanded = false;
+  const setTraitsExpanded = (expanded: boolean) => {
+    traitsExpanded = expanded;
+    redraw();
+    document.getElementById("match-traits-toggle")?.focus({ preventScroll: true });
+  };
   let drag: { matchId: string; revision: number; itemId: string } | undefined;
   let dropHover: HTMLElement | undefined;
   const setDropHover = (target?: HTMLElement) => {
@@ -227,12 +230,36 @@ export function matchView(
       }
       return "eventId" in operation && operation.eventId === selectedEvent?.id;
     }) : [];
-    const traits = html`<aside class="match-traits" aria-label="已激活羁绊">
-      <h3>羁绊</h3>
-      <div class="traits">
-        ${m.traits.map(t => html`<span title=${[t.name, t.detail].filter(Boolean).join(" · ")} aria-label=${t.name}>
-          ${art(t.image) === nothing ? t.name.slice(0, 1) : art(t.image)}
-        </span>`)}
+    const traits = html`<aside class="match-traits" aria-label="阵容羁绊"
+        @keydown=${(event: KeyboardEvent) => {
+          if (event.key === "Escape" && traitsExpanded) setTraitsExpanded(false);
+        }}>
+      <div class="traits-panel" ?data-expanded=${traitsExpanded}>
+        <div class="traits-heading">
+          <h3>羁绊</h3>
+          <button type="button" id="match-traits-toggle" aria-expanded=${traitsExpanded} aria-controls="match-trait-list"
+            @click=${() => setTraitsExpanded(!traitsExpanded)}>${traitsExpanded ? "收起" : "展开"}</button>
+        </div>
+        <ul id="match-trait-list" class="match-trait-list" aria-label="羁绊列表" tabindex="0">
+          ${m.traits.length ? m.traits.map(trait => {
+            const progress = trait.progress;
+            const active = progress?.thresholds.filter(value => value <= progress.count).at(-1);
+            const artwork = art(trait.image);
+            return html`<li title=${[trait.name, trait.detail].filter(Boolean).join(" · ")}>
+              <span class="trait-emblem" ?data-active=${active !== undefined}>
+                ${artwork === nothing ? trait.name.slice(0, 1) : artwork}
+                ${progress ? html`<b aria-label=${`当前人数 ${progress.count}`}>${progress.count}</b>` : nothing}
+              </span>
+              <span class="trait-copy">
+                <strong>${trait.name}</strong>
+                ${progress?.thresholds.length ? html`<small class="trait-breakpoints" aria-label="激活档位">
+                  ${progress.thresholds.map((value, index) => html`${index ? " / " : ""}<span ?data-active=${value === active}>${value}</span>`)}
+                </small>` : nothing}
+                ${traitsExpanded && trait.detail ? html`<small>${trait.detail}</small>` : nothing}
+              </span>
+            </li>`;
+          }) : html`<li class="no-traits">暂无羁绊</li>`}
+        </ul>
       </div>
     </aside>`;
     return {
@@ -240,9 +267,22 @@ export function matchView(
       subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
       tools: matchStatus(m, true),
       left: html`<div class="match-roster">
-        ${row("前台", m.front, m.frontCapacity, "front", renderPiece, traits)}
-        ${row("后台", m.back, m.backCapacity, "back", renderPiece)}
-        ${row("备战席", m.bench, m.benchCapacity, "bench", renderPiece)}
+        <div class="deploy-layout">
+          <section class="formation front-formation">
+            <h2>前台 <small>${m.front.length} / ${m.frontCapacity}</small></h2>
+            ${slots(m.front, m.frontCapacity, 0, m.frontCapacity, "front", "前台", renderPiece)}
+          </section>
+          <section class="formation back-formation">
+            <h2>后台 <small>${m.back.length} / ${m.backCapacity}</small></h2>
+            ${slots(m.back, m.backCapacity, 0, 4, "back back-head", "后台首排", renderPiece)}
+          </section>
+          ${traits}
+        </div>
+        ${slots(m.back, m.backCapacity, 4, Math.max(9, m.backCapacity), "back back-tail", "后台续排", renderPiece)}
+        <section class="formation bench-formation">
+          <h2>备战席 <small>${m.bench.length} / ${m.benchCapacity}</small></h2>
+          ${slots(m.bench, m.benchCapacity, 0, m.benchCapacity, "bench", "备战席", renderPiece)}
+        </section>
         </div>`,
       right:
         editing && action
