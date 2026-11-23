@@ -207,6 +207,26 @@ fn scripted_replay_reports_the_first_disagreement() {
 }
 
 #[test]
+fn scripted_replay_rejects_action_fields_on_skip() {
+    let operations =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/replay-invalid-skip.json");
+    let output = invoke(&[
+        "replay",
+        &example("revival-budget.json"),
+        "42",
+        operations.to_str().unwrap(),
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let error: Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(error["status"], "error");
+    assert!(error["error"]
+        .as_str()
+        .unwrap()
+        .starts_with("operations schema: unknown field `actor`"));
+}
+
+#[test]
 fn scripted_replay_uses_a_legal_choice_other_than_the_first() {
     let mut file =
         ScenarioFile::from_slice(&fs::read(example("team-waves.json")).unwrap()).unwrap();

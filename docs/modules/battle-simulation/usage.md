@@ -43,8 +43,8 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- replay core
 | 字段 | 用法 |
 | --- | --- |
 | `point` | 填 `normal_turn`、`extra_turn` 或 `insert`，与会话给出的窗口一致。 |
-| `choice` | 选招填 `{"kind":"action","actor":"fighter","action":"skill"}`。每个放弃的插入窗口填 `{"kind":"skip"}`，包括合法列表为空的窗口。 |
-| `expect` | 可选列表。每项填写 `offset`、`kind`、`actor`、`action` 和 `target`。`offset` 从本步首条事件数起，第一条为 `0`。`action`、`target` 无值时可省略。填写 `amount` 时必须给出数值，按事件自身的单位精确核对。只核对事件身份时省略 `amount`。 |
+| `choice` | 选招填 `{"kind":"action","actor":"fighter","action":"skill"}`。每个放弃的插入窗口填 `{"kind":"skip"}`，包括合法列表为空的窗口。`skip` 只接受 `kind` 字段。 |
+| `expect` | 可选列表，按填写顺序检查。每项填写 `offset`、`kind`、`actor`、`action` 和 `target`。`offset` 从本步首条事件数起，第一条为 `0`。`action`、`target` 无值时可省略。填写 `amount` 时必须给出数值，按事件自身的单位精确核对。只核对事件身份时省略 `amount`。 |
 
 例如，复活罚时事件 `revival_av_penalty` 的 `amount: 25` 表示实际扣除 25 AV。生命减少量用 `hp_loss` 核对，名义伤害用 `damage` 核对。填入数值后，回放在对应事件缺少数值或数值不一致时报错，给出步骤、事件和预期与实际值。录像只显示舍入结果时，可以保留原读数并另按游戏显示精度对照报告。
 

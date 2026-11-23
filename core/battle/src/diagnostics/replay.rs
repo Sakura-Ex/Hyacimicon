@@ -33,8 +33,8 @@ struct ScriptStep {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Choice {
-    /// 放弃当前插入机会。
-    Skip,
+    /// 放弃当前插入机会。空结构体变体使解析器检查多余字段。
+    Skip {},
     /// 选择执行者和技能。
     Action {
         /// 场景的单位 ID。
