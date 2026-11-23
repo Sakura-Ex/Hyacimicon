@@ -39,21 +39,20 @@ function overviewEntries(entries: MatchOverviewEntry[]) {
 
 function opponentPreview(opponent: NonNullable<Match["overview"]>["opponent"]) {
   if (!opponent) return nothing;
-  return html`<div class="match-info-strip match-scout">
-    ${matchDisclosure("敌人预览",
-      html`<span>敌人预览</span><strong>难度 ${opponent.difficulty ?? "—"}</strong>
-        ${opponent.stars === null ? nothing : html`<strong>${opponent.stars} 星</strong>`}`,
-      html`<p>${opponent.name}</p>
-        ${overviewEntries(opponent.enemies.map(enemy => ({ name: enemy.name, detail: enemy.stars === null ? undefined : `${enemy.stars} 星` })))}`,
-    )}
-  </div>`;
+  return matchDisclosure("敌人预览",
+    html`<span>敌人预览</span><strong>难度 ${opponent.difficulty ?? "—"}</strong>
+      ${opponent.stars === null ? nothing : html`<strong>${opponent.stars} 星</strong>`}`,
+    html`<p>${opponent.name}</p>
+      ${overviewEntries(opponent.enemies.map(enemy => ({ name: enemy.name, detail: enemy.stars === null ? undefined : `${enemy.stars} 星` })))}`,
+  );
 }
 
-function matchConditions(overview: Match["overview"]) {
+function matchOverview(overview: Match["overview"]) {
   if (!overview) return nothing;
-  const { modifiers, investmentEnvironment, investmentStrategies, crystals } = overview;
-  if (!modifiers && !investmentEnvironment && !investmentStrategies && !crystals) return nothing;
-  return html`<div class="match-info-strip match-conditions">
+  const { opponent, modifiers, investmentEnvironment, investmentStrategies, crystals } = overview;
+  if (!opponent && !modifiers && !investmentEnvironment && !investmentStrategies && !crystals) return nothing;
+  return html`<div class="match-info-strip" role="group" aria-label="对局概览">
+    ${opponentPreview(opponent)}
     ${modifiers ? matchDisclosure("负面词条",
       html`<span>负面词条</span><strong>${modifiers.length}</strong>`, overviewEntries(modifiers)) : nothing}
     ${investmentEnvironment ? matchDisclosure("投资环境",
@@ -365,7 +364,7 @@ export function matchView(
       title: "阵容部署",
       subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
       tools: matchStatus(m, true),
-      left: html`${opponentPreview(m.overview?.opponent)}<div class="match-roster">
+      left: html`${matchOverview(m.overview)}<div class="match-roster">
         <div class="match-formations">
           <section class="formation front-formation">
             <h2>前台 <small>${m.front.length} / ${m.frontCapacity}</small></h2>
@@ -430,7 +429,6 @@ export function matchView(
                   <div class="match-inventory">${repeat(selectedPiece.gear, item => item.itemId, item => itemCard(item, selectedPiece.pieceId))}</div>` : nothing}
                 <div class="command-list">${options.length ? options.map(commandButton) : html`<p>当前没有可执行操作</p>`}</div>
               </section>` : html`<div class="match-home">
-              ${matchConditions(m.overview)}
               <div class="match-summary">
               <div class="metrics match-economy">
                 ${stats([

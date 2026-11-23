@@ -376,10 +376,9 @@
 .match-info-strip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.27rem;
-  padding-bottom: 0.27rem;
-  margin-bottom: 0.46rem;
-  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.88rem;
 }
 .match-crystals {
   margin-left: auto;
@@ -885,6 +884,9 @@
 }
 .book:has(.match-roster) .page {
   padding-top: 0.65rem;
+}
+.book .page.left:has(.match-info-strip) {
+  padding-top: 0.3rem;
 }
 .book:has(.match-roster) .heading {
   padding-block: 0.16rem 0.32rem;
