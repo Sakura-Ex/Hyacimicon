@@ -24,7 +24,7 @@ struct ScriptStep {
     point: DecisionPoint,
     /// 选择要执行的技能，或放弃插入机会。
     choice: Choice,
-    /// 可选的事件身份检查，偏移以本步开始为基准。
+    /// 可选的事件身份与数值检查，偏移以本步开始为基准。
     #[serde(default)]
     expect: Vec<ExpectedEvent>,
 }
@@ -44,7 +44,7 @@ enum Choice {
     },
 }
 
-/// 待核对事件的身份字段。数值结果由引擎执行产生。
+/// 待核对事件的身份及可选的 `amount` 数值。
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ExpectedEvent {
@@ -58,6 +58,8 @@ struct ExpectedEvent {
     target: Option<String>,
     /// 事件记录的技能 ID。
     action: Option<String>,
+    /// 精确核对原始事件数值，单位与该事件的 `amount` 相同。
+    amount: Option<f64>,
 }
 
 impl ExpectedEvent {
@@ -66,18 +68,30 @@ impl ExpectedEvent {
         let actual = events
             .get(self.offset)
             .ok_or_else(|| format!("missing event at offset {}", self.offset))?;
-        if actual.kind == self.kind
-            && actual.actor == self.actor
-            && actual.target == self.target
-            && actual.action == self.action
+        if actual.kind != self.kind
+            || actual.actor != self.actor
+            || actual.target != self.target
+            || actual.action != self.action
         {
-            return Ok(());
+            return Err(format!(
+                "event {} mismatch: expected {} actor {:?} action {:?} target {:?}, got {} actor {:?} action {:?} target {:?}",
+                actual.index, self.kind, self.actor, self.action, self.target,
+                actual.kind, actual.actor, actual.action, actual.target,
+            ));
         }
-        Err(format!(
-            "event {} mismatch: expected {} actor {:?} action {:?} target {:?}, got {} actor {:?} action {:?} target {:?}",
-            actual.index, self.kind, self.actor, self.action, self.target,
-            actual.kind, actual.actor, actual.action, actual.target,
-        ))
+        let Some(expected) = self.amount else {
+            return Ok(());
+        };
+        if actual.amount != Some(expected) {
+            let actual_amount = actual
+                .amount
+                .map_or_else(|| "missing".into(), |amount| amount.to_string());
+            return Err(format!(
+                "event {} ({}) amount mismatch: expected {expected}, got {actual_amount}",
+                actual.index, actual.kind
+            ));
+        }
+        Ok(())
     }
 }
 

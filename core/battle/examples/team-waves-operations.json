@@ -28,7 +28,10 @@
       "point": "insert",
       "choice": {"kind":"action","actor":"fighter","action":"ultimate"},
       "expect": [
-        {"offset":4,"kind":"damage","actor":"fighter","action":"ultimate","target":"wave2_boss"}
+        {"offset":0,"kind":"request_queued","actor":"fighter","amount":70},
+        {"offset":1,"kind":"energy_cost","actor":"fighter","action":"ultimate","target":"fighter","amount":60},
+        {"offset":2,"kind":"ultimate_turn_start","actor":"fighter","amount":10},
+        {"offset":4,"kind":"damage","actor":"fighter","action":"ultimate","target":"wave2_boss","amount":480}
       ]
     },
     {"point":"insert","choice":{"kind":"skip"}},

@@ -184,9 +184,16 @@ fn scripted_replay_reports_the_first_disagreement() {
     changed["steps"][1]["choice"] = json!({"kind":"action", "actor":"striker", "action":"basic"});
     assert!(run(changed).contains("script step 1, decision 1: illegal operation"));
 
-    let mut changed = script;
+    let mut changed = script.clone();
     changed["steps"][4]["expect"][0]["target"] = json!("wrong-target");
     assert!(run(changed).contains("script step 4, decision 4: event 15 mismatch"));
+
+    let mut changed = script;
+    changed["steps"][4]["expect"][1]["amount"] = json!(26);
+    assert_eq!(
+        run(changed),
+        "script step 4, decision 4: event 16 (revival_av_penalty) amount mismatch: expected 26, got 25"
+    );
 }
 
 #[test]
