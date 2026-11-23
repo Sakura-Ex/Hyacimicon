@@ -142,6 +142,7 @@ pub struct BattleReport {
     pub settlement: Option<settlement::SettlementResult>,
 }
 
+pub mod replay;
 pub mod settlement;
 
 /// 以默认策略运行开发场景，trace 决定是否记录逐事件回放。

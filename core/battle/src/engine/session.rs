@@ -54,6 +54,32 @@ impl<'input> BattleSession<'input> {
         Self::create(input, seed, trace)
     }
 
+    /// 从当前合法操作读取单位和动作标识，供诊断脚本比对。
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn operation_names(&self, op: &Operation) -> (&str, &str) {
+        let unit = &self.state.units[op.actor].spec;
+        (&unit.id, &unit.actions[op.action].id)
+    }
+
+    /// 读取当前波次编号，首波为 1。
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn replay_wave(&self) -> usize {
+        self.state.wave + 1
+    }
+
+    /// 读取已记录的诊断事件。终局时事件已经移入结果。
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn replay_trace(&self) -> Result<&[crate::diagnostics::Event], String> {
+        let (events, truncated) = match &self.phase {
+            Phase::Finished(result) => (&result.events, result.trace_truncated),
+            _ => (&self.state.events, self.state.trace_truncated),
+        };
+        if truncated {
+            return Err("battle trace was truncated".into());
+        }
+        Ok(events)
+    }
+
     /// 初始化本场状态和开战事件，诊断选项在正式构建中被排除。
     fn create(
         input: &'input Scenario,

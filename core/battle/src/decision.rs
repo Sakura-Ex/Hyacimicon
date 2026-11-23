@@ -12,7 +12,7 @@ pub struct Operation {
     pub action: usize,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "diagnostics", derive(serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "diagnostics", serde(rename_all = "snake_case"))]
 /// 外部策略选择动作所处的窗口。
 pub enum DecisionPoint {

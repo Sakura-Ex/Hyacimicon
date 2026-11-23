@@ -106,6 +106,17 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --locked -- batch core/battle/examples/duel.json 100 42
 ```
 
+### 固定操作回放
+
+按[固定操作回放用法](usage.md#13-固定操作回放)用种子 `42` 分别运行换波和复活样例。`cli` 回归核对每步的实际操作、事件区间与同种子 `simulate` 的完整报告，并重跑比较结果。两份固定脚本选择与这些样例的默认策略一致。
+
+| 样例 | 核对结果 |
+| --- | --- |
+| `team-waves` | 49 个决策点、18 个 Action。AV 约 272.73 时第一波清空，终结技先入队，推进时扣 60 能量，命中第二波的 `wave2_boss`。两波清场获胜，剩余约 954.55 AV。 |
+| `revival-budget` | 13 个决策点、4 个 Action。两次死亡后各恢复到 100 HP 并扣 25 AV，罚时没有推进实际时钟。本场推进 300 AV，耗尽预算判负，剩余 0 AV。 |
+
+两组均为合成场景。用真实战斗记录时，先按操作核对执行者、目标和事件顺序，再对照结算与伤害等可见结果。
+
 ### 那刻夏 S2 样例
 
 [`anaxa-s2-full-battle.json`](../../../core/battle/examples/anaxa-s2-full-battle.json) 在种子 42 下返回 `victory / enemies_defeated`。场上容量为 2，最终清空 6 名敌人，执行 40 个 Action，消耗 1250 AV，剩余约 1150 AV。样例诊断 `settlement.hp_after` 为 63。

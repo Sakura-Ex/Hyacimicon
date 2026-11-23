@@ -25,6 +25,9 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- simulate <S
 
 # 3. 蒙特卡洛批次评估（参数：场景文件 试验场次 主随机种子）
 cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCENARIO.json> <TRIALS> <MASTER_SEED_U64>
+
+# 4. 按明确的操作序列逐步回放
+cargo run -p battle-core --features diagnostics --bin hcwa-battle -- replay core/battle/examples/team-waves.json 42 core/battle/examples/team-waves-operations.json
 ```
 
 ### 1.2 退出码与错误输出
@@ -32,6 +35,20 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- batch <SCEN
 - **退出码 0**：执行成功，标准输出（stdout）打印格式化的 JSON 结果。
 - **退出码 2**：文件读取、结构解析、参数、模拟执行或输出出错，错误详情以 JSON 写入标准错误（stderr）。
 - 建议将大量批次运行结果重定向至本地忽略目录，如 `runs/result.json`。
+
+### 1.3 固定操作回放
+
+`replay SCENARIO.json SEED OPERATIONS.json` 使用相同的 `BattleSession` 执行外部指定的操作。操作文件使用 `schema_version: 1`，`steps` 的每一项与一个决策点对应。参见[换波操作文件](../../../core/battle/examples/team-waves-operations.json)和[复活操作文件](../../../core/battle/examples/revival-budget-operations.json)。
+
+| 字段 | 用法 |
+| --- | --- |
+| `point` | 填 `normal_turn`、`extra_turn` 或 `insert`，与会话给出的窗口一致。 |
+| `choice` | 选招填 `{"kind":"action","actor":"fighter","action":"skill"}`。每个放弃的插入窗口填 `{"kind":"skip"}`，包括合法列表为空的窗口。 |
+| `expect` | 可选列表。每项填写 `offset`、`kind`、`actor`、`action` 和 `target`。`offset` 从本步首条事件数起，第一条为 `0`。`action`、`target` 无值时可省略。用于核对实际发生的事件身份与目标。 |
+
+报告保留常规战斗字段和 `events`，另有 `steps`，每步包含决策编号、波次、提交前观测、合法列表和选择。用 `[event_start, event_after_submit)` 查看提交期间的事件，用 `[event_after_submit, event_end)` 查看推进到下一决策或终局期间的事件。提交终结技登记入队。实际扣能和执行发生在它获准进入回合的推进阶段；队首可能先产生其他决策，已登记的请求也可能因战斗状态变化而失效。`expect` 的偏移以该事件实际出现的步骤为准。同一 AV 上的事件按索引区分。首个决策前的开战事件保留在全局 `events` 中。每步后的状态参照下一步的 `observation`，最后一步参照报告中的终局状态。
+
+回放按场景规则决定实际目标。`expect` 对照运行产生的事件。脚本提前结束、终局后多给操作、非法选择、事件不符或记录截断会返回错误。对局受动作上限等保护规则终止时，报告的 `outcome` 仍为 `incomplete`。
 
 ---
 

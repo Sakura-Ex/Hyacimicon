@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "steps": [
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"normal_turn","choice":{"kind":"action","actor":"reviver","action":"basic"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {
+      "point": "normal_turn",
+      "choice": {"kind":"action","actor":"striker","action":"basic"},
+      "expect": [
+        {"offset":6,"kind":"revive","actor":"reviver","action":"basic","target":"reviver"}
+      ]
+    },
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"normal_turn","choice":{"kind":"action","actor":"reviver","action":"basic"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"normal_turn","choice":{"kind":"action","actor":"striker","action":"basic"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}}
+  ]
+}

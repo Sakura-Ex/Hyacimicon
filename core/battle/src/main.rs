@@ -1,7 +1,10 @@
 //! 仅由 diagnostics 功能启用的开发场景命令行入口。
 use battle_core::{
     batch::{run_batch, BatchRequest},
-    diagnostics::{simulate, ScenarioFile},
+    diagnostics::{
+        replay::{replay, ReplayScript},
+        simulate, ScenarioFile,
+    },
     engine::RNG_ALGORITHM,
 };
 use serde_json::{json, Value};
@@ -10,21 +13,28 @@ use std::{
     io::{self, Read, Write},
 };
 
+/// 读取单个开发输入，最多接受 16 MiB。
+fn read_input(path: &str, kind: &str) -> Result<Vec<u8>, String> {
+    const LIMIT: usize = 16 * 1024 * 1024;
+    let mut bytes = Vec::new();
+    fs::File::open(path)
+        .map_err(|e| format!("{kind}: {e}"))?
+        .take(LIMIT as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("{kind}: {e}"))?;
+    if bytes.len() > LIMIT {
+        return Err(format!("{kind} exceeds 16 MiB input limit"));
+    }
+    Ok(bytes)
+}
+
 /// 读取文件和命令参数，返回开发报告或明确的解析错误。
 fn execute() -> Result<Value, String> {
     let args: Vec<_> = env::args().collect();
     if args.len() < 3 {
-        return Err("usage: hcwa-battle inspect SCENARIO.json | simulate SCENARIO.json SEED | batch SCENARIO.json TRIALS SEED".into());
+        return Err("usage: hcwa-battle inspect SCENARIO.json | simulate SCENARIO.json SEED | replay SCENARIO.json SEED OPERATIONS.json | batch SCENARIO.json TRIALS SEED".into());
     }
-    let mut bytes = Vec::new();
-    fs::File::open(&args[2])
-        .map_err(|e| format!("scenario: {e}"))?
-        .take(16 * 1024 * 1024 + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| format!("scenario: {e}"))?;
-    if bytes.len() > 16 * 1024 * 1024 {
-        return Err("scenario exceeds 16 MiB input limit".into());
-    }
+    let bytes = read_input(&args[2], "scenario")?;
     let file = ScenarioFile::from_slice(&bytes).map_err(|e| format!("scenario schema: {e}"))?;
     let input = &file.battle;
     match args[1].as_str() {
@@ -36,6 +46,14 @@ fn execute() -> Result<Value, String> {
                 .map_err(|_| "seed must be an unsigned integer")?;
             let result = simulate(input, seed, true)?;
             serde_json::to_value(file.report(result, seed)).map_err(|e| e.to_string())
+        }
+        "replay" if args.len() == 5 => {
+            let seed = args[3]
+                .parse()
+                .map_err(|_| "seed must be an unsigned integer")?;
+            let script: ReplayScript = serde_json::from_slice(&read_input(&args[4], "operations")?)
+                .map_err(|e| format!("operations schema: {e}"))?;
+            serde_json::to_value(replay(&file, seed, &script)?).map_err(|e| e.to_string())
         }
         "batch" if args.len() == 5 => {
             let request = BatchRequest {
