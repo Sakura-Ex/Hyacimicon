@@ -114,11 +114,30 @@ const previewMaxHealth = 100;
 const previewGold = 37;
 const previewExperienceCost = 4;
 const previewExperienceGain = 4;
+const traitRows: [string, number, number, number[]][] = [
+  ["云上五骁", 100702, 3, [2, 4, 5]],
+  ["星核猎手", 100802, 2, [2, 4, 6]],
+  ["击破", 200502, 5, [2, 4, 6, 8, 10]],
+  ["召唤", 200602, 4, [2, 4, 7]],
+  ["开拓银轨", 100502, 2, [2, 4, 6]],
+  ["千星商会", 100602, 1, [2, 3, 4]],
+  ["幻月游戏", 100302, 2, [1, 3, 5]],
+  ["黄金大饭店", 101202, 3, [2, 4, 6]],
+  ["梦境交织", 101002, 1, [2, 4, 6]],
+  ["治疗", 201002, 2, [2, 3]],
+  ["群攻", 200302, 3, [2, 4, 7]],
+  ["追击", 200102, 2, [2, 4, 7]],
+  ["持续伤害", 200202, 1, [2, 4, 6]],
+  ["连击", 200402, 2, [2, 4, 6]],
+];
+const previewTraits = traitRows.map(([name, icon, count, thresholds]) => ({
+  ...item(name, `/traits/${icon}.webp`),
+  progress: { count, thresholds },
+}));
 const offerTraitIcons: Record<string, number> = {
-  云上五骁: 100702, 召唤: 200602, 星核猎手: 100802, 持续伤害: 200202, 千星商会: 100602,
-  群攻: 200302, 黑市主理人: 300402, 小小巨人: 100902, 梦境交织: 101002, 欢愉: 200702,
-  星间旅人: 100402, 治疗: 201002, 少女乐队: 101102, 追击: 200102, 奇兽花园: 100202,
-  反击: 200802, 击破: 200502,
+  ...Object.fromEntries(traitRows.map(([name, icon]) => [name, icon])),
+  黑市主理人: 300402, 小小巨人: 100902, 欢愉: 200702, 星间旅人: 100402,
+  少女乐队: 101102, 奇兽花园: 100202, 反击: 200802,
 };
 const offerTraitNames: Record<string, string[]> = {
   "1204": ["云上五骁", "召唤"],
@@ -146,6 +165,19 @@ const initial: Match = {
   maxHealth: previewMaxHealth,
   streak: 2,
   interest: 3,
+  overview: {
+    opponent: {
+      name: "凛冬经贸联合体", difficulty: 14, stars: 2,
+      enemies: [{ name: "银鬃尉官", stars: 2 }, { name: "银鬃炮手", stars: 1 }, { name: "银鬃近卫", stars: 1 }],
+    },
+    modifiers: [
+      { name: "随从强化", detail: "普通和精英敌人速度提高 30%，生命上限提高 20%。" },
+      { name: "第二位面强化", detail: "第二位面敌人速度提高 40%，生命上限提高 25%。" },
+    ],
+    investmentEnvironment: { name: "增发货币", detail: "第一、第二、第三阶段开始时，分别获得一个价值 6、8、10 金币的晶矿。" },
+    investmentStrategies: [{ name: "概率事件", detail: "刷新时有 50% 概率获得一次免费刷新。" }],
+    crystals: { count: 2, entries: [{ name: "晶矿", detail: "6 金币" }, { name: "晶矿", detail: "8 金币" }] },
+  },
   capacity: 8,
   gold: previewGold,
   experience: { level: 8, current: 68, required: 72 },
@@ -160,13 +192,7 @@ const initial: Match = {
   backCapacity: 6,
   bench: [piece("1112", 1, [gear[1]]), piece("1208", 1, [gear[5]]), piece("1212", 1), piece("1204", 1)],
   benchCapacity: 9,
-  traits: [
-    item("云上五骁", "/traits/100702.webp"),
-    item("击破", "/traits/200502.webp"),
-    item("治疗", "/traits/201002.webp"),
-    item("星核猎手", "/traits/100802.webp"),
-    item("召唤", "/traits/200602.webp"),
-  ],
+  traits: [0, 2, 9, 1, 3].map(index => previewTraits[index]),
   traitMechanisms: ["aha", "wishPower", "trailblazeShop", "chimeraGarden"],
   inventory: matchItems("stock", gear),
   consumables: matchItems("supply", [
@@ -278,14 +304,12 @@ export function demoPort(scenario?: string | null): PlayerPort {
   let match = structuredClone(initial);
   if (scenario === "full") {
     match.backCapacity = 9;
-    match.back.push(...["1308", "1309", "1005", "1407", "1304"].map(id => piece(id, 1, gear.slice(0, 3))));
-    match.bench.push(...["1004", "1310", "1205", "1314", "1306"].map(id => piece(id, 1, gear.slice(3))));
+    match.back.push(piece("1308", 1, [gear[0], gear[3], gear[4]]), piece("1309", 2, [gear[3]]),
+      piece("1005", 1, [gear[1], gear[2]]), piece("1407", 2, [gear[4], gear[5]]), piece("1304", 1, [gear[5]]));
+    match.bench.push(piece("1004", 1, [gear[5]]), piece("1310", 1),
+      piece("1205", 1, [gear[0], gear[2], gear[5]]), piece("1314", 1, [gear[4]]), piece("1306", 1));
     match.capacity = match.front.length + match.back.length;
-    match.traits = [
-      ...match.traits,
-      ...["千星商会", "幻月游戏", "开拓银轨", "黄金大饭店", "梦境交织", "群攻", "追击", "持续伤害", "额外攻击"]
-        .map(name => item(name, "")),
-    ].map((trait, i) => ({ ...trait, progress: { count: i % 5 + 1, thresholds: [2, 4, 6] } }));
+    match.traits = structuredClone(previewTraits);
   }
   for (const zone of zones) {
     match[zone].forEach((p, slot) => {
@@ -294,7 +318,7 @@ export function demoPort(scenario?: string | null): PlayerPort {
       p.gear = matchItems(p.pieceId, p.gear);
     });
   }
-  match.companion = { name: "绷带猫", detail: "随行伙伴 · 装备补给" };
+  match.companion = { name: "绷带猫", detail: "装备补给" };
   if (scenario === "aura") {
     match.node = "2-7";
     match.event = { id: "opening-act", kind: "aura", title: "主角光环", detail: "为出战角色选择本场首领战的光环。" };

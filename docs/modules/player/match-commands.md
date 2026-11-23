@@ -33,6 +33,8 @@
 
 `traitMechanisms` 为可选数组，列出当前局面需要显示的机制。键值为 `aha`（阿哈）、`wishPower`（幻月游戏·愿力）、`trailblazeShop`（开拓商店）和 `chimeraGarden`（奇兽花园）。缺省或为空时，羁绊列表下方省略机制区。该字段用于展示。
 
+可选的 `overview` 提供局面可见信息。 `opponent` 提供竞争对手名称、难度、预览星级和已揭示的敌人名单，未知难度或星级用 `null`。 `modifiers`、`investmentEnvironment`、`investmentStrategies` 使用带 `name` 和可选 `detail` 的条目。 `crystals.count` 是当前晶矿个数，可通过 `entries` 提供可见明细。缺省的字段省略对应入口。金币按钮直接显示局面原有的 `gold`、`streak` 和 `interest`。
+
 `offers[].traits` 可提供报价角色的羁绊列表，每条包含 `name` 和 `image`。商店按返回列表展示，上阵羁绊的人数仍使用局面顶层的 `traits`。
 
 `experience` 可提供等级、当前经验和升级所需经验。等级达到上限时 `required` 为 `null`。购买经验的花费和收益通过指令的 `label` 与 `detail` 展示，结算后的等级、经验和上阵上限随新局面返回。

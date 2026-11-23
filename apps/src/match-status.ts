@@ -8,7 +8,7 @@ const kinds = {
   boss: { name: "首领", mark: "◆" },
 };
 
-export function matchStatus(match: Match, emphasizeCurrent = false) {
+export function matchStatus(match: Match, showStepNumbers = false) {
   const planes = match.planes ?? [];
   const plane = planes.findIndex((nodes) => nodes.some((step) => step.id === match.node));
   const steps = planes[plane] ?? [];
@@ -25,7 +25,7 @@ export function matchStatus(match: Match, emphasizeCurrent = false) {
     const label = [step.id, info?.name, current ? "当前节点" : before ? "已结算" : ""].filter(Boolean).join(" · ");
     return html`<li class=${before ? "past" : ""} title=${label}
       aria-label=${label} aria-current=${current ? "step" : nothing}>
-      <span aria-hidden="true">${emphasizeCurrent && current ? position + 1 : info?.mark ?? "·"}</span>
+      <span aria-hidden="true">${showStepNumbers ? position + 1 : info?.mark ?? "·"}</span>
     </li>`;
   }
 

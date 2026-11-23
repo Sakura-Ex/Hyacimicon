@@ -1,12 +1,11 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece, TraitMechanism, Unit } from "./contracts";
+import type { ActionOption, Match, MatchCommand, MatchItem, MatchOverviewEntry, MatchPort, Piece, TraitMechanism, Unit } from "./contracts";
 import { art, icon, stats, type Run, type Spread } from "./folio";
 import { matchStatus } from "./match-status";
 import { commandsForDrop, type DropTarget } from "./match-drag";
 
 type Selection = { kind: "item" | "piece" | "event"; id: string; commandIds?: Set<string> };
-
 const traitMechanismLabels = {
   aha: "阿哈",
   wishPower: "幻月游戏·愿力",
@@ -14,11 +13,74 @@ const traitMechanismLabels = {
   chimeraGarden: "奇兽花园",
 } satisfies Record<TraitMechanism, string>;
 
+function matchDisclosure(title: string, summary: TemplateResult, content: TemplateResult, alignEnd = false) {
+  return html`<details class="match-disclosure" name="match-overview" ?data-align-end=${alignEnd}
+      @keydown=${(event: KeyboardEvent) => {
+        const disclosure = event.currentTarget;
+        if (event.key !== "Escape" || !(disclosure instanceof HTMLDetailsElement) || !disclosure.open) return;
+        event.stopPropagation();
+        disclosure.open = false;
+        disclosure.querySelector("summary")?.focus({ preventScroll: true });
+      }}>
+    <summary>${summary}${icon("chev")}</summary>
+    <div class="match-disclosure-panel">
+      <h3>${title}</h3>
+      ${content}
+    </div>
+  </details>`;
+}
+
+function overviewEntries(entries: MatchOverviewEntry[]) {
+  return entries.length ? html`<ul class="match-overview-entries">
+    ${entries.map(entry => html`<li><strong>${entry.name}</strong>
+      ${entry.detail ? html`<p>${entry.detail}</p>` : nothing}</li>`)}
+  </ul>` : html`<p>暂无条目</p>`;
+}
+
+function opponentPreview(opponent: NonNullable<Match["overview"]>["opponent"]) {
+  if (!opponent) return nothing;
+  return html`<div class="match-info-strip match-scout">
+    ${matchDisclosure("敌人预览",
+      html`<span>敌人预览</span><strong>难度 ${opponent.difficulty ?? "—"}</strong>
+        ${opponent.stars === null ? nothing : html`<strong>${opponent.stars} 星</strong>`}`,
+      html`<p>${opponent.name}</p>
+        ${overviewEntries(opponent.enemies.map(enemy => ({ name: enemy.name, detail: enemy.stars === null ? undefined : `${enemy.stars} 星` })))}`,
+    )}
+  </div>`;
+}
+
+function matchConditions(overview: Match["overview"]) {
+  if (!overview) return nothing;
+  const { modifiers, investmentEnvironment, investmentStrategies, crystals } = overview;
+  if (!modifiers && !investmentEnvironment && !investmentStrategies && !crystals) return nothing;
+  return html`<div class="match-info-strip match-conditions">
+    ${modifiers ? matchDisclosure("负面词条",
+      html`<span>负面词条</span><strong>${modifiers.length}</strong>`, overviewEntries(modifiers)) : nothing}
+    ${investmentEnvironment ? matchDisclosure("投资环境",
+      html`<span>投资环境</span>`, overviewEntries([investmentEnvironment])) : nothing}
+    ${investmentStrategies ? matchDisclosure("投资策略",
+      html`<span>投资策略</span><strong>${investmentStrategies.length}</strong>`, overviewEntries(investmentStrategies)) : nothing}
+    ${crystals ? html`<div class="match-crystals">${matchDisclosure("晶矿",
+      html`<span>晶矿</span><strong>${crystals.count}</strong>`,
+      crystals.entries ? overviewEntries(crystals.entries) : html`<p>当前晶矿 ${crystals.count} 个</p>`, true)}</div>` : nothing}
+  </div>`;
+}
+
+function shopBalance(m: Match) {
+  return matchDisclosure("本局金币",
+    html`${icon("coin")}<span>金币</span><strong>${m.gold ?? "—"}</strong>
+      <span class="shop-income">火热连胜 <b>${m.streak ?? "—"}</b> · 利息 <b>${m.interest ?? "—"}</b></span>`,
+    overviewEntries([
+      { name: "剩余金币", detail: m.gold?.toString() ?? "未知" },
+      { name: "火热连胜", detail: m.streak?.toString() ?? "未知" },
+      { name: "预计利息", detail: m.interest?.toString() ?? "未知" },
+    ]), true);
+}
+
 function itemPicture(item: MatchItem) {
   const artwork = art(item.image);
   return artwork === nothing ? html`<span class="item-initial">${item.name.slice(0, 1)}</span>` : artwork;
 }
-
 function cataloguePortrait(unit: Unit) {
   const picture = art(`/match-portraits/${unit.id}.webp`);
   if (picture !== nothing) return picture;
@@ -91,10 +153,10 @@ export function matchView(
 ) {
   let actionId = "";
   let traitsExpanded = false;
-  const setTraitsExpanded = (expanded: boolean) => {
+  const setTraitsExpanded = (expanded: boolean, restoreFocus = false) => {
     traitsExpanded = expanded;
     redraw();
-    document.getElementById("match-traits-toggle")?.focus({ preventScroll: true });
+    if (restoreFocus) document.getElementById("match-traits-toggle")?.focus({ preventScroll: true });
   };
   let drag: { matchId: string; revision: number; itemId: string } | undefined;
   let dropHover: HTMLElement | undefined;
@@ -251,31 +313,39 @@ export function matchView(
     );
     const traits = html`<aside class="match-traits" aria-label="阵容羁绊"
         @keydown=${(event: KeyboardEvent) => {
-          if (event.key === "Escape" && traitsExpanded) setTraitsExpanded(false);
+          if (event.key === "Escape" && traitsExpanded) setTraitsExpanded(false, true);
         }}>
       <div class="traits-panel" ?data-expanded=${traitsExpanded}>
         <div class="traits-heading">
           <h3>羁绊</h3>
           <button type="button" id="match-traits-toggle" aria-expanded=${traitsExpanded} aria-controls="match-trait-list"
-            @click=${() => setTraitsExpanded(!traitsExpanded)}>${traitsExpanded ? "收起" : "展开"}</button>
+            @click=${() => setTraitsExpanded(!traitsExpanded)}>${traitsExpanded ? "收起" : "展开"}${icon("chev")}</button>
         </div>
         <ul id="match-trait-list" class="match-trait-list" aria-label="羁绊列表" tabindex="0">
           ${m.traits.length ? m.traits.map(trait => {
             const progress = trait.progress;
             const active = progress?.thresholds.filter(value => value <= progress.count).at(-1);
+            const nextTier = progress?.thresholds.find(value => value > progress.count);
             const artwork = art(trait.image);
-            return html`<li title=${[trait.name, trait.detail].filter(Boolean).join(" · ")}>
-              <span class="trait-emblem" ?data-active=${active !== undefined}>
+            return html`<li ?data-active=${active !== undefined}
+                ?data-near=${progress !== undefined && nextTier === progress.count + 1}
+                title=${[trait.name, trait.detail].filter(Boolean).join(" · ")}>
+              <span class="trait-emblem" aria-hidden="true">
                 ${artwork === nothing ? trait.name.slice(0, 1) : artwork}
-                ${progress ? html`<b aria-label=${`当前人数 ${progress.count}`}>${progress.count}</b>` : nothing}
               </span>
               <span class="trait-copy">
                 <strong>${trait.name}</strong>
-                ${progress?.thresholds.length ? html`<small class="trait-breakpoints" aria-label="激活档位">
-                  ${progress.thresholds.map((value, index) => html`${index ? " / " : ""}<span ?data-active=${value === active}>${value}</span>`)}
+                ${traitsExpanded && progress?.thresholds.length ? html`<small class="trait-breakpoints" aria-label="激活档位">
+                  ${progress.thresholds.map(value => html`<span ?data-active=${value === active}>${value}</span>`)}
                 </small>` : nothing}
                 ${traitsExpanded && trait.detail ? html`<small>${trait.detail}</small>` : nothing}
               </span>
+              ${progress ? html`<span class="trait-count" aria-label=${nextTier === undefined
+                ? `当前 ${progress.count} 人`
+                : `当前 ${progress.count} 人，下一档 ${nextTier} 人`}>
+                <span>${progress.count}</span>${nextTier === undefined
+                  ? nothing : html`<small>/</small><small>${nextTier}</small>`}
+              </span>` : nothing}
             </li>`;
           }) : html`<li class="no-traits">暂无羁绊</li>`}
         </ul>
@@ -289,23 +359,25 @@ export function matchView(
       title: "阵容部署",
       subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
       tools: matchStatus(m, true),
-      left: html`<div class="match-roster">
-        <div class="deploy-layout">
+      left: html`${opponentPreview(m.overview?.opponent)}<div class="match-roster">
+        <div class="match-formations">
           <section class="formation front-formation">
             <h2>前台 <small>${m.front.length} / ${m.frontCapacity}</small></h2>
             ${slots(m.front, m.frontCapacity, 0, m.frontCapacity, "front", "前台", renderPiece)}
           </section>
           <section class="formation back-formation">
             <h2>后台 <small>${m.back.length} / ${m.backCapacity}</small></h2>
-            ${slots(m.back, m.backCapacity, 0, 4, "back back-head", "后台首排", renderPiece)}
+            <div class="back-board">
+              ${slots(m.back, m.backCapacity, 0, 4, "back back-head", "后台首排", renderPiece)}
+              ${slots(m.back, m.backCapacity, 4, Math.max(9, m.backCapacity), "back back-tail", "后台续排", renderPiece)}
+            </div>
           </section>
-          ${traits}
+          <section class="formation bench-formation">
+            <h2>备战席 <small>${m.bench.length} / ${m.benchCapacity}</small></h2>
+            ${slots(m.bench, m.benchCapacity, 0, m.benchCapacity, "bench", "备战席", renderPiece)}
+          </section>
         </div>
-        ${slots(m.back, m.backCapacity, 4, Math.max(9, m.backCapacity), "back back-tail", "后台续排", renderPiece)}
-        <section class="formation bench-formation">
-          <h2>备战席 <small>${m.bench.length} / ${m.benchCapacity}</small></h2>
-          ${slots(m.bench, m.benchCapacity, 0, m.benchCapacity, "bench", "备战席", renderPiece)}
-        </section>
+        ${traits}
         </div>`,
       right:
         editing && action
@@ -341,7 +413,7 @@ export function matchView(
                 <button class="inspector-back" @click=${() => inspect()}>‹ 返回</button>
                 <div class="inspector-heading">
                   ${selectedItem ? html`<span class="item-picture">${itemPicture(selectedItem)}</span>` : nothing}
-                  ${selectedPiece ? art(selectedPiece.image) : nothing}
+                  ${selectedPiece ? html`<span class="inspector-portrait">${cataloguePortrait(selectedPiece)}</span>` : nothing}
                   <div>
                     <h2 tabindex="-1" id="match-inspector-title">${"title" in inspector ? inspector.title : inspector.name}</h2>
                     ${"detail" in inspector && inspector.detail ? html`<p>${inspector.detail}</p>` : nothing}
@@ -351,12 +423,11 @@ export function matchView(
                 ${selectedPiece ? html`<h3>已装备 <small>${selectedPiece.gear.length} / 3</small></h3>
                   <div class="match-inventory">${repeat(selectedPiece.gear, item => item.itemId, item => itemCard(item, selectedPiece.pieceId))}</div>` : nothing}
                 <div class="command-list">${options.length ? options.map(commandButton) : html`<p>当前没有可执行操作</p>`}</div>
-              </section>` : html`
+              </section>` : html`<div class="match-home">
+              ${matchConditions(m.overview)}
+              <div class="match-summary">
               <div class="metrics match-economy">
                 ${stats([
-                  ["金币", m.gold?.toString() ?? "—"],
-                  ["预计利息", m.interest?.toString() ?? "—"],
-                  ["连胜", m.streak?.toString() ?? "—"],
                   ["上阵人数", m.front.length + m.back.length + " / " + m.capacity],
                 ])}
                 <div class="match-training">
@@ -366,22 +437,29 @@ export function matchView(
                   </button>
                 </div>
               </div>
-              ${m.event || m.companion ? html`<section class="match-event">
-                <div><strong>${m.event?.title ?? m.companion?.name}</strong><small>${m.event?.detail || m.companion?.detail}</small>
+              ${m.event || m.companion ? html`<div class="match-event" ?data-pending=${m.event !== undefined}>
+                <div>${m.event ? nothing : html`<small>奇遇伙伴</small>`}<strong>${m.event?.title ?? m.companion?.name}</strong><small>${m.event?.detail || m.companion?.detail}</small>
                   ${m.aura ? html`<small>${m.aura.name} · ${pieces.find(p => p.pieceId === m.aura?.pieceId)?.name ?? "主角"}</small>` : nothing}
                 </div>
                 ${m.event ? html`<button @click=${() => inspect({ kind: "event", id: m.event!.id }, m.revision)}>
                   ${m.event.kind === "aura" ? "选择光环" : "进入茶歇"} <span aria-hidden="true">›</span>
-                </button>` : html`<span class="companion-label">奇遇伙伴</span>`}
-              </section>` : nothing}
+                </button>` : nothing}
+              </div>` : nothing}
+              </div>
               <section class="match-stores">
-                <h2 id="match-resources" tabindex="-1">装备 <small>${m.inventory.reduce((total, item) => total + item.count, 0)} 件待分配</small></h2>
-                <div class="match-inventory stock-window" role="region" aria-label="待分配装备" tabindex="0">${m.inventory.length ? repeat(m.inventory, item => item.itemId, item => itemCard(item)) : html`<p>暂无待分配装备</p>`}</div>
-                <h2>消耗品</h2>
-                <div class="match-inventory match-supplies stock-window" role="region" aria-label="消耗品" tabindex="0">${m.consumables.length ? repeat(m.consumables, item => item.itemId, item => itemCard(item)) : html`<p>暂无消耗品</p>`}</div>
+                <div>
+                  <h2 id="match-resources" tabindex="-1">装备 <small>${m.inventory.reduce((total, item) => total + item.count, 0)} 件待分配</small></h2>
+                  <div class="match-inventory stock-window" role="region" aria-label="待分配装备" tabindex="0">${m.inventory.length ? repeat(m.inventory, item => item.itemId, item => itemCard(item)) : html`<p>暂无待分配装备</p>`}</div>
+                </div>
+                <div class="match-supply-tray">
+                  <h2>消耗品</h2>
+                  <div class="match-inventory match-supplies stock-window" role="region" aria-label="消耗品" tabindex="0">${m.consumables.length ? repeat(m.consumables, item => item.itemId, item => itemCard(item)) : html`<p>暂无消耗品</p>`}</div>
+                </div>
               </section>
               <section class="match-shop">
                 <div class="shop-heading"><h2>商店</h2><div class="shop-tools">
+                  <div class="shop-balance">${shopBalance(m)}</div>
+                  ${m.bench.length >= m.benchCapacity ? html`<small class="shop-capacity">备战席已满</small>` : nothing}
                   <button aria-pressed=${m.locked} ?disabled=${!lock} @click=${() => lock && execute(lock)}>
                     ${icon("lock")} ${lock?.label ?? (m.locked ? "已锁定" : "锁定")}
                   </button>
@@ -432,7 +510,7 @@ export function matchView(
                       </div>`
                   : m.lastAction ? html`<p role="status">实际操作已记录</p>` : nothing
               }
-              `}
+              </div>`}
               </div>
               <footer class="match-actions">
                 <button class="match-reload" @click=${reload}>重读局面</button>

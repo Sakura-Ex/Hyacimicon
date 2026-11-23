@@ -132,6 +132,22 @@ export interface MatchStep {
   kind?: "reward" | "battle" | "encounter" | "boss";
 }
 export type TraitMechanism = "aha" | "wishPower" | "trailblazeShop" | "chimeraGarden";
+export interface MatchOverviewEntry {
+  name: string;
+  detail?: string;
+}
+export interface MatchOverview {
+  opponent?: {
+    name: string;
+    difficulty: number | null;
+    stars: number | null;
+    enemies: { name: string; stars: number | null }[];
+  };
+  modifiers?: MatchOverviewEntry[];
+  investmentEnvironment?: MatchOverviewEntry;
+  investmentStrategies?: MatchOverviewEntry[];
+  crystals?: { count: number; entries?: MatchOverviewEntry[] };
+}
 export interface Match {
   id: string;
   revision: number;
@@ -142,6 +158,7 @@ export interface Match {
   preview?: boolean;
   streak: number | null;
   interest: number | null;
+  overview?: MatchOverview;
   capacity: number;
   gold: number | null;
   experience?: { level: number; current: number; required: number | null };
