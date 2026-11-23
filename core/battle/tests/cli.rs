@@ -1,5 +1,8 @@
 //! 通过真实开发入口核对来源、种子和解析结果。
-use battle_core::diagnostics::{replay::replay, ScenarioFile};
+use battle_core::diagnostics::{
+    replay::{replay, ReplayScript},
+    ScenarioFile,
+};
 use serde_json::{json, Value};
 use std::{fs, path::PathBuf, process::Command};
 
@@ -188,12 +191,19 @@ fn scripted_replay_reports_the_first_disagreement() {
     changed["steps"][4]["expect"][0]["target"] = json!("wrong-target");
     assert!(run(changed).contains("script step 4, decision 4: event 15 mismatch"));
 
-    let mut changed = script;
+    let mut changed = script.clone();
     changed["steps"][4]["expect"][1]["amount"] = json!(26);
     assert_eq!(
         run(changed),
         "script step 4, decision 4: event 16 (revival_av_penalty) amount mismatch: expected 26, got 25"
     );
+
+    let mut changed = script;
+    changed["steps"][4]["expect"][1]["amount"] = Value::Null;
+    let error = serde_json::from_value::<ReplayScript>(changed).unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("invalid type: null, expected f64"));
 }
 
 #[test]

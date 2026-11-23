@@ -59,7 +59,15 @@ struct ExpectedEvent {
     /// 事件记录的技能 ID。
     action: Option<String>,
     /// 精确核对原始事件数值，单位与该事件的 `amount` 相同。
+    #[serde(default, deserialize_with = "deserialize_amount")]
     amount: Option<f64>,
+}
+
+/// 字段缺省时跳过数值核对，提供字段时必须是数值。
+fn deserialize_amount<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<f64>, D::Error> {
+    f64::deserialize(deserializer).map(Some)
 }
 
 impl ExpectedEvent {
