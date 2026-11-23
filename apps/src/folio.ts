@@ -4,6 +4,7 @@ import { imageUrl } from "./game-images";
 export interface Spread {
   title: string;
   subtitle: string;
+  subtitleTools?: TemplateResult;
   tools: TemplateResult;
   left: TemplateResult;
   right: TemplateResult;

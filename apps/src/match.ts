@@ -1,526 +1,331 @@
-import { html, nothing, type TemplateResult } from "lit";
+import { html, nothing } from "lit";
+import { keyed } from "lit/directives/keyed.js";
 import { repeat } from "lit/directives/repeat.js";
-import type { ActionOption, Match, MatchCommand, MatchItem, MatchOverviewEntry, MatchPort, Piece, TraitMechanism, Unit } from "./contracts";
-import { art, icon, stats, type Run, type Spread } from "./folio";
-import { matchStatus } from "./match-status";
-import { commandsForDrop, type DropTarget } from "./match-drag";
+import type { Account, ActionOption } from "./contracts.ts";
+import { art, icon, stats, type Spread } from "./folio.ts";
+import { auraList, board, itemCard, itemPicture, openingIntel, portrait, type BoardInteraction } from "./match-board.ts";
+import { matchCatalogue, type MatchCatalogue } from "./match-catalogue.ts";
+import { disclosure, entryList, matchControls, type MatchControls } from "./match-controls.ts";
+import { actionsForDrop, type DragSource, type MatchDrop } from "./match-drag.ts";
+import { phaseNames, phasePanel, settlement, setup, traitChoice } from "./match-phases.ts";
+import type { LegalAction, MatchSnapshot, Preparation } from "./match-session-contract.ts";
+import type { MatchSession } from "./match-session.ts";
+import type { MatchInsights } from "./match-port.ts";
+import { matchStatus } from "./match-status.ts";
 
-type Selection = { kind: "item" | "piece" | "event"; id: string; commandIds?: Set<string> };
-const traitMechanismLabels = {
-  aha: "阿哈",
-  wishPower: "幻月游戏·愿力",
-  trailblazeShop: "开拓商店",
-  chimeraGarden: "奇兽花园",
-} satisfies Record<TraitMechanism, string>;
+type Inspection = (DragSource | { kind: "trait"; mechanism: string; id: string }) & {
+  actionIds?: Set<string>;
+};
 
-function matchDisclosure(title: string, summary: TemplateResult, content: TemplateResult, alignEnd = false) {
-  return html`<details class="match-disclosure" name="match-overview" ?data-align-end=${alignEnd}
-      @keydown=${(event: KeyboardEvent) => {
-        const disclosure = event.currentTarget;
-        if (event.key !== "Escape" || !(disclosure instanceof HTMLDetailsElement) || !disclosure.open) return;
-        event.stopPropagation();
-        disclosure.open = false;
-        disclosure.querySelector("summary")?.focus({ preventScroll: true });
-      }}>
-    <summary>${summary}${icon("chev")}</summary>
-    <div class="match-disclosure-panel">
-      <h3>${title}</h3>
-      ${content}
+function preparationView(s: MatchSnapshot, p: Preparation, c: MatchCatalogue, controls: MatchControls, ui: BoardInteraction,
+  insights: MatchInsights | undefined, adviceId: string, chooseAdvice: (id: string) => void) {
+  const { button, find } = controls;
+  const r = p.resources;
+  const interest = Math.min(r.interestCap, Math.floor(r.gold / 10));
+  const active = p.board.pieces.filter(piece => piece.slot.zone !== "bench").length;
+  const equipment = p.inventory.filter(item => c.item(item.definitionId).kind === "equipment");
+  const consumables = p.inventory.filter(item => c.item(item.definitionId).kind === "consumable");
+  const unclassified = p.inventory.filter(item => c.item(item.definitionId).kind === undefined);
+  const choice = insights?.advice.find(a => a.id === adviceId) ?? insights?.advice[0];
+  function stock(label: string, items: Preparation["inventory"]) {
+    return html`<div class="match-inventory stock-window" role="region" aria-label=${label} tabindex="0">
+      ${items.length ? repeat(items, item => item.itemId, item => itemCard(item, c, ui)) : html`<p>暂无${label}</p>`}</div>`;
+  }
+  return html`<div class="match-home">
+    <div class="match-summary">
+      <div class="metrics match-economy">
+        ${stats([["上阵人数", active + " / " + p.board.active]])}
+        <div class="match-training"><small>Lv.${r.level}${r.experienceToNextLevel === null ? nothing :
+          html` · ${r.experience} / ${r.experienceToNextLevel}`}</small>
+          ${button(find("buyExperience"), "购买经验")}</div>
+      </div>
+      ${s.companion ? html`<div class="match-event"><div><small>奇遇伙伴</small>
+        <strong>${s.companion.name}</strong><small>${s.companion.detail}</small></div>
+        ${s.phase.kind === "preparation" && s.phase.spotlightAvailable ?
+          button(find("openSpotlight"), "选择主角光环 ›", true) : nothing}</div>` :
+        s.phase.kind === "preparation" && s.phase.spotlightAvailable ? button(find("openSpotlight"), "选择主角光环 ›", true) : nothing}
     </div>
-  </details>`;
-}
-
-function overviewEntries(entries: MatchOverviewEntry[]) {
-  return entries.length ? html`<ul class="match-overview-entries">
-    ${entries.map(entry => html`<li><strong>${entry.name}</strong>
-      ${entry.detail ? html`<p>${entry.detail}</p>` : nothing}</li>`)}
-  </ul>` : html`<p>暂无条目</p>`;
-}
-
-function opponentPreview(opponent: NonNullable<Match["overview"]>["opponent"]) {
-  if (!opponent) return nothing;
-  return matchDisclosure("敌人预览",
-    html`<span>敌人预览</span><strong>难度 ${opponent.difficulty ?? "—"}</strong>
-      ${opponent.stars === null ? nothing : html`<strong>${opponent.stars} 星</strong>`}`,
-    html`<p>${opponent.name}</p>
-      ${overviewEntries(opponent.enemies.map(enemy => ({ name: enemy.name, detail: enemy.stars === null ? undefined : `${enemy.stars} 星` })))}`,
-  );
-}
-
-function matchOverview(overview: Match["overview"]) {
-  if (!overview) return nothing;
-  const { opponent, modifiers, investmentEnvironment, investmentStrategies, crystals } = overview;
-  if (!opponent && !modifiers && !investmentEnvironment && !investmentStrategies && !crystals) return nothing;
-  return html`<div class="match-info-strip" role="group" aria-label="对局概览">
-    ${opponentPreview(opponent)}
-    ${modifiers ? matchDisclosure("负面词条",
-      html`<span>负面词条</span><strong>${modifiers.length}</strong>`, overviewEntries(modifiers)) : nothing}
-    ${investmentEnvironment ? matchDisclosure("投资环境",
-      html`<span>投资环境</span>`, overviewEntries([investmentEnvironment])) : nothing}
-    ${investmentStrategies ? matchDisclosure("投资策略",
-      html`<span>投资策略</span><strong>${investmentStrategies.length}</strong>`, overviewEntries(investmentStrategies)) : nothing}
-    ${crystals ? html`<div class="match-crystals">${matchDisclosure("晶矿",
-      html`<span>晶矿</span><strong>${crystals.count}</strong>`,
-      crystals.entries ? overviewEntries(crystals.entries) : html`<p>当前晶矿 ${crystals.count} 个</p>`, true)}</div>` : nothing}
+    <section class="match-stores">
+      <div><h2 id="match-resources" tabindex="-1">装备 <small>${equipment.reduce((n, item) => n + item.count, 0)} 件待分配</small></h2>
+        ${stock("待分配装备", equipment)}</div>
+      <div class="match-supply-tray"><h2>消耗品</h2>${stock("消耗品", consumables)}</div>
+      ${unclassified.length ? html`<div class="match-unclassified"><h2>待识别物品</h2>${stock("待识别物品", unclassified)}</div>` : nothing}
+    </section>
+    <section class="match-shop">
+      <div class="shop-heading"><h2>商店</h2><div class="shop-tools">
+        <div class="shop-balance">${disclosure("本局金币",
+          html`${icon("coin")}<span>金币</span><strong>${r.gold}</strong>
+            <span class="shop-income">火热连胜 <b>${r.hotStreak}</b> · 利息 <b>${interest}</b></span>`,
+          entryList([{ name: "金币 " + r.gold }, { name: "火热连胜 " + r.hotStreak },
+            { name: `预计利息 ${interest} / 上限 ${r.interestCap}` }]), true)}</div>
+        ${button(find("lockShop"), p.shop.locked ? "解锁" : "锁定", false, p.shop.locked)}
+        ${button(find("refreshShop"), p.shop.freeRefreshes > 0 ? `免费刷新 · ${p.shop.freeRefreshes}` : "刷新")}
+      </div></div>
+      <div class="match-offers">${Array.from({ length: 5 }, (_, index) => {
+        const offer = p.shop.slots[index];
+        if (!offer) return html`<div class="offer-empty" role="img" aria-label="商店空位"><span>空位</span></div>`;
+        const unit = c.unit(offer.unitId);
+        const traits = "traitIds" in unit && Array.isArray(unit.traitIds) ? unit.traitIds.map(c.trait) : [];
+        const label = [unit.name, offer.price + " 金币", ...traits.map(trait => trait.name)].join(" · ");
+        const entry = find("buy", a => a.kind === "buy" && a.offerId === offer.offerId);
+        return html`<button type="button" title=${label} aria-label=${"招募 " + label}
+          ?disabled=${!entry} @click=${() => entry && controls.execute(entry)}>
+          <span class="offer-portrait" aria-hidden="true">
+            <span class="offer-art">${portrait(unit)}</span>
+            <span class="offer-traits">${traits.map(trait => html`<span class="offer-trait">
+              ${art(trait.image, "offer-trait-icon")}<span class="offer-trait-name">${trait.name}</span></span>`)}</span>
+          </span>
+          <span class="offer-footer" aria-hidden="true"><span class="offer-name">${unit.name}</span>
+            <span class="offer-price">${icon("coin")}${offer.price}</span></span>
+        </button>`;
+      })}</div>
+    </section>
+    ${choice ? html`<article class="advice">
+      <small>本步建议 <span>节点 ${s.position?.nodeId}</span></small>
+      <div>${choice.image ? art(choice.image, "thumb") : nothing}
+        <div><h3>${choice.title}</h3><p>${choice.reason}</p></div></div>
+      <div class="metrics">${stats(choice.effects)}</div></article>
+      <div class="alternatives"><small>备选</small>${insights?.advice.filter(a => a !== choice).map(advice =>
+        html`<button type="button" @click=${() => chooseAdvice(advice.id)}>${advice.title} <small>${advice.reason}</small></button>`)}</div>` : nothing}
+    ${insights?.lastAction ? html`<p role="status">实际操作已记录</p>` : nothing}
   </div>`;
 }
 
-function shopBalance(m: Match) {
-  return matchDisclosure("本局金币",
-    html`${icon("coin")}<span>金币</span><strong>${m.gold ?? "—"}</strong>
-      <span class="shop-income">火热连胜 <b>${m.streak ?? "—"}</b> · 利息 <b>${m.interest ?? "—"}</b></span>`,
-    overviewEntries([
-      { name: "剩余金币", detail: m.gold?.toString() ?? "未知" },
-      { name: "火热连胜", detail: m.streak?.toString() ?? "未知" },
-      { name: "预计利息", detail: m.interest?.toString() ?? "未知" },
-    ]), true);
-}
-
-function itemPicture(item: MatchItem) {
-  const artwork = art(item.image);
-  return artwork === nothing ? html`<span class="item-initial">${item.name.slice(0, 1)}</span>` : artwork;
-}
-function cataloguePortrait(unit: Unit) {
-  const picture = art(`/match-portraits/${unit.id}.webp`);
-  if (picture !== nothing) return picture;
-  const fallback = art(unit.portrait);
-  if (fallback !== nothing) return fallback;
-  const avatar = art(unit.image);
-  return avatar !== nothing ? avatar : html`<span class="portrait-initial" aria-hidden="true">${unit.name.slice(0, 1)}</span>`;
-}
-
-function slots(
-  pieces: Piece[],
-  capacity: number,
-  start: number,
-  end: number,
-  className: string,
-  label: string,
-  renderPiece: (piece: Piece) => TemplateResult,
-) {
-  return html`<div class=${`slots ${className}`} role="group" aria-label=${label}>
-      ${Array.from({ length: end - start }, (_, offset) => {
-        const i = start + offset;
-        const p = pieces.find(piece => piece.slot === i);
-        if (p) return renderPiece(p);
-        const locked = i >= capacity;
-        return html`<span class=${locked ? "roster-slot empty reserved-slot" : "roster-slot empty"}
-            role="img" aria-label=${locked ? "未解锁" : "空位"} title=${locked ? "未解锁" : nothing}>
-          <span class="piece-main" aria-hidden="true">
-            <span class="piece-face">${locked ? icon("lock") : nothing}</span>
-          </span>
-          <span class="piece-gear" aria-hidden="true"></span>
-        </span>`;
-      })}
-    </div>`;
-}
-function feedback(
-  m: Match,
-  choice: ActionOption,
-  choose: (id: string) => void,
-  cancel: () => void,
-  save: (e: SubmitEvent) => void,
-) {
-  return html`<form class="feedback" @submit=${save}>
-    <b>节点 ${m.node} / 实战回填</b>
-    <h3>记录实际操作</h3>
+function feedback(s: MatchSnapshot, insights: MatchInsights, action: ActionOption, session: MatchSession,
+  choose: (id: string) => void, close: () => void) {
+  return html`<form class="feedback" @submit=${async (event: SubmitEvent) => {
+    event.preventDefault();
+    if (!(event.currentTarget instanceof HTMLFormElement)) return;
+    const form = new FormData(event.currentTarget);
+    const observed = Object.fromEntries(insights.feedbackFields.map(field => [field.key, Number(form.get(field.key))]));
+    await session.feedback(s, action.id, observed);
+    if (!session.notice) close();
+  }}>
+    <b>节点 ${s.position?.nodeId} / 实战回填</b><h3>记录实际操作</h3>
     <div class="scroll-area" role="region" aria-label="实战回填字段" tabindex="0">
-    <section>
-      <p class="feedback-row"><span>本步建议</span><strong>${m.advice[0]?.title ?? "暂无建议"}</strong></p>
-      <label
-        >实际操作<select
-          .value=${choice.id}
-          @change=${(e: Event) => choose((e.target as HTMLSelectElement).value)}
-        >
-          ${m.actions.map((a) => html`<option value=${a.id}>${a.title}</option>`)}
-        </select></label
-      >
-    </section>
-    <section>
-      <h2>核对游戏内结果</h2>
-      ${m.feedbackFields.map((f) => html`<label>${f.label}<input type="number" required step="1" name=${f.key} min=${f.min} max=${f.max ?? nothing} .value=${String(choice.expected[f.key] ?? f.current ?? "")} />${f.current === null ? nothing : html`<small>原为 ${f.current}</small>`}</label>`)}
-    </section>
+      <section><p class="feedback-row"><span>本步建议</span><strong>${insights.advice[0]?.title ?? "暂无建议"}</strong></p>
+      <label>实际操作<select @change=${(event: Event) => {
+        if (event.target instanceof HTMLSelectElement) choose(event.target.value);
+      }}>${insights.actions.map(entry => html`<option value=${entry.id} ?selected=${entry.id === action.id}>${entry.title}</option>`)}</select></label></section>
+      <section><h2>核对游戏内结果</h2>${insights.feedbackFields.map(field =>
+        html`<label>${field.label}<input type="number" required step="1" name=${field.key} min=${field.min} max=${field.max ?? nothing}
+          .value=${String(action.expected[field.key] ?? field.current ?? "")}></label>`)}</section>
     </div>
-
-    <footer>
-      <button type="button" @click=${cancel}>返回</button
-      ><button class="primary">${icon("check")} 保存记录</button>
-    </footer>
+    <footer><button type="button" @click=${close}>返回</button>
+      <button class="primary" ?disabled=${session.pending || session.disconnected}>${icon("check")} 保存记录</button></footer>
   </form>`;
 }
-export function matchView(
-  port: Pick<MatchPort, "executeMatchCommand" | "saveFeedback">,
-  update: (m: Match) => void,
-  redraw: () => void,
-  run: Run,
-  openBattle: (() => Promise<void>) | undefined,
-  reload: () => Promise<void>,
-) {
-  let actionId = "";
-  let traitsExpanded = false;
-  const setTraitsExpanded = (expanded: boolean, restoreFocus = false) => {
-    traitsExpanded = expanded;
+
+export function matchView(session: MatchSession, redraw: () => void, openBattle: (() => Promise<void>) | undefined, demoVersion?: string) {
+  let last: MatchSnapshot | undefined;
+  let expanded = false;
+  let aura: { id: string; selectionId: string } | undefined;
+  let editing: string | undefined;
+  let adviceId = "";
+  let drag: { source: DragSource; snapshot: MatchSnapshot } | undefined;
+  let hover: HTMLElement | undefined;
+  const inspections: { entry: Inspection; trigger: HTMLElement | null }[] = [];
+  function highlight(target?: HTMLElement) {
+    if (hover === target) return;
+    hover?.removeAttribute("data-drop-hover");
+    hover = target;
+    hover?.setAttribute("data-drop-hover", "");
+  }
+  function inspect(entry: Inspection) {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (!trigger?.closest(".match-inspector")) inspections.length = 0;
+    inspections.push({ entry, trigger });
     redraw();
-    if (restoreFocus) document.getElementById("match-traits-toggle")?.focus({ preventScroll: true });
-  };
-  let drag: { matchId: string; revision: number; itemId: string } | undefined;
-  let dropHover: HTMLElement | undefined;
-  const setDropHover = (target?: HTMLElement) => {
-    if (target === dropHover) return;
-    dropHover?.removeAttribute("data-drop-hover");
-    dropHover = target;
-    target?.setAttribute("data-drop-hover", "");
-  };
-  const leaveDrop = (event: DragEvent) => {
-    if (dropHover !== event.currentTarget) return;
-    if (event.relatedTarget instanceof Node && dropHover?.contains(event.relatedTarget)) return;
-    setDropHover();
-  };
-  const inspections: { selection: Selection; revision: number; trigger: HTMLElement | null }[] = [];
-  const inspect = (entry?: Selection, revision?: number) => {
-    if (entry && revision !== undefined) {
-      const trigger = document.activeElement as HTMLElement | null;
-      if (!trigger?.closest(".match-inspector")) inspections.length = 0;
-      inspections.push({ selection: entry, revision, trigger });
-      redraw();
-      document.getElementById("match-inspector-title")?.focus();
-    } else {
-      const closed = inspections.pop();
-      redraw();
-      if (closed?.trigger?.isConnected) closed.trigger.focus();
-      else document.querySelector<HTMLElement>("#match-inspector-title, #match-resources")?.focus();
-    }
-  };
-  const selectAction = (id: string) => {
-    actionId = id;
+    document.getElementById("match-inspector-title")?.focus({ preventScroll: true });
+  }
+  function closeInspection() {
+    const previous = inspections.pop();
     redraw();
-  };
-  let adviceId = "",
-    editing = false;
-  const choose = (id: string) => {
-    adviceId = id;
-    redraw();
-  };
-  return (m: Match): Spread => {
-    const commands = m.commands;
-    const pieces = [...m.front, ...m.back, ...m.bench];
-    const allItems = [...m.inventory, ...m.consumables, ...pieces.flatMap(piece => piece.gear)];
-    const inspection = inspections.at(-1);
-    const current = inspection?.revision === m.revision ? inspection.selection : undefined;
-    const selectedItem = current?.kind === "item" ? allItems.find(item => item.itemId === current.id) : undefined;
-    const selectedPiece = current?.kind === "piece" ? pieces.find(piece => piece.pieceId === current.id) : undefined;
-    const selectedEvent = current?.kind === "event" && m.event?.id === current.id ? m.event : undefined;
-    const execute = (command: MatchCommand) => run(async () => {
-      const next = await port.executeMatchCommand({ matchId: m.id, revision: m.revision, commandId: command.id });
+    if (previous?.trigger?.isConnected) previous.trigger.focus();
+    else document.getElementById("match-inspector-title")?.focus();
+  }
+
+  return (account: Account | undefined): Spread => {
+    const s = session.snapshot;
+    if (s !== last) {
+      if (s?.matchId !== last?.matchId) { expanded = false; aura = undefined; adviceId = ""; }
       inspections.length = 0;
-      update(next);
-      document.getElementById("match-resources")?.focus({ preventScroll: true });
-    });
-    const commandButton = (command: MatchCommand) => html`<button type="button" @click=${() => execute(command)}>
-      <span><strong>${command.label}</strong>${command.detail ? html`<small>${command.detail}</small>` : nothing}</span>
-      <span aria-hidden="true">›</span>
-    </button>`;
-    const draggedItemId = drag?.matchId === m.id && drag.revision === m.revision ? drag.itemId : undefined;
-    const getDrop = (target: DropTarget) => drag?.matchId === m.id && drag.revision === m.revision
-      ? commandsForDrop(commands, drag.itemId, target) : [];
-    const allowDrop = (event: DragEvent, target: DropTarget) => {
-      if (!getDrop(target).length) return;
-      event.preventDefault();
-      event.stopPropagation();
-      setDropHover(event.currentTarget as HTMLElement);
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    };
-    const drop = (event: DragEvent, target: DropTarget) => {
-      const available = getDrop(target);
-      if (!available.length || !drag) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const itemId = drag.itemId;
+      editing = undefined;
       drag = undefined;
-      setDropHover();
-      if (available.length === 1) {
-        redraw();
-        void execute(available[0]);
-      } else {
-        inspect({ kind: "item", id: itemId, commandIds: new Set(available.map(command => command.id)) }, m.revision);
-      }
-    };
-    const itemCard = (item: MatchItem, pieceId?: string) => {
-      const target = { itemId: item.itemId, pieceId };
-      const draggable = !editing && commands.some(({ operation }) =>
-        ("itemId" in operation && operation.itemId === item.itemId &&
-          (operation.kind !== "useItem" || operation.pieceId !== undefined || operation.targetItemId !== undefined)) ||
-        (operation.kind === "combine" && operation.otherItemId === item.itemId));
-      const label = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
-      return html`<button class="match-item" type="button" title=${label} aria-label=${label}
-        draggable=${String(draggable)} ?data-drop-ready=${getDrop(target).length > 0}
-        ?data-drag-source=${draggedItemId === item.itemId}
-        @dragstart=${(event: DragEvent) => {
-          if (!draggable || !event.dataTransfer) return;
-          event.dataTransfer.setData("application/x-hyacimicon-item", item.itemId);
-          event.dataTransfer.effectAllowed = "move";
-          const started = { matchId: m.id, revision: m.revision, itemId: item.itemId };
-          drag = started;
-          requestAnimationFrame(() => { if (drag === started) redraw(); });
-        }}
-        @dragend=${() => { drag = undefined; setDropHover(); redraw(); }}
-        @dragover=${(event: DragEvent) => allowDrop(event, target)}
-        @dragleave=${leaveDrop}
-        @drop=${(event: DragEvent) => drop(event, target)}
-        @click=${() => inspect({ kind: "item", id: item.itemId }, m.revision)}>
-      <span class="item-picture">${itemPicture(item)}${item.count > 1 ? html`<small>×${item.count}</small>` : nothing}</span>
-    </button>`;
-    };
-    const renderPiece = (p: Piece) => {
-      const target = { pieceId: p.pieceId };
-      const available = getDrop(target);
-      const incoming = available.some(command => command.operation.kind === "equip")
-        ? allItems.find(item => item.itemId === draggedItemId) : undefined;
-      const label = `${p.name} · ${p.stars === null ? "星级未知" : p.stars + " 星"} · 装备 ${p.gear.length} 件`;
-      return html`<div class="roster-slot piece" ?data-drop-ready=${available.length > 0}
-          @dragover=${(event: DragEvent) => allowDrop(event, target)}
-          @dragleave=${leaveDrop}
-          @drop=${(event: DragEvent) => drop(event, target)}>
-        <button class="piece-main" type="button" aria-pressed=${selectedPiece?.pieceId === p.pieceId}
-            aria-label=${label} title=${label} @click=${() => inspect({ kind: "piece", id: p.pieceId }, m.revision)}>
-          <span class="piece-face">${cataloguePortrait(p)}</span>
-          <span class="piece-stars" aria-hidden="true">${p.stars === null ? "—" : "★".repeat(p.stars)}</span>
-        </button>
-        <div class="piece-gear">${repeat(p.gear, item => item.itemId, item => itemCard(item, p.pieceId))}</div>
-        ${incoming ? html`<span class="incoming-gear" aria-hidden="true">${itemPicture(incoming)}</span>` : nothing}
-      </div>`;
-    };
-    const lock = commands.find(command => command.operation.kind === "lockShop");
-    const refresh = commands.find(command => command.operation.kind === "refreshShop");
-    const buyExperience = commands.find(command => command.operation.kind === "buyExperience");
-    const choice = m.advice.find((a) => a.id === adviceId) ?? m.advice[0];
-    const action = m.actions.find((a) => a.id === actionId) ?? m.actions[0];
-    const open = (id: string) => {
+      highlight();
+      last = s;
+    }
+    const notice = session.notice ? html`<p class="session-notice" role="status">${session.notice}</p>` : nothing;
+    if (!s) {
+      const view = account ? setup(account, session.pending, demoVersion, session.create) :
+        { left: html`<p>请先在账号书签中选择账号。</p>`, right: html`` };
+      return { ...view, right: html`${notice}${keyed(account?.id, view.right)}`, title: "对局", subtitle: demoVersion ? "货币战争 · 演示对局" : "货币战争", tools: html`` };
+    }
+
+    const { phase, preparation: p, controller } = s;
+    const insights = session.insights;
+    const c = matchCatalogue(s, account, insights);
+    const manual = controller.kind === "manual";
+    const writeable = manual && !session.pending && !session.disconnected;
+    const controls = matchControls(writeable ? s.legalActions : [], c, entry => { void session.execute(s, entry); });
+    const { find, button, actions } = controls;
+    const current = inspections.at(-1)?.entry;
+    const selection = phase.kind === "spotlight" && phase.view === "selection" ? phase : undefined;
+    const auraTarget = selection ? aura?.selectionId === selection.selectionId && selection.eligiblePieceIds.includes(aura.id)
+      ? aura.id : selection.eligiblePieceIds[0] : undefined;
+    function selectAura(id: string) {
+      if (!selection?.eligiblePieceIds.includes(id)) return;
+      aura = { id, selectionId: selection.selectionId };
       inspections.length = 0;
-      editing = true;
-      selectAction(id);
+      redraw();
+    }
+    function closeFeedback() { editing = undefined; redraw(); }
+    function dropActions(target: MatchDrop) {
+      return drag && drag.snapshot === s ? actionsForDrop(actions, drag.source, target) : [];
+    }
+    const ui: BoardInteraction = {
+      selected: current?.kind === "piece" ? current.id : undefined,
+      auraTarget,
+      inspectPiece(piece) {
+        if (selection?.eligiblePieceIds.includes(piece.pieceId)) selectAura(piece.pieceId);
+        else inspect({ kind: "piece", id: piece.pieceId });
+      },
+      inspectItem: item => inspect({ kind: "item", id: item.itemId }),
+      inspectTrait: (mechanism, choice) => inspect({ kind: "trait", id: choice.choiceId, mechanism: mechanism.kind }),
+      draggable(source) {
+        return !editing && actions.some(({ action: a }) => source.kind === "piece" ?
+          a.kind === "move" && a.pieceId === source.id :
+          "itemId" in a && a.itemId === source.id || a.kind === "combine" && a.otherItemId === source.id);
+      },
+      dragStart(event, source) {
+        if (!ui.draggable(source) || !event.dataTransfer) { event.preventDefault(); return; }
+        event.dataTransfer.setData("application/x-hyacimicon-match", source.id);
+        event.dataTransfer.effectAllowed = "move";
+        const started = { source, snapshot: s };
+        drag = started;
+        requestAnimationFrame(() => { if (drag === started) redraw(); });
+      },
+      dragEnd() { drag = undefined; highlight(); redraw(); },
+      dropReady: target => dropActions(target).length > 0,
+      dropLabel(target) {
+        const offered = dropActions(target);
+        if (!offered.length || drag?.source.kind !== "item") return;
+        const itemId = drag.source.id;
+        const item = p?.inventory.find(item => item.itemId === itemId);
+        const worn = p?.board.pieces.find(piece => piece.pieceId === target.pieceId)?.equipment;
+        if (offered.some(entry => entry.action.kind === "combine") ||
+            offered.some(entry => entry.action.kind === "equip") && item && c.item(item.definitionId).component &&
+            worn?.some(item => c.item(item.definitionId).component)) return "合成";
+        if (offered.some(entry => entry.action.kind === "equip")) return "装备";
+        return "使用";
+      },
+      dragOver(event, target) {
+        if (!dropActions(target).length || !(event.currentTarget instanceof HTMLElement)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        highlight(event.currentTarget);
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      },
+      dragLeave(event) {
+        if (hover !== event.currentTarget || event.relatedTarget instanceof Node && hover?.contains(event.relatedTarget)) return;
+        highlight();
+      },
+      drop(event, target) {
+        const offered = dropActions(target);
+        const source = drag?.source;
+        if (!source || !offered.length) return;
+        event.preventDefault();
+        event.stopPropagation();
+        drag = undefined;
+        highlight();
+        if (offered.length === 1) controls.execute(offered[0]);
+        else inspect({ ...source, actionIds: new Set(offered.map(action => action.actionId)) });
+      },
     };
-    const inspector = selectedItem ?? selectedPiece ?? selectedEvent;
-    const options = inspector ? commands.filter(({ id, operation }) => {
-      if (selectedItem) {
-        if (current?.commandIds) return current.commandIds.has(id);
-        return ("itemId" in operation && operation.itemId === selectedItem.itemId) ||
-          (operation.kind === "combine" && operation.otherItemId === selectedItem.itemId);
-      }
-      if (selectedPiece) {
-        return (operation.kind === "move" || operation.kind === "sell") &&
-          operation.pieceId === selectedPiece.pieceId;
-      }
-      return "eventId" in operation && operation.eventId === selectedEvent?.id;
-    }) : [];
-    const visibleMechanisms = Object.entries(traitMechanismLabels).filter(([id]) =>
-      m.traitMechanisms?.some(mechanism => mechanism === id),
-    );
-    const traits = html`<aside class="match-traits" aria-label="阵容羁绊"
-        @keydown=${(event: KeyboardEvent) => {
-          if (event.key === "Escape" && traitsExpanded) setTraitsExpanded(false, true);
-        }}>
-      <div class="traits-panel" ?data-expanded=${traitsExpanded}>
-        <div class="traits-heading">
-          <h3>羁绊</h3>
-          <button type="button" id="match-traits-toggle" aria-expanded=${traitsExpanded} aria-controls="match-trait-list"
-            @click=${() => setTraitsExpanded(!traitsExpanded)}>${traitsExpanded ? "收起" : "展开"}${icon("chev")}</button>
-        </div>
-        <ul id="match-trait-list" class="match-trait-list" aria-label="羁绊列表" tabindex="0">
-          ${m.traits.length ? m.traits.map(trait => {
-            const progress = trait.progress;
-            const active = progress?.thresholds.filter(value => value <= progress.count).at(-1);
-            const nextTier = progress?.thresholds.find(value => value > progress.count);
-            const artwork = art(trait.image);
-            return html`<li ?data-active=${active !== undefined}
-                ?data-near=${progress !== undefined && nextTier === progress.count + 1}
-                title=${[trait.name, trait.detail].filter(Boolean).join(" · ")}>
-              <span class="trait-emblem" aria-hidden="true">
-                ${artwork === nothing ? trait.name.slice(0, 1) : artwork}
-              </span>
-              <span class="trait-copy">
-                <strong>${trait.name}</strong>
-                ${traitsExpanded && progress?.thresholds.length ? html`<small class="trait-breakpoints" aria-label="激活档位">
-                  ${progress.thresholds.map(value => html`<span ?data-active=${value === active}>${value}</span>`)}
-                </small>` : nothing}
-                ${traitsExpanded && trait.detail ? html`<small>${trait.detail}</small>` : nothing}
-              </span>
-              ${progress ? html`<span class="trait-count" aria-label=${nextTier === undefined
-                ? `当前 ${progress.count} 人`
-                : `当前 ${progress.count} 人，下一档 ${nextTier} 人`}>
-                <span>${progress.count}</span>${nextTier === undefined
-                  ? nothing : html`<small>/</small><small>${nextTier}</small>`}
-              </span>` : nothing}
-            </li>`;
-          }) : html`<li class="no-traits">暂无羁绊</li>`}
-        </ul>
+    const piece = current?.kind === "piece" ? p?.board.pieces.find(piece => piece.pieceId === current.id) : undefined;
+    const item = current?.kind === "item" ? [...p?.inventory ?? [],
+      ...p?.board.pieces.flatMap(piece => piece.equipment) ?? []].find(item => item.itemId === current.id) : undefined;
+    const choiceView = current?.kind === "trait" ? { mechanism: current.mechanism, choiceId: current.id } :
+      phase.kind === "preparation" ? phase.openTraitChoice : null;
+    const mechanism = p?.mechanisms.find(m => m.kind === choiceView?.mechanism);
+    const choice = mechanism?.choices.find(c => c.choiceId === choiceView?.choiceId);
+    const draft = choiceView && "draftOptionId" in choiceView ? choiceView.draftOptionId : undefined;
+    const inspectionActions = actions.filter(({ action: a, actionId }) => {
+      if (current?.actionIds) return current.actionIds.has(actionId);
+      if (piece) return (a.kind === "move" || a.kind === "sell") && a.pieceId === piece.pieceId;
+      return item && ("itemId" in a && a.itemId === item.itemId || a.kind === "combine" && a.otherItemId === item.itemId);
+    });
+    const unit = piece ? c.unit(piece.unitId) : undefined;
+    const itemData = item ? c.item(item.definitionId) : undefined;
+    const inspector = piece && unit || item && itemData ? html`<section class="match-inspector">
+      <button type="button" class="inspector-back" @click=${closeInspection}>‹ 返回</button>
+      <div class="inspector-heading">
+        ${unit ? html`<span class="inspector-portrait">${portrait(unit)}</span>` : nothing}
+        ${itemData ? itemPicture({ ...itemData, count: item?.count }) : nothing}
+        <div><h2 tabindex="-1" id="match-inspector-title">${unit?.name ?? itemData?.name}</h2>${itemData?.detail ? html`<p>${itemData.detail}</p>` : nothing}</div>
       </div>
-      ${visibleMechanisms.length ? html`<section class="trait-mechanisms" aria-labelledby="trait-mechanisms-title">
-        <h4 id="trait-mechanisms-title">羁绊机制</h4>
-        <ul>${visibleMechanisms.map(([, label]) => html`<li>${label}</li>`)}</ul>
-      </section>` : nothing}
-    </aside>`;
+      ${piece && p ? html`<h3>已装备 <small>${piece.equipment.length} / 3</small></h3>
+        <div class="match-inventory">${piece.equipment.map(item => itemCard(item, c, ui))}</div>
+        ${p.selectedAuras.some(aura => aura.pieceId === piece.pieceId) ? auraList(p, c, piece.pieceId) : nothing}` : nothing}
+      <div class="command-list">${inspectionActions.map(entry => button(entry, controls.label(entry.action)))}</div>
+    </section>` : mechanism && choice ? html`<div class="match-inspector">
+      ${current?.kind === "trait" ? html`<button type="button" @click=${closeInspection}>‹ 返回</button>` : nothing}
+      ${traitChoice(mechanism, choice, controls, draft)}</div>` : nothing;
+
+    const revisiting = "view" in phase && phase.view === "preparation";
+    const workbench = p && (phase.kind === "preparation" || revisiting);
+    const primary = phase.kind === "preparation" && !phase.openTraitChoice ? button(find("startBattle"), "开始战斗", true) :
+      phase.kind === "battle" ? button(find("leaveBattle"), "暂离战斗", true) :
+      phase.kind === "battleUnavailable" ? button(find("restartBattle"), "重试战斗", true) :
+      phase.kind === "battleAway" ? button(find("reenterBattle"), "重新进入战斗", true) :
+      phase.kind === "teaBreakReward" ? button(find("claimTeaBreakReward"), "领取奖励", true) :
+      phase.kind === "finished" ? html`<button class="primary" type="button" @click=${session.newMatch}>开启新对局</button>` :
+      "view" in phase ? button(find(revisiting ? "returnToSelection" : "returnToPreparation"),
+        revisiting ? "回到选择" : "返回备战", true) : nothing;
+    const action = insights?.actions.find(action => action.id === editing) ?? insights?.actions[0];
+    const history = session.history;
+    const headerControls = html`<div class="session-control" data-controller=${controller.kind}>
+      ${controller.kind === "model" ? html`<span>模型接管 · ${controller.modelId}</span>
+        <button type="button" class="primary" ?disabled=${session.pending} @click=${() => session.control(s, { kind: "manual" })}>收回控制</button>` :
+        html`<span>手动控制</span>${phase.kind !== "finished" && insights?.models.length ?
+          html`<details><summary>交给模型</summary><div>${insights.models.map(model =>
+            html`<button type="button" ?disabled=${!writeable} @click=${() => session.control(s, { kind: "model", modelId: model.id })}>${model.name}</button>`)}</div></details>` : nothing}`}
+      ${session.disconnected ? html`<button type="button" @click=${session.reload}>连接中断 · 重连</button>` : nothing}
+    </div>`;
     return {
       title: "阵容部署",
-      subtitle: m.preview ? "货币战争 · 演示对局" : "货币战争",
-      tools: matchStatus(m, true),
-      left: html`${matchOverview(m.overview)}<div class="match-roster">
-        <div class="match-formations">
-          <section class="formation front-formation">
-            <h2>前台 <small>${m.front.length} / ${m.frontCapacity}</small></h2>
-            ${slots(m.front, m.frontCapacity, 0, m.frontCapacity, "front", "前台", renderPiece)}
-          </section>
-          <section class="formation back-formation">
-            <h2>后台 <small>${m.back.length} / ${m.backCapacity}</small></h2>
-            <div class="back-board">
-              ${slots(m.back, m.backCapacity, 0, 4, "back back-head", "后台首排", renderPiece)}
-              ${slots(m.back, m.backCapacity, 4, Math.max(9, m.backCapacity), "back back-tail", "后台续排", renderPiece)}
-            </div>
-          </section>
-          <section class="formation bench-formation">
-            <h2>备战席 <small>${m.bench.length} / ${m.benchCapacity}</small></h2>
-            ${slots(m.bench, m.benchCapacity, 0, m.benchCapacity, "bench", "备战席", renderPiece)}
-          </section>
+      subtitle: demoVersion ? "货币战争 · 演示对局" : "货币战争",
+      subtitleTools: headerControls,
+      badge: phaseNames[phase.kind],
+      tools: matchStatus(s, true),
+      left: p ? board(s, p, c, controls, ui, expanded, value => { expanded = value; redraw(); }) : openingIntel(s),
+      right: html`${notice}${editing && action && insights && manual ? feedback(s, insights, action, session,
+        id => { editing = id; redraw(); }, closeFeedback) : html`
+        <div class="match-content scroll-area" role="region" aria-label="对局操作" tabindex="0" @keydown=${(event: KeyboardEvent) => {
+          if (event.key === "Escape" && current) closeInspection();
+        }}>
+          ${controller.kind === "model" || history.length ? html`<details class="settlement model-history">
+            <summary>AI 操作流水${history.length ? html` · ${c.actionLabel(history.at(-1)?.action ?? history[0].action)}` : nothing}</summary>
+            ${history.length ? html`<ol>${[...history].reverse().map(entry => html`<li>版本 ${entry.revision} · ${entry.modelId} · ${c.actionLabel(entry.action)}</li>`)}</ol>` : html`<p>等待模型操作。</p>`}
+          </details>` : nothing}
+          ${s.latestSettlement ? keyed(s.latestSettlement.nodeId, settlement(s.latestSettlement)) : nothing}
+          ${revisiting ? html`<p class="phase-banner">${phaseNames[phase.kind]} ·
+            ${phase.kind === "spotlight" ? "可调整站位与开启晶矿" : "可开启晶矿"}</p>` : nothing}
+          ${inspector !== nothing ? inspector : workbench ?
+            preparationView(s, p, c, controls, ui, insights, adviceId, id => { adviceId = id; redraw(); }) :
+            phasePanel(s, c, controls, insights, auraTarget, selectAura)}
         </div>
-        ${traits}
-        </div>`,
-      right:
-        editing && action
-          ? feedback(
-              m,
-              action,
-              selectAction,
-              () => {
-                editing = false;
-                redraw();
-              },
-              (e) => {
-                e.preventDefault();
-                const form = new FormData(e.target as HTMLFormElement);
-                const observed = Object.fromEntries(
-                  m.feedbackFields.map((f) => [f.key, Number(form.get(f.key))]),
-                );
-                return run(async () => {
-                  const next = await port.saveFeedback({
-                    matchId: m.id,
-                    revision: m.revision,
-                    action: action.id,
-                    observed,
-                  });
-                  editing = false;
-                  update(next);
-                });
-              },
-            )
-          : html`<div class="match-content scroll-area" role="region" aria-label="对局操作" tabindex="0"
-              @keydown=${(event: KeyboardEvent) => { if (event.key === "Escape" && inspector) inspect(); }}>
-            ${inspector ? html`<section class="match-inspector">
-                <button class="inspector-back" @click=${() => inspect()}>‹ 返回</button>
-                <div class="inspector-heading">
-                  ${selectedItem ? html`<span class="item-picture">${itemPicture(selectedItem)}</span>` : nothing}
-                  ${selectedPiece ? html`<span class="inspector-portrait">${cataloguePortrait(selectedPiece)}</span>` : nothing}
-                  <div>
-                    <h2 tabindex="-1" id="match-inspector-title">${"title" in inspector ? inspector.title : inspector.name}</h2>
-                    ${"detail" in inspector && inspector.detail ? html`<p>${inspector.detail}</p>` : nothing}
-                    ${selectedPiece && m.aura?.pieceId === selectedPiece.pieceId ? html`<p>${m.aura.name} · ${m.aura.detail}</p>` : nothing}
-                  </div>
-                </div>
-                ${selectedPiece ? html`<h3>已装备 <small>${selectedPiece.gear.length} / 3</small></h3>
-                  <div class="match-inventory">${repeat(selectedPiece.gear, item => item.itemId, item => itemCard(item, selectedPiece.pieceId))}</div>` : nothing}
-                <div class="command-list">${options.length ? options.map(commandButton) : html`<p>当前没有可执行操作</p>`}</div>
-              </section>` : html`<div class="match-home">
-              <div class="match-summary">
-              <div class="metrics match-economy">
-                ${stats([
-                  ["上阵人数", m.front.length + m.back.length + " / " + m.capacity],
-                ])}
-                <div class="match-training">
-                  <small>${m.experience ? `Lv.${m.experience.level}${m.experience.required === null ? "" : ` · ${m.experience.current} / ${m.experience.required}`}` : "队伍等级"}</small>
-                  <button ?disabled=${!buyExperience} title=${buyExperience?.detail ?? ""} @click=${() => buyExperience && execute(buyExperience)}>
-                    ${buyExperience?.label ?? "购买经验"}
-                  </button>
-                </div>
-              </div>
-              ${m.event || m.companion ? html`<div class="match-event" ?data-pending=${m.event !== undefined}>
-                <div>${m.event ? nothing : html`<small>奇遇伙伴</small>`}<strong>${m.event?.title ?? m.companion?.name}</strong><small>${m.event?.detail || m.companion?.detail}</small>
-                  ${m.aura ? html`<small>${m.aura.name} · ${pieces.find(p => p.pieceId === m.aura?.pieceId)?.name ?? "主角"}</small>` : nothing}
-                </div>
-                ${m.event ? html`<button @click=${() => inspect({ kind: "event", id: m.event!.id }, m.revision)}>
-                  ${m.event.kind === "aura" ? "选择光环" : "进入茶歇"} <span aria-hidden="true">›</span>
-                </button>` : nothing}
-              </div>` : nothing}
-              </div>
-              <section class="match-stores">
-                <div>
-                  <h2 id="match-resources" tabindex="-1">装备 <small>${m.inventory.reduce((total, item) => total + item.count, 0)} 件待分配</small></h2>
-                  <div class="match-inventory stock-window" role="region" aria-label="待分配装备" tabindex="0">${m.inventory.length ? repeat(m.inventory, item => item.itemId, item => itemCard(item)) : html`<p>暂无待分配装备</p>`}</div>
-                </div>
-                <div class="match-supply-tray">
-                  <h2>消耗品</h2>
-                  <div class="match-inventory match-supplies stock-window" role="region" aria-label="消耗品" tabindex="0">${m.consumables.length ? repeat(m.consumables, item => item.itemId, item => itemCard(item)) : html`<p>暂无消耗品</p>`}</div>
-                </div>
-              </section>
-              <section class="match-shop">
-                <div class="shop-heading"><h2>商店</h2><div class="shop-tools">
-                  <div class="shop-balance">${shopBalance(m)}</div>
-                  ${m.bench.length >= m.benchCapacity ? html`<small class="shop-capacity">备战席已满</small>` : nothing}
-                  <button aria-pressed=${m.locked} ?disabled=${!lock} @click=${() => lock && execute(lock)}>
-                    ${icon("lock")} ${lock?.label ?? (m.locked ? "已锁定" : "锁定")}
-                  </button>
-                  <button ?disabled=${!refresh} @click=${() => refresh && execute(refresh)}>
-                    ${icon("cycle")} ${refresh?.label ?? "刷新"}
-                  </button>
-                </div></div>
-                <div class="match-offers">${m.offers.map(offer => {
-                  const command = commands.find(({ operation }) => operation.kind === "buy" && operation.offerId === offer.offerId);
-                  const traits = offer.traits ?? [];
-                  const details = [offer.note, ...traits.map(trait => trait.name)];
-                  return html`<button type="button" title=${[offer.unit.name, ...details].filter(Boolean).join(" · ")} ?disabled=${!command}
-                    aria-label=${[command?.label ?? offer.unit.name, command?.detail ?? (offer.cost === null ? "价格未知" : `${offer.cost} 金币`), ...details].filter(Boolean).join(" · ")}
-                    @click=${() => command && execute(command)}>
-                    <span class="offer-portrait" aria-hidden="true">
-                      <span class="offer-art">${cataloguePortrait(offer.unit)}</span>
-                      ${traits.length || offer.note ? html`<span class="offer-traits">
-                        ${traits.map(trait => html`<span class="offer-trait">
-                          ${art(trait.image, "offer-trait-icon")}<span class="offer-trait-name">${trait.name}</span>
-                        </span>`)}
-                        ${offer.note ? html`<span class="offer-note">${offer.note}</span>` : nothing}
-                      </span>` : nothing}
-                    </span>
-                    <span class="offer-footer" aria-hidden="true">
-                      <span class="offer-name">${offer.unit.name}</span>
-                      <span class="offer-price">${icon("coin")}${offer.cost ?? "—"}</span>
-                    </span>
-                  </button>`;
-                })}${m.offers.length ? nothing : html`<p>暂无报价</p>`}</div>
-                <div class="command-list">${commands.filter(({ operation }) => operation.kind === "advance").map(commandButton)}</div>
-              </section>
-              ${
-                choice
-                  ? html`<article class="advice">
-                        <small>本步建议 <span>节点 ${m.node}</span></small>
-                        <div>
-                          ${choice.image ? art(choice.image, "thumb") : nothing}
-                          <div>
-                            <h3>${choice.title}</h3>
-                            <p>${choice.reason}</p>
-                          </div>
-                        </div>
-                        <div class="metrics">${stats(choice.effects)}</div>
-                      </article>
-                      <div class="alternatives">
-                        <small>备选</small
-                        >${m.advice.filter((a) => a !== choice).map((a) => html`<button @click=${() => choose(a.id)}>${a.title} <small>${a.reason}</small></button>`)}
-                      </div>`
-                  : m.lastAction ? html`<p role="status">实际操作已记录</p>` : nothing
-              }
-              </div>`}
-              </div>
-              <footer class="match-actions">
-                <button class="match-reload" @click=${reload}>重读局面</button>
-                ${openBattle ? html`<button @click=${openBattle}>查看本局战斗</button>` : nothing}
-                ${action ? html`<button class="match-record" @click=${() => open(choice?.id ?? action.id)}>${icon("check")} 记录实际操作</button>` : nothing}
-              </footer>`,
+        <footer class="match-actions">
+          <button type="button" class="match-reload" ?disabled=${session.pending} @click=${session.reload}>重读局面</button>
+          ${action && manual ? html`<button type="button" class="match-record" ?disabled=${!writeable} @click=${() => {
+            inspections.length = 0;
+            editing = insights?.advice.find(a => a.id === adviceId)?.id ?? insights?.advice[0]?.id ?? action.id;
+            redraw();
+          }}>${icon("check")} 记录实际操作</button>` : nothing}
+          <span class="match-footer-spacer"></span>
+          ${openBattle && p ? html`<button type="button" @click=${openBattle}>查看本局战斗</button>` : nothing}
+          ${primary}
+        </footer>`}`,
     };
   };
 }

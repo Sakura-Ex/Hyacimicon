@@ -1,15 +1,14 @@
+import type { Catalogue } from "./match-catalogue";
 import type {
   Account,
   Item,
-  Match,
-  MatchCommand,
-  MatchItem,
-  MatchStep,
+  AccountPort,
+  BattlePort,
   Combatant,
-  Piece,
-  PlayerPort,
   Unit,
 } from "./contracts";
+
+export const demoRules = "demo-4.7";
 
 // Preview data identifies local artwork and leaves game descriptions and calculated values empty.
 const names: Record<string, string> = {
@@ -98,22 +97,19 @@ const account: Account = {
         : [],
   })),
 };
-function piece(id: string, stars: number, items: Item[] = []): Piece {
+export interface DemoItem extends Item { itemId: string }
+interface DemoPiece extends Unit {
+  pieceId: string;
+  slot: number;
+  stars: number;
+  gear: DemoItem[];
+}
+function piece(id: string, stars: number, items: Item[] = []): DemoPiece {
   return { ...unit(id), pieceId: "", slot: 0, stars, gear: matchItems("gear", items) };
 }
-function matchItems(prefix: string, items: Item[]): MatchItem[] {
+function matchItems(prefix: string, items: Item[]): DemoItem[] {
   return items.map((item, i) => ({ ...item, itemId: `${prefix}-${i}` }));
 }
-const routeKinds: MatchStep["kind"][][] = [
-  ["reward", "battle", "battle", "encounter", "reward", "battle", "boss"],
-  ["reward", "battle", "battle", "encounter", "battle", "reward", "boss"],
-  ["reward", "battle", "encounter", "battle", "battle", "boss"],
-];
-const previewHealth = 68;
-const previewMaxHealth = 100;
-const previewGold = 37;
-const previewExperienceCost = 4;
-const previewExperienceGain = 4;
 const traitRows: [string, number, number, number[]][] = [
   ["云上五骁", 100702, 3, [2, 4, 5]],
   ["星核猎手", 100802, 2, [2, 4, 6]],
@@ -151,36 +147,11 @@ const offerTraitNames: Record<string, string[]> = {
   "1205": ["云上五骁", "反击"],
   "1310": ["星核猎手", "击破"],
 };
-const offerTraits = (id: string) =>
-  (offerTraitNames[id] ?? []).map(name => ({ name, image: `/traits/${offerTraitIcons[name]}.webp` }));
-const initial: Match = {
-  id: "preview-match",
-  revision: 1,
-  node: "2-3",
-  planes: routeKinds.map((nodes, plane) =>
-    nodes.map((kind, node) => ({ id: `${plane + 1}-${node + 1}`, kind })),
-  ),
-  preview: true,
-  health: previewHealth,
-  maxHealth: previewMaxHealth,
+const initial = {
+  health: 68,
   streak: 2,
-  interest: 3,
-  overview: {
-    opponent: {
-      name: "凛冬经贸联合体", difficulty: 14, stars: 2,
-      enemies: [{ name: "银鬃尉官", stars: 2 }, { name: "银鬃炮手", stars: 1 }, { name: "银鬃近卫", stars: 1 }],
-    },
-    modifiers: [
-      { name: "随从强化", detail: "普通和精英敌人速度提高 30%，生命上限提高 20%。" },
-      { name: "第二位面强化", detail: "第二位面敌人速度提高 40%，生命上限提高 25%。" },
-    ],
-    investmentEnvironment: { name: "增发货币", detail: "第一、第二、第三阶段开始时，分别获得一个价值 6、8、10 金币的晶矿。" },
-    investmentStrategies: [{ name: "概率事件", detail: "刷新时有 50% 概率获得一次免费刷新。" }],
-    crystals: { count: 2, entries: [{ name: "晶矿", detail: "6 金币" }, { name: "晶矿", detail: "8 金币" }] },
-  },
   capacity: 8,
-  gold: previewGold,
-  experience: { level: 8, current: 68, required: 72 },
+  gold: 37,
   front: [
     piece("1205", 2, [gear[2]]),
     piece("1310", 2, gear.slice(0, 2)),
@@ -193,7 +164,7 @@ const initial: Match = {
   bench: [piece("1112", 1, [gear[1]]), piece("1208", 1, [gear[5]]), piece("1212", 1), piece("1204", 1)],
   benchCapacity: 9,
   traits: [0, 2, 9, 1, 3].map(index => previewTraits[index]),
-  traitMechanisms: ["aha", "wishPower", "trailblazeShop", "chimeraGarden"],
+
   inventory: matchItems("stock", gear),
   consumables: matchItems("supply", [
     item("精密拆装扳手", "/items/350102.webp"),
@@ -204,26 +175,24 @@ const initial: Match = {
     offerId: "offer-" + i,
     unit: unit(id),
     cost: [4, 2, 3, 4, 2][i],
-    note: "",
-    traits: offerTraits(id),
+
+
   })),
-  advice: [],
-  commands: [],
-  actions: [
-    ["recruit", "招募"],
-    ["hold", "保留金币"],
-    ["refresh", "刷新商店"],
-  ].map(([id, title]) => ({
-    id,
-    title,
-    expected: {},
-  })),
-  feedbackFields: [
-    { key: "gold", label: "剩余金币", min: 0, current: previewGold },
-    { key: "health", label: "整局血量", min: 0, max: previewMaxHealth, current: previewHealth },
-  ],
-  locked: false,
 };
+const previewCatalogue: Catalogue = {
+  units: Object.fromEntries(Object.keys(names).map(id => [id, {
+    ...unit(id), traitIds: (offerTraitNames[id] ?? []).map(name => String(offerTraitIcons[name])),
+  }])),
+  items: {
+    ...Object.fromEntries([...initial.inventory, ...initial.consumables].map(entry => {
+      const component = entry.itemId.startsWith("stock");
+      return [entry.image.slice(7, -5), { ...entry, kind: component ? "equipment" : "consumable", component }];
+    })),
+    "demo-combined": { name: "合成装备", image: "", kind: "equipment", detail: "演示进阶装备。" },
+  },
+  traits: Object.fromEntries(Object.entries(offerTraitIcons).map(([name, id]) => [String(id), { name, image: "/traits/" + id + ".webp" }])),
+};
+export const demoMatchCatalogue = () => previewCatalogue;
 const enemies = ["1002030", "1002040"].map((id, i) => ({
   id,
   name: "敌方单位 " + (i + 1),
@@ -239,7 +208,7 @@ function resolveUnits(ids: string[], options: Unit[]): Unit[] {
     return entry;
   });
 }
-function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
+export function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
   return {
     ...u,
     side,
@@ -260,47 +229,7 @@ function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
 }
 const zones = ["front", "back", "bench"] as const;
 
-function previewCommands(m: Match): MatchCommand[] {
-  const commands: MatchCommand[] = [];
-  const add = (operation: MatchCommand["operation"], label: string, detail?: string) => {
-    commands.push({ id: String(commands.length), operation, label, detail });
-  };
-  const pieces = zones.flatMap(zone => m[zone]);
-  const location = (p: Piece) => `${p.pieceId.startsWith("front-") ? "前台" : p.pieceId.startsWith("back-") ? "后台" : "备战席"} ${p.slot + 1}`;
-  for (const item of m.inventory) {
-    for (const p of pieces.filter(p => p.gear.length < 3)) {
-      add({ kind: "equip", itemId: item.itemId, pieceId: p.pieceId }, `装备给 ${p.name}`, `${location(p)} · ${p.gear.length} / 3 槽位已用`);
-    }
-  }
-  for (const item of m.consumables) {
-    if (item.name === "精密拆装扳手") {
-      for (const p of pieces.filter(p => p.gear.length)) {
-        add({ kind: "useItem", itemId: item.itemId, pieceId: p.pieceId }, `卸下 ${p.name} 的装备`, location(p));
-      }
-    }
-  }
-  for (const offer of m.offers) {
-    if (m.bench.length < m.benchCapacity && offer.cost !== null && offer.cost <= (m.gold ?? 0)) {
-      add({ kind: "buy", offerId: offer.offerId }, `招募 ${offer.unit.name}`, `${offer.cost} 金币`);
-    }
-  }
-  add({ kind: "lockShop", locked: !m.locked }, m.locked ? "解锁" : "锁定");
-  if ((m.gold ?? 0) >= 2) add({ kind: "refreshShop" }, "刷新 2", "2 金币");
-  if ((m.gold ?? 0) >= previewExperienceCost && m.experience?.required != null) {
-    add({ kind: "buyExperience" }, `购买经验 · ${previewExperienceCost}`, `${previewExperienceCost} 金币获得 ${previewExperienceGain} 经验`);
-  }
-  if (m.event?.kind === "aura") {
-    for (const p of [...m.front, ...m.back]) {
-      add({ kind: "chooseAura", eventId: m.event.id, pieceId: p.pieceId, optionId: "demo-aura" }, p.name, "舞台聚光 · 示例光环");
-    }
-  }
-  if (m.event?.kind === "teaBreak") {
-    add({ kind: "teaBreak", eventId: m.event.id, optionId: "demo-supply" }, "领取随行补给", "精密拆装扳手 ×1");
-  }
-  return commands;
-}
-
-export function demoPort(scenario?: string | null): PlayerPort {
+export function demoFixture(scenario?: string) {
   let match = structuredClone(initial);
   if (scenario === "full") {
     match.backCapacity = 9;
@@ -318,23 +247,16 @@ export function demoPort(scenario?: string | null): PlayerPort {
       p.gear = matchItems(p.pieceId, p.gear);
     });
   }
-  match.companion = { name: "绷带猫", detail: "装备补给" };
-  if (scenario === "aura") {
-    match.node = "2-7";
-    match.event = { id: "opening-act", kind: "aura", title: "主角光环", detail: "为出战角色选择本场首领战的光环。" };
-  } else if (scenario === "teaBreak") {
-    match.node = "2-6";
-    match.event = { id: "intermission", kind: "teaBreak", title: "幕后茶歇", detail: "绷带猫带来了随行补给。" };
-  } else if (scenario === "stock") {
+  if (scenario === "stock") {
     match.inventory = matchItems("stock", Array.from({ length: 30 }, (_, i) => gear[i % gear.length]));
   }
-  match.commands = previewCommands(match);
+  return match;
+}
+export type DemoFixture = ReturnType<typeof demoFixture>;
+
+export function demoPort(): AccountPort & BattlePort {
   function requireAccountService(): never {
     throw new Error("请使用 Windows 桌面版导入或生成账号。");
-  }
-  function check(id: string, revision: number) {
-    if (id !== match.id || revision !== match.revision)
-      throw new Error("局面版本已更新，请重新读取局面。");
   }
   return {
     async accounts() {
@@ -351,10 +273,6 @@ export function demoPort(scenario?: string | null): PlayerPort {
     async renameAccount() { return requireAccountService(); },
     async deleteAccount() { return requireAccountService(); },
     async exportAccount() { return requireAccountService(); },
-    async match(accountId) {
-      if (accountId !== account.id) throw new Error("请切换到预览账号查看示例对局。");
-      return match;
-    },
     async battleCatalogue() {
       return {
         allies,
@@ -382,103 +300,7 @@ export function demoPort(scenario?: string | null): PlayerPort {
           ],
         };
       }
-      check(input.matchId, input.revision);
-      const deployed = (pieces: Piece[], side: string) =>
-        pieces.map((p, i) =>
-          combatant({ ...p, id: side + "-" + i }, side, p.gear),
-        );
-      return {
-        kind: "preview",
-        units: [
-          ...deployed(match.front, "前台"),
-          ...deployed(match.back, "后台"),
-          ...enemies.map((u) => combatant(u, "敌方")),
-        ],
-      };
-    },
-    async executeMatchCommand({ matchId, revision, commandId }) {
-      check(matchId, revision);
-      const operation = match.commands.find(command => command.id === commandId)?.operation;
-      if (!operation) throw new Error("该操作当前不可用。");
-      const next = structuredClone(match);
-      const pieces = zones.flatMap(zone => next[zone]);
-      if (operation.kind === "equip") {
-        const target = pieces.find(p => p.pieceId === operation.pieceId)!;
-        const item = next.inventory.find(i => i.itemId === operation.itemId)!;
-        target.gear.push(item);
-        next.inventory = next.inventory.filter(i => i !== item);
-      } else if (operation.kind === "useItem") {
-        const target = pieces.find(p => p.pieceId === operation.pieceId)!;
-        next.inventory.push(...target.gear);
-        target.gear = [];
-        next.consumables = next.consumables.filter(i => i.itemId !== operation.itemId);
-      } else if (operation.kind === "buy") {
-        const offer = next.offers.find(o => o.offerId === operation.offerId)!;
-        const recruit = piece(offer.unit.id, 1);
-        recruit.slot = next.bench.length;
-        recruit.pieceId = "recruit-" + revision;
-        next.bench.push(recruit);
-        next.gold = (next.gold ?? 0) - offer.cost!;
-        next.offers = next.offers.filter(o => o !== offer);
-      } else if (operation.kind === "refreshShop") {
-        next.gold = (next.gold ?? 0) - 2;
-        const ids = ["1308", "1309", "1409", "1205", "1310"];
-        next.offers = initial.offers.map((offer, i) => {
-          const id = ids[(i + revision) % ids.length];
-          return { ...offer, unit: unit(id), traits: offerTraits(id) };
-        });
-      } else if (operation.kind === "buyExperience") {
-        const experience = next.experience!;
-        next.gold = (next.gold ?? 0) - previewExperienceCost;
-        experience.current += previewExperienceGain;
-        if (experience.required !== null && experience.current >= experience.required) {
-          experience.current -= experience.required;
-          experience.level++;
-          experience.required = experience.level === 9 ? 84 : null;
-          next.capacity++;
-        }
-      } else if (operation.kind === "lockShop") {
-        next.locked = operation.locked;
-      } else if (operation.kind === "chooseAura") {
-        next.aura = { pieceId: operation.pieceId, name: "舞台聚光", detail: "示例光环" };
-        delete next.event;
-      } else if (operation.kind === "teaBreak") {
-        next.consumables.push({ ...initial.consumables[0], itemId: "tea-supply" });
-        delete next.event;
-      }
-      next.revision++;
-      next.feedbackFields = next.feedbackFields.map(field => field.key === "gold" ? { ...field, current: next.gold } : field);
-      next.commands = previewCommands(next);
-      match = next;
-      return match;
-    },
-    async saveFeedback(input) {
-      check(input.matchId, input.revision);
-      const gold = input.observed.gold;
-      const health = input.observed.health;
-      if (
-        !match.actions.some((a) => a.id === input.action) ||
-        !Number.isSafeInteger(gold) ||
-        gold < 0
-      )
-        throw new Error("请选择实际操作并填写有效的金币数量。");
-      if (health !== undefined && (!Number.isSafeInteger(health) || health < 0 || health > previewMaxHealth)) {
-        throw new Error("请填写有效的整局血量。");
-      }
-      match = {
-        ...match,
-        revision: match.revision + 1,
-        gold,
-        health: health ?? match.health,
-        feedbackFields: match.feedbackFields.map((f) => ({
-          ...f,
-          current: input.observed[f.key] ?? f.current,
-        })),
-        lastAction: input.action,
-        advice: [],
-      };
-      match.commands = previewCommands(match);
-      return match;
+      throw new Error("请从当前对局打开货币战争战斗预览。");
     },
   };
 }

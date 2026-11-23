@@ -2,10 +2,13 @@ import { html, nothing, render } from "lit";
 import { accountView } from "./account";
 import { desktopAccounts } from "./account-port";
 import { matchView } from "./match";
-import { httpMatchPort, tauriMatchPort } from "./match-port";
+import { httpSessionPort, tauriSessionPort } from "./match-port";
+import { matchSession } from "./match-session";
+import { demoSessionPort } from "./demo-match";
+import { matchCatalogue, zoneNames } from "./match-catalogue";
 import { battleWorkspace } from "./battle-workspace";
-import { demoPort } from "./demo";
-import type { Account, Match } from "./contracts";
+import { combatant, demoPort, demoRules } from "./demo";
+import type { Account } from "./contracts";
 import { icon, type Spread } from "./folio";
 import { syncGameImages } from "./game-images";
 import { centerBook, control, desktop } from "./windows";
@@ -44,62 +47,66 @@ let page: Page = "account";
 let accounts: Account[] | undefined;
 let accountWarnings: string[] = [];
 let account: Account | undefined;
-let match: Match | undefined;
 let busy = false,
   message = "";
 let syncingImages = false;
 let imageStatus = "";
 let imageError = "";
-const preview = demoPort(params.get("scenario"));
+const preview = demoPort();
+const demo = demoSessionPort();
+const scenario = import.meta.env.DEV ? params.get("scenario") : null;
 const matchBase = import.meta.env.VITE_MATCH_API_BASE;
 const liveMatch = desktop
-  ? import.meta.env.VITE_MATCH_TRANSPORT === "tauri" ? tauriMatchPort() : undefined
-  : matchBase ? httpMatchPort(matchBase) : undefined;
+  ? import.meta.env.VITE_MATCH_TRANSPORT === "tauri" ? tauriSessionPort() : undefined
+  : matchBase ? httpSessionPort(matchBase) : undefined;
 const port = {
   ...preview,
   ...(desktop ? desktopAccounts(preview) : {}),
-  ...liveMatch,
 };
 const accountsPage = accountView(port, draw, run, select, removeAccount);
-const battles = battleWorkspace(port, draw, run, loadMatch, !liveMatch);
-const createMatch = () =>
-  matchView(
-    port,
-    (m) => {
-      match = m;
-      draw();
-    },
-    draw,
-    run,
-    liveMatch ? undefined : () =>
-      run(async () => {
-        await battles.enter("currencyWars");
-        page = "battle";
-      }),
-    () => run(async () => {
-      if (account) {
-        match = await port.match(account.id);
-        matchPage = createMatch();
-      }
-    }),
-  );
-let matchPage = createMatch();
+const session = matchSession(liveMatch ?? demo, draw, !liveMatch && scenario ? accountId => demo.preview({
+  accountId, rulesVersion: demoRules, enemyDifficulty: 8, affixCount: 2,
+  randomness: { kind: "seeded", seed: "layout" },
+}, scenario) : undefined);
+const battles = battleWorkspace(port, draw, run, async (snapshot) => {
+  const p = snapshot.preparation;
+  if (!p) throw new Error("请先在对局中完成开局准备。");
+  const c = matchCatalogue(snapshot, account);
+  const allies = p.board.pieces.filter(piece => piece.slot.zone !== "bench").map(piece =>
+    combatant({ ...c.unit(piece.unitId), id: piece.pieceId }, zoneNames[piece.slot.zone],
+      piece.equipment.map(item => ({ ...c.item(item.definitionId), count: item.count }))));
+  const { enemies } = await port.battleCatalogue();
+  const revealed = p.revealedEnemies.map(enemy =>
+    combatant(enemies.find(unit => unit.id === enemy.id) ?? { ...enemy, image: "" }, "敌方"));
+  return { kind: "preview", units: [...allies, ...revealed] };
+}, () => liveMatch ? undefined : session.snapshot);
+const matchPage = matchView(session, draw, liveMatch ? undefined : () => run(async () => {
+  await battles.enter("currencyWars");
+  page = "battle";
+}), liveMatch ? undefined : demoRules);
 function select(a: Account) {
   accounts ??= [];
   const index = accounts.findIndex((other) => other.id === a.id);
   if (index < 0) accounts.unshift(a);
   else accounts[index] = a;
   account = a;
-  match = undefined;
+  session.select(a.id);
   battles.resetMatch();
-  matchPage = createMatch();
   draw();
 }
 function removeAccount(id: string) {
   if (!accounts) return;
+  session.forget(id);
   accounts = accounts.filter((entry) => entry.id !== id);
-  if (account?.id === id && accounts[0]) select(accounts[0]);
-  else draw();
+  if (account?.id === id) {
+    if (accounts[0]) select(accounts[0]);
+    else {
+      account = undefined;
+      session.select();
+      battles.resetMatch();
+      draw();
+    }
+  } else draw();
 }
 async function run(work: () => Promise<void>) {
   if (busy) return;
@@ -123,16 +130,12 @@ async function loadAccounts() {
     account = accounts[0];
   }
 }
-async function loadMatch() {
-  await loadAccounts();
-  if (!account) throw new Error("请先选择账号。");
-  if (!match) match = await port.match(account.id);
-  return match;
-}
 async function navigate(next: Page) {
   if (next === "battle") await battles.enter();
-  else if (next === "match") await loadMatch();
-  else await loadAccounts();
+  else {
+    await loadAccounts();
+    if (next === "match" && account) await session.enter(account.id);
+  }
   page = next;
 }
 async function prepareImages() {
@@ -169,7 +172,7 @@ function draw() {
     right: html``,
   };
   if (page === "account") spread = accountsPage(account, accounts ?? [], accountWarnings);
-  if (page === "match" && match) spread = matchPage(match);
+  if (page === "match") spread = matchPage(account);
   if (page === "battle") spread = battles.spread();
   document.title = "Hyacimicon · " + spread.title;
   render(
@@ -187,6 +190,7 @@ function draw() {
             ${spread.badge ? html`<b class="badge">${spread.badge}</b>` : nothing}<small
               >${spread.subtitle}</small
             >
+            ${spread.subtitleTools ?? nothing}
           </div>
           <div class="tools">${spread.tools}</div>
         </header>
@@ -196,7 +200,8 @@ function draw() {
         </div>
       </div>
       <nav aria-label="书签">
-        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
+        ${(Object.keys(tabs) as Page[]).map((t) => html`<button aria-current=${t === page ? "page" : nothing}
+          ?disabled=${busy || session.pending} @click=${() => run(() => navigate(t))}>${icon("tab-" + t)}${tabs[t]}</button>`)}
       </nav>
       ${
         message

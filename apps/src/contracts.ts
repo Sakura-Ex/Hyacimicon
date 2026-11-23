@@ -77,46 +77,6 @@ export interface AccountCatalogue {
   characters: { id: string; name: string }[];
   lightCones: { id: string; name: string }[];
 }
-export interface Piece extends Unit {
-  pieceId: string;
-  slot: number;
-  stars: number | null;
-  gear: MatchItem[];
-}
-export interface MatchItem extends Item {
-  itemId: string;
-}
-export interface MatchTrait extends Item {
-  progress?: { count: number; thresholds: number[] };
-}
-export type MatchOperation =
-  | { kind: "equip"; itemId: string; pieceId: string }
-  | { kind: "combine"; itemId: string; otherItemId: string }
-  | { kind: "useItem"; itemId: string; pieceId?: string; targetItemId?: string }
-  | { kind: "buy"; offerId: string }
-  | { kind: "sell"; pieceId: string }
-  | { kind: "move"; pieceId: string; zone: "front" | "back" | "bench"; slot: number }
-  | { kind: "refreshShop" | "buyExperience" | "advance" }
-  | { kind: "lockShop"; locked: boolean }
-  | { kind: "chooseAura"; eventId: string; pieceId: string; optionId: string }
-  | { kind: "teaBreak"; eventId: string; optionId: string };
-export interface MatchCommand {
-  id: string;
-  label: string;
-  detail?: string;
-  operation: MatchOperation;
-}
-export interface MatchEvent {
-  id: string;
-  kind: "aura" | "teaBreak";
-  title: string;
-  detail: string;
-}
-export interface MatchCommandInput {
-  matchId: string;
-  revision: number;
-  commandId: string;
-}
 export interface ActionOption {
   id: string;
   title: string;
@@ -127,73 +87,12 @@ export interface Advice extends ActionOption {
   effects: Stat[];
   image?: string;
 }
-export interface MatchStep {
-  id: string;
-  kind?: "reward" | "battle" | "encounter" | "boss";
-}
-export type TraitMechanism = "aha" | "wishPower" | "trailblazeShop" | "chimeraGarden";
-export interface MatchOverviewEntry {
-  name: string;
-  detail?: string;
-}
-export interface MatchOverview {
-  opponent?: {
-    name: string;
-    difficulty: number | null;
-    stars: number | null;
-    enemies: { name: string; stars: number | null }[];
-  };
-  modifiers?: MatchOverviewEntry[];
-  investmentEnvironment?: MatchOverviewEntry;
-  investmentStrategies?: MatchOverviewEntry[];
-  crystals?: { count: number; entries?: MatchOverviewEntry[] };
-}
-export interface Match {
-  id: string;
-  revision: number;
-  node: string;
-  health: number | null;
-  maxHealth?: number | null;
-  planes?: MatchStep[][];
-  preview?: boolean;
-  streak: number | null;
-  interest: number | null;
-  overview?: MatchOverview;
-  capacity: number;
-  gold: number | null;
-  experience?: { level: number; current: number; required: number | null };
-  front: Piece[];
-  frontCapacity: number;
-  back: Piece[];
-  backCapacity: number;
-  bench: Piece[];
-  benchCapacity: number;
-  traits: MatchTrait[];
-  traitMechanisms?: TraitMechanism[];
-  inventory: MatchItem[];
-  consumables: MatchItem[];
-  offers: {
-    offerId: string;
-    unit: Unit;
-    cost: number | null;
-    note: string;
-    traits?: Pick<MatchTrait, "name" | "image">[];
-  }[];
-  commands: MatchCommand[];
-  companion?: { name: string; detail: string };
-  aura?: { pieceId: string; name: string; detail: string };
-  event?: MatchEvent;
-  actions: ActionOption[];
-  advice: Advice[];
-  feedbackFields: {
-    key: string;
-    label: string;
-    current: number | null;
-    min: number;
-    max?: number;
-  }[];
-  lastAction?: string;
-  locked: boolean;
+export interface FeedbackField {
+  key: string;
+  label: string;
+  current: number | null;
+  min: number;
+  max?: number;
 }
 export interface Feedback {
   matchId: string;
@@ -232,11 +131,6 @@ export interface AccountPort {
   deleteAccount(id: string): Promise<void>;
   exportAccount(id: string, kind: AccountFileKind): Promise<string>;
 }
-export interface MatchPort {
-  match(accountId: string): Promise<Match>;
-  executeMatchCommand(input: MatchCommandInput): Promise<Match>;
-  saveFeedback(input: Feedback): Promise<Match>;
-}
 export interface StandardBattle {
   mode: "standard";
   allyIds: string[];
@@ -260,4 +154,3 @@ export interface BattlePort {
   battleCatalogue(): Promise<BattleCatalogue>;
   battle(input: BattleInput): Promise<BattleResult>;
 }
-export type PlayerPort = AccountPort & MatchPort & BattlePort;

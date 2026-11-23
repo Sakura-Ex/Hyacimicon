@@ -1,24 +1,23 @@
-import type { MatchCommand } from "./contracts";
+import type { LegalAction, Slot } from "./match-session-contract.ts";
 
-export type DropTarget =
-  | { pieceId: string; itemId?: never }
-  | { itemId: string; pieceId?: string };
+export type DragSource = { kind: "item" | "piece"; id: string };
+export type MatchDrop = { pieceId?: string; itemId?: string; slot?: Slot };
 
-export function commandsForDrop(commands: MatchCommand[], itemId: string, target: DropTarget) {
-  if (target.itemId === itemId) return [];
-  return commands.filter(({ operation }) => {
-    if (operation.kind === "equip") {
-      return !target.itemId && operation.itemId === itemId && operation.pieceId === target.pieceId;
+export function actionsForDrop(actions: readonly LegalAction[], source: DragSource, target: MatchDrop) {
+  return actions.filter(({ action }) => {
+    if (source.kind === "piece") {
+      return action.kind === "move" && action.pieceId === source.id && target.slot?.zone === action.destination.zone &&
+        target.slot.index === action.destination.index;
     }
-    if (operation.kind === "combine") {
-      return (operation.itemId === itemId && operation.otherItemId === target.itemId) ||
-        (operation.otherItemId === itemId && operation.itemId === target.itemId);
+    if (target.itemId === source.id) return false;
+    switch (action.kind) {
+      case "equip": return !target.itemId && action.itemId === source.id && action.pieceId === target.pieceId;
+      case "combine": return action.itemId === source.id && action.otherItemId === target.itemId ||
+        action.otherItemId === source.id && action.itemId === target.itemId;
+      case "useItem": return action.itemId === source.id && (target.itemId
+        ? action.target.kind === "item" && action.target.itemId === target.itemId
+        : action.target.kind === "piece" && action.target.pieceId === target.pieceId);
+      default: return false;
     }
-    if (operation.kind === "useItem") {
-      return operation.itemId === itemId && operation.targetItemId === target.itemId &&
-        (operation.pieceId === undefined || operation.pieceId === target.pieceId) &&
-        (operation.pieceId !== undefined || operation.targetItemId !== undefined);
-    }
-    return false;
   });
 }
