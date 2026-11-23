@@ -177,6 +177,7 @@ export interface MatchSnapshot extends MatchVersion {
   phase: MatchPhase;
   rival: RuleEntry | null;
   opponents: OpponentPreview[];
+  /** Slot order. The first slot is an enhancement or its corresponding 贪饕 variant. */
   affixes: RuleEntry[];
   environment: RuleEntry | null;
   companion: RuleEntry | null;
