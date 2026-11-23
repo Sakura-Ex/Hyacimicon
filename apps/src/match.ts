@@ -187,8 +187,11 @@ export function matchView(
     };
     const renderPiece = (p: Piece) => {
       const target = { pieceId: p.pieceId };
+      const available = getDrop(target);
+      const incoming = available.some(command => command.operation.kind === "equip")
+        ? allItems.find(item => item.itemId === draggedItemId) : undefined;
       const label = `${p.name} · ${p.stars === null ? "星级未知" : p.stars + " 星"} · 装备 ${p.gear.length} 件`;
-      return html`<div class="piece" ?data-drop-ready=${getDrop(target).length > 0}
+      return html`<div class="piece" ?data-drop-ready=${available.length > 0}
           @dragover=${(event: DragEvent) => allowDrop(event, target)}
           @dragleave=${leaveDrop}
           @drop=${(event: DragEvent) => drop(event, target)}>
@@ -198,6 +201,7 @@ export function matchView(
           <span class="piece-stars" aria-hidden="true">${p.stars === null ? "—" : "★".repeat(p.stars)}</span>
         </button>
         <div class="piece-gear">${repeat(p.gear, item => item.itemId, item => itemCard(item, p.pieceId))}</div>
+        ${incoming ? html`<span class="incoming-gear" aria-hidden="true">${itemPicture(incoming)}</span>` : nothing}
       </div>`;
     };
     const lock = commands.find(command => command.operation.kind === "lockShop");

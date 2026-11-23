@@ -200,6 +200,8 @@
 .match-inventory .match-item {
   width: 100%;
   height: 3.45rem;
+  border-color: #e5dce2;
+  background: #f6eef259;
 }
 .match-inventory > p {
   grid-column: 1 / -1;
@@ -264,6 +266,28 @@
 }
 .match-item[data-drag-source] .item-picture {
   opacity: 0.42;
+}
+.incoming-gear {
+  display: none;
+  position: absolute;
+  right: 0.2rem;
+  bottom: 0.2rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0.06rem;
+  border: 1px dashed #4e796b;
+  border-radius: 0.25rem;
+  background: #e5f0e6;
+  pointer-events: none;
+}
+.incoming-gear img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.piece[data-drop-hover] .incoming-gear {
+  display: grid;
+  place-items: center;
 }
 .item-picture {
   flex: none;
