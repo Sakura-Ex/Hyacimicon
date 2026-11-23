@@ -78,8 +78,41 @@ export interface AccountCatalogue {
   lightCones: { id: string; name: string }[];
 }
 export interface Piece extends Unit {
+  pieceId: string;
+  slot: number;
   stars: number | null;
-  gear: Item[];
+  gear: MatchItem[];
+}
+export interface MatchItem extends Item {
+  itemId: string;
+}
+export type MatchOperation =
+  | { kind: "equip"; itemId: string; pieceId: string }
+  | { kind: "combine"; itemId: string; otherItemId: string }
+  | { kind: "useItem"; itemId: string; pieceId?: string; targetItemId?: string }
+  | { kind: "buy"; offerId: string }
+  | { kind: "sell"; pieceId: string }
+  | { kind: "move"; pieceId: string; zone: "front" | "back" | "bench"; slot: number }
+  | { kind: "refreshShop" | "buyExperience" | "advance" }
+  | { kind: "lockShop"; locked: boolean }
+  | { kind: "chooseAura"; eventId: string; pieceId: string; optionId: string }
+  | { kind: "teaBreak"; eventId: string; optionId: string };
+export interface MatchCommand {
+  id: string;
+  label: string;
+  detail?: string;
+  operation: MatchOperation;
+}
+export interface MatchEvent {
+  id: string;
+  kind: "aura" | "teaBreak";
+  title: string;
+  detail: string;
+}
+export interface MatchCommandInput {
+  matchId: string;
+  revision: number;
+  commandId: string;
 }
 export interface ActionOption {
   id: string;
@@ -108,13 +141,19 @@ export interface Match {
   capacity: number;
   gold: number | null;
   front: Piece[];
+  frontCapacity: number;
   back: Piece[];
   backCapacity: number;
   bench: Piece[];
+  benchCapacity: number;
   traits: Item[];
-  inventory: Item[];
-  consumables: Item[];
-  offers: { unit: Unit; cost: number | null; note: string }[];
+  inventory: MatchItem[];
+  consumables: MatchItem[];
+  offers: { offerId: string; unit: Unit; cost: number | null; note: string }[];
+  commands: MatchCommand[];
+  companion?: { name: string; detail: string };
+  aura?: { pieceId: string; name: string; detail: string };
+  event?: MatchEvent;
   actions: ActionOption[];
   advice: Advice[];
   feedbackFields: {
@@ -124,7 +163,6 @@ export interface Match {
     min: number;
     max?: number;
   }[];
-  refresh?: { actionId: string; label: string };
   lastAction?: string;
   locked: boolean;
 }
@@ -167,11 +205,7 @@ export interface AccountPort {
 }
 export interface MatchPort {
   match(accountId: string): Promise<Match>;
-  setShopLock(
-    matchId: string,
-    revision: number,
-    locked: boolean,
-  ): Promise<Match>;
+  executeMatchCommand(input: MatchCommandInput): Promise<Match>;
   saveFeedback(input: Feedback): Promise<Match>;
 }
 export interface StandardBattle {

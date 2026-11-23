@@ -209,7 +209,7 @@ header::after {
 .relics small,
 .combat-items small,
 .timeline small,
-.offers small {
+.match-offers small {
   display: block;
 }
 .heading > small {
@@ -262,7 +262,6 @@ header::after {
 }
 .page section + section,
 .right > .page-content > section:not(:first-child),
-.market,
 footer,
 .targets {
   border-top: 1px solid var(--line);
@@ -665,34 +664,6 @@ nav .icon {
   line-height: 1.15;
   white-space: nowrap;
 }
-.worn {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.15rem;
-  padding: 0.15rem 0.16rem 0.24rem;
-  min-height: 1.52rem;
-}
-.worn .item {
-  flex: 0 1 1.18rem;
-  min-width: 0;
-}
-.worn .item img,
-.worn .item-mark {
-  width: 100%;
-  height: 1.18rem;
-  background: #fffaf8;
-  border-radius: 0.2rem;
-  padding: 0.07rem;
-  border: 1px solid var(--line);
-}
-.front .worn .item {
-  flex-basis: 1.55rem;
-}
-.front .worn .item img,
-.front .worn .item-mark {
-  height: 1.55rem;
-}
 .empty,
 .locked {
   display: grid;
@@ -723,8 +694,7 @@ nav .icon {
   padding: 0.18rem;
   border-radius: 0.22rem;
 }
-.traits span,
-.market h2 span {
+.traits span {
   margin-left: auto;
 }
 .advice {
@@ -762,106 +732,6 @@ nav .icon {
   background: none;
   padding: 0.25rem;
   text-align: left;
-}
-.market {
-  display: grid;
-  grid-template-columns: 58% 1fr;
-  gap: 1rem;
-  margin-top: 0.2rem;
-  flex: 1;
-  align-content: start;
-}
-.market aside {
-  border-left: 1px solid var(--line);
-  padding-left: 1.5rem;
-}
-.market h2,
-.market h2 span {
-  display: flex;
-  align-items: center;
-}
-.market h2 span {
-  color: var(--wine);
-  font-size: 1.25rem;
-}
-.inventory {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.36rem;
-  margin-bottom: 1.4rem;
-}
-.item {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-.item img {
-  width: 2.9rem;
-  height: 2.9rem;
-  object-fit: contain;
-}
-.item-mark {
-  display: grid;
-  place-items: center;
-  padding: 0.25rem 0.45rem;
-  border: 1px solid var(--line);
-  border-radius: 0.3rem;
-  color: var(--wine);
-  background: #faf0f4;
-  font-size: 0.78rem;
-  line-height: 1.1;
-}
-.item-mark-initial,
-.worn .item-mark-name {
-  display: none;
-}
-.worn .item-mark-initial {
-  display: block;
-}
-.item small {
-  position: absolute;
-  bottom: -0.4rem;
-  right: -0.15rem;
-  font-weight: bold;
-}
-.tooltip {
-  display: none;
-  position: absolute;
-  z-index: 3;
-  bottom: 100%;
-  left: 0;
-  width: max-content;
-  max-width: 12rem;
-  font-size: 0.8rem;
-  padding: 0.45rem;
-  background: #403540;
-  color: white;
-  border-radius: 0.3rem;
-}
-.item:hover .tooltip,
-.item:focus .tooltip {
-  display: block;
-}
-.offers {
-  display: grid;
-  gap: 0.28rem;
-}
-.offers > div {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 0.25rem;
-  gap: 0.6rem;
-  padding: 0.15rem 0.45rem;
-}
-.offers img {
-  width: 2.7rem;
-  height: 2.7rem;
-}
-.offers b {
-  margin-left: auto;
-  color: var(--wine);
-  font-size: 0.85rem;
 }
 .shop-tools {
   display: flex;

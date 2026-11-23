@@ -2,6 +2,8 @@ import type {
   Account,
   Item,
   Match,
+  MatchCommand,
+  MatchItem,
   MatchStep,
   Combatant,
   Piece,
@@ -97,7 +99,10 @@ const account: Account = {
   })),
 };
 function piece(id: string, stars: number, items: Item[] = []): Piece {
-  return { ...unit(id), stars, gear: items };
+  return { ...unit(id), pieceId: "", slot: 0, stars, gear: matchItems("gear", items) };
+}
+function matchItems(prefix: string, items: Item[]): MatchItem[] {
+  return items.map((item, i) => ({ ...item, itemId: `${prefix}-${i}` }));
 }
 const routeKinds: MatchStep["kind"][][] = [
   ["reward", "battle", "battle", "encounter", "reward", "battle", "boss"],
@@ -127,9 +132,11 @@ const initial: Match = {
     piece("1204", 1, [gear[4]]),
     piece("1306", 1, [gear[5]]),
   ],
+  frontCapacity: 4,
   back: [piece("1314", 2, [gear[3]]), piece("1409", 2, [gear[4], gear[0]]), piece("1211", 1), piece("1203", 1)],
   backCapacity: 6,
   bench: [piece("1112", 1, [gear[1]]), piece("1208", 1, [gear[5]]), piece("1212", 1), piece("1204", 1)],
+  benchCapacity: 9,
   traits: [
     item("云上五骁", "/traits/100702.webp"),
     item("击破", "/traits/200502.webp"),
@@ -137,18 +144,20 @@ const initial: Match = {
     item("星核猎手", "/traits/100802.webp"),
     item("召唤", "/traits/200602.webp"),
   ],
-  inventory: gear,
-  consumables: [
+  inventory: matchItems("stock", gear),
+  consumables: matchItems("supply", [
     item("精密拆装扳手", "/items/350102.webp"),
     item("冶金炉", "/items/350103.webp"),
     item("员工投影仪", "/items/350105.webp"),
-  ],
-  offers: ["1204", "1005", "1314", "1306", "1203"].map((id) => ({
+  ]),
+  offers: ["1204", "1005", "1314", "1306", "1203"].map((id, i) => ({
+    offerId: "offer-" + i,
     unit: unit(id),
-    cost: null,
+    cost: [4, 2, 3, 4, 2][i],
     note: "",
   })),
   advice: [],
+  commands: [],
   actions: [
     ["recruit", "招募"],
     ["hold", "保留金币"],
@@ -158,7 +167,6 @@ const initial: Match = {
     title,
     expected: {},
   })),
-  refresh: { actionId: "refresh", label: "刷新" },
   feedbackFields: [
     { key: "gold", label: "剩余金币", min: 0, current: previewGold },
     { key: "health", label: "整局血量", min: 0, max: previewMaxHealth, current: previewHealth },
@@ -199,8 +207,63 @@ function combatant(u: Unit, side: string, gear: Item[] = []): Combatant {
     initiative: null,
   };
 }
-export function demoPort(): PlayerPort {
+const zones = ["front", "back", "bench"] as const;
+
+function previewCommands(m: Match): MatchCommand[] {
+  const commands: MatchCommand[] = [];
+  const add = (operation: MatchCommand["operation"], label: string, detail?: string) => {
+    commands.push({ id: String(commands.length), operation, label, detail });
+  };
+  const pieces = zones.flatMap(zone => m[zone]);
+  const location = (p: Piece) => `${p.pieceId.startsWith("front-") ? "前台" : p.pieceId.startsWith("back-") ? "后台" : "备战席"} ${p.slot + 1}`;
+  for (const item of m.inventory) {
+    for (const p of pieces.filter(p => p.gear.length < 3)) {
+      add({ kind: "equip", itemId: item.itemId, pieceId: p.pieceId }, `装备给 ${p.name}`, `${location(p)} · ${p.gear.length} / 3 槽位已用`);
+    }
+  }
+  for (const item of m.consumables) {
+    if (item.name === "精密拆装扳手") {
+      for (const p of pieces.filter(p => p.gear.length)) {
+        add({ kind: "useItem", itemId: item.itemId, pieceId: p.pieceId }, `卸下 ${p.name} 的装备`, location(p));
+      }
+    }
+  }
+  for (const offer of m.offers) {
+    if (m.bench.length < m.benchCapacity && offer.cost !== null && offer.cost <= (m.gold ?? 0)) {
+      add({ kind: "buy", offerId: offer.offerId }, `招募 ${offer.unit.name}`, `${offer.cost} 金币`);
+    }
+  }
+  add({ kind: "lockShop", locked: !m.locked }, m.locked ? "解锁" : "锁定");
+  if ((m.gold ?? 0) >= 2) add({ kind: "refreshShop" }, "刷新 2", "2 金币");
+  if (m.event?.kind === "aura") {
+    for (const p of [...m.front, ...m.back]) {
+      add({ kind: "chooseAura", eventId: m.event.id, pieceId: p.pieceId, optionId: "demo-aura" }, p.name, "舞台聚光 · 示例光环");
+    }
+  }
+  if (m.event?.kind === "teaBreak") {
+    add({ kind: "teaBreak", eventId: m.event.id, optionId: "demo-supply" }, "领取随行补给", "精密拆装扳手 ×1");
+  }
+  return commands;
+}
+
+export function demoPort(scenario?: string | null): PlayerPort {
   let match = structuredClone(initial);
+  for (const zone of zones) {
+    match[zone].forEach((p, slot) => {
+      p.slot = slot;
+      p.pieceId = `${zone}-${slot}`;
+      p.gear = matchItems(p.pieceId, p.gear);
+    });
+  }
+  match.companion = { name: "绷带猫", detail: "随行伙伴 · 装备补给" };
+  if (scenario === "aura") {
+    match.node = "2-7";
+    match.event = { id: "opening-act", kind: "aura", title: "主角光环", detail: "为出战角色选择本场首领战的光环。" };
+  } else if (scenario === "teaBreak") {
+    match.node = "2-6";
+    match.event = { id: "intermission", kind: "teaBreak", title: "幕后茶歇", detail: "绷带猫带来了随行补给。" };
+  }
+  match.commands = previewCommands(match);
   function requireAccountService(): never {
     throw new Error("请使用 Windows 桌面版导入或生成账号。");
   }
@@ -268,9 +331,47 @@ export function demoPort(): PlayerPort {
         ],
       };
     },
-    async setShopLock(id, revision, locked) {
-      check(id, revision);
-      match = { ...match, locked, revision: revision + 1 };
+    async executeMatchCommand({ matchId, revision, commandId }) {
+      check(matchId, revision);
+      const operation = match.commands.find(command => command.id === commandId)?.operation;
+      if (!operation) throw new Error("该操作当前不可用。");
+      const next = structuredClone(match);
+      const pieces = zones.flatMap(zone => next[zone]);
+      if (operation.kind === "equip") {
+        const target = pieces.find(p => p.pieceId === operation.pieceId)!;
+        const item = next.inventory.find(i => i.itemId === operation.itemId)!;
+        target.gear.push(item);
+        next.inventory = next.inventory.filter(i => i !== item);
+      } else if (operation.kind === "useItem") {
+        const target = pieces.find(p => p.pieceId === operation.pieceId)!;
+        next.inventory.push(...target.gear);
+        target.gear = [];
+        next.consumables = next.consumables.filter(i => i.itemId !== operation.itemId);
+      } else if (operation.kind === "buy") {
+        const offer = next.offers.find(o => o.offerId === operation.offerId)!;
+        const recruit = piece(offer.unit.id, 1);
+        recruit.slot = next.bench.length;
+        recruit.pieceId = "recruit-" + revision;
+        next.bench.push(recruit);
+        next.gold = (next.gold ?? 0) - offer.cost!;
+        next.offers = next.offers.filter(o => o !== offer);
+      } else if (operation.kind === "refreshShop") {
+        next.gold = (next.gold ?? 0) - 2;
+        const ids = ["1308", "1309", "1409", "1205", "1310"];
+        next.offers = initial.offers.map((offer, i) => ({ ...offer, unit: unit(ids[(i + revision) % ids.length]) }));
+      } else if (operation.kind === "lockShop") {
+        next.locked = operation.locked;
+      } else if (operation.kind === "chooseAura") {
+        next.aura = { pieceId: operation.pieceId, name: "舞台聚光", detail: "示例光环" };
+        delete next.event;
+      } else if (operation.kind === "teaBreak") {
+        next.consumables.push({ ...initial.consumables[0], itemId: "tea-supply" });
+        delete next.event;
+      }
+      next.revision++;
+      next.feedbackFields = next.feedbackFields.map(field => field.key === "gold" ? { ...field, current: next.gold } : field);
+      next.commands = previewCommands(next);
+      match = next;
       return match;
     },
     async saveFeedback(input) {
@@ -297,8 +398,8 @@ export function demoPort(): PlayerPort {
         })),
         lastAction: input.action,
         advice: [],
-        refresh: undefined,
       };
+      match.commands = previewCommands(match);
       return match;
     },
   };

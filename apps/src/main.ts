@@ -2,6 +2,7 @@ import { html, nothing, render } from "lit";
 import { accountView } from "./account";
 import { desktopAccounts } from "./account-port";
 import { matchView } from "./match";
+import { httpMatchPort, tauriMatchPort } from "./match-port";
 import { battleWorkspace } from "./battle-workspace";
 import { demoPort } from "./demo";
 import type { Account, Match } from "./contracts";
@@ -11,6 +12,7 @@ import { centerBook, control, desktop } from "./windows";
 import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/noto-sans-sc";
 import "./style.css";
+import "./match.css";
 
 const root = document.querySelector("main");
 if (!root) throw new Error("找不到书册容器");
@@ -48,10 +50,18 @@ let busy = false,
 let syncingImages = false;
 let imageStatus = "";
 let imageError = "";
-const preview = demoPort();
-const port = desktop ? { ...preview, ...desktopAccounts(preview) } : preview;
+const preview = demoPort(params.get("scenario"));
+const matchBase = import.meta.env.VITE_MATCH_API_BASE;
+const liveMatch = desktop
+  ? import.meta.env.VITE_MATCH_TRANSPORT === "tauri" ? tauriMatchPort() : undefined
+  : matchBase ? httpMatchPort(matchBase) : undefined;
+const port = {
+  ...preview,
+  ...(desktop ? desktopAccounts(preview) : {}),
+  ...liveMatch,
+};
 const accountsPage = accountView(port, draw, run, select, removeAccount);
-const battles = battleWorkspace(port, draw, run, loadMatch);
+const battles = battleWorkspace(port, draw, run, loadMatch, !liveMatch);
 const createMatch = () =>
   matchView(
     port,
@@ -61,11 +71,17 @@ const createMatch = () =>
     },
     draw,
     run,
-    () =>
+    liveMatch ? undefined : () =>
       run(async () => {
         await battles.enter("currencyWars");
         page = "battle";
       }),
+    () => run(async () => {
+      if (account) {
+        match = await port.match(account.id);
+        matchPage = createMatch();
+      }
+    }),
   );
 let matchPage = createMatch();
 function select(a: Account) {

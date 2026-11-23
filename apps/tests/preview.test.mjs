@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { demoPort } from "../src/demo.ts";
+import { httpMatchPort } from "../src/match-port.ts";
+
+function execute(port, match, kind, predicate = () => true) {
+  const command = match.commands.find(({ operation }) => operation.kind === kind && predicate(operation));
+  assert.ok(command, `${kind} must be available`);
+  return port.executeMatchCommand({ matchId: match.id, revision: match.revision, commandId: command.id });
+}
 
 test("each preview character references its own full portrait", async () => {
   const port = demoPort();
@@ -18,7 +25,7 @@ test("a confirmed observation changes only the recorded fields and expires the o
   const initial = await port.match(account.id);
   assert.equal(initial.gold, 37);
   assert.deepEqual(initial.advice, []);
-  const locked = await port.setShopLock(initial.id, initial.revision, true);
+  const locked = await execute(port, initial, "lockShop");
   const input = {
     matchId: initial.id,
     revision: initial.revision,
@@ -76,8 +83,77 @@ test("currency preview contains deployed units and carries no fabricated action 
     match.back.length,
   );
   assert.deepEqual(result.units[0].gear, match.front[0].gear);
-  await port.setShopLock(match.id, match.revision, true);
+  await execute(port, match, "lockShop");
   await assert.rejects(port.battle(source), /版本已更新/);
+});
+
+test("equipment uses the instance ID when the same character appears twice", async () => {
+  const port = demoPort();
+  const before = await port.match("preview");
+  const [item] = before.inventory;
+  const duplicate = before.bench.find(piece => piece.id === "1204");
+  const deployed = before.front.find(piece => piece.id === duplicate.id);
+  const equip = operation => operation.itemId === item.itemId && operation.pieceId === duplicate.pieceId;
+  const equipped = await execute(port, before, "equip", equip);
+  assert.deepEqual(equipped.front.find(piece => piece.pieceId === deployed.pieceId), deployed);
+  assert.ok(equipped.bench.find(piece => piece.pieceId === duplicate.pieceId).gear.some(gear => gear.itemId === item.itemId));
+  assert.ok(!equipped.inventory.some(gear => gear.itemId === item.itemId));
+  await assert.rejects(execute(port, before, "equip", equip), /版本已更新/);
+  const removed = await execute(port, equipped, "useItem", operation => operation.pieceId === duplicate.pieceId);
+  assert.ok(removed.inventory.some(gear => gear.itemId === item.itemId));
+  assert.equal(removed.bench.find(piece => piece.pieceId === duplicate.pieceId).gear.length, 0);
+});
+
+test("shop actions use the offer ID and the new snapshot carries the resulting price and balance", async () => {
+  const port = demoPort();
+  const before = await port.match("preview");
+  const offer = before.offers[0];
+  const bought = await execute(port, before, "buy", operation => operation.offerId === offer.offerId);
+  assert.ok(!bought.offers.some(entry => entry.offerId === offer.offerId));
+  assert.equal(bought.gold, before.gold - offer.cost);
+  assert.equal(bought.bench.at(-1).id, offer.unit.id);
+  const refreshed = await execute(port, bought, "refreshShop");
+  assert.equal(refreshed.gold, bought.gold - 2);
+  assert.equal(refreshed.offers.length, 5);
+});
+
+test("aura accepts deployed instances and tea break resolves its own reward", async () => {
+  const auraPort = demoPort("aura");
+  const aura = await auraPort.match("preview");
+  const candidates = aura.commands.filter(command => command.operation.kind === "chooseAura");
+  const deployed = new Set([...aura.front, ...aura.back].map(piece => piece.pieceId));
+  assert.ok(candidates.every(({ operation }) => deployed.has(operation.pieceId)));
+  const assigned = await execute(auraPort, aura, "chooseAura");
+  assert.equal(assigned.aura.pieceId, candidates[0].operation.pieceId);
+  assert.equal(assigned.event, undefined);
+
+  const teaPort = demoPort("teaBreak");
+  const tea = await teaPort.match("preview");
+  const rewarded = await execute(teaPort, tea, "teaBreak");
+  assert.equal(rewarded.consumables.length, tea.consumables.length + 1);
+  assert.equal(rewarded.event, undefined);
+});
+
+test("the HTTP port sends only the revision-scoped command and reports version conflicts", async (t) => {
+  const input = { matchId: "sample", revision: 7, commandId: "equip-9" };
+  const snapshot = { id: input.matchId, revision: 8 };
+  let requestCount = 0;
+  t.mock.method(globalThis, "fetch", async (url, init) => {
+    if (++requestCount === 1) {
+      assert.equal(url, "https://example.test/v1/match?accountId=a%26b");
+      assert.equal(init.cache, "no-store");
+    } else {
+      assert.equal(url, "https://example.test/v1/match/commands");
+      assert.equal(init.method, "POST");
+      assert.deepEqual(JSON.parse(init.body), input);
+    }
+    return requestCount === 3 ? new Response(null, { status: 409 }) : Response.json(snapshot);
+  });
+  const port = httpMatchPort("https://example.test/v1/");
+  assert.deepEqual(await port.match("a&b"), snapshot);
+  assert.deepEqual(await port.executeMatchCommand(input), snapshot);
+  await assert.rejects(port.executeMatchCommand(input), /重新读取局面/);
+  assert.equal(requestCount, 3);
 });
 test("standard combat uses its selected lineup independently of a match", async () => {
   const port = demoPort();

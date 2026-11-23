@@ -8,7 +8,7 @@ const kinds = {
   boss: { name: "首领", mark: "◆" },
 };
 
-export function matchStatus(match: Match) {
+export function matchStatus(match: Match, emphasizeCurrent = false) {
   const planes = match.planes ?? [];
   const plane = planes.findIndex((nodes) => nodes.some((step) => step.id === match.node));
   const steps = planes[plane] ?? [];
@@ -18,13 +18,14 @@ export function matchStatus(match: Match) {
   const health = match.health;
   const range = maximum != null && maximum > 0;
 
-  function mark(step: MatchStep, before: boolean) {
+  function mark(step: MatchStep, position: number) {
+    const before = position < index;
     const current = step.id === match.node;
     const info = step.kind ? kinds[step.kind] : undefined;
     const label = [step.id, info?.name, current ? "当前节点" : before ? "已结算" : ""].filter(Boolean).join(" · ");
     return html`<li class=${before ? "past" : ""} title=${label}
       aria-label=${label} aria-current=${current ? "step" : nothing}>
-      <span aria-hidden="true">${info?.mark ?? "·"}</span>
+      <span aria-hidden="true">${emphasizeCurrent && current ? position + 1 : info?.mark ?? "·"}</span>
     </li>`;
   }
 
@@ -38,7 +39,7 @@ export function matchStatus(match: Match) {
         </div>
       </div>
       ${steps.length ? html`<ol class="match-steps" aria-label=${`位面 ${plane + 1} 的节点`}>
-        ${steps.map((step, j) => mark(step, j < index))}
+        ${steps.map(mark)}
       </ol>` : nothing}
     </div>
     <div class="match-health">

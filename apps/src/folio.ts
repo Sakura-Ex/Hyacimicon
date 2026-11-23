@@ -1,5 +1,5 @@
 import { html, nothing, type TemplateResult } from "lit";
-import type { Item, Stat } from "./contracts";
+import type { Stat } from "./contracts";
 import { imageUrl } from "./game-images";
 export interface Spread {
   title: string;
@@ -15,16 +15,6 @@ export function art(source: string | undefined, cls = "", alt = "") {
   const url = imageUrl(source);
   return url ? html`<img class=${cls} src=${url} alt=${alt} draggable="false" />` : nothing;
 }
-export const itemArt = (i: Item) =>
-  html`<span class="item" tabindex="0" aria-label=${i.name + " " + i.detail}
-    >${imageUrl(i.image) ? art(i.image) : html`<span class="item-mark" aria-hidden="true">
-      <span class="item-mark-initial">${i.name.slice(0, 1)}</span><span class="item-mark-name">${i.name}</span>
-    </span>`}
-    ${i.count > 1 ? html`<small>×${i.count}</small>` : nothing}<span
-      class="tooltip"
-      >${[i.name, i.detail].filter(Boolean).join(" · ")}</span
-    ></span
-  >`;
 export const stats = (rows: Stat[]) =>
   rows.map(
     ([label, value]) =>

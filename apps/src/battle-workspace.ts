@@ -9,6 +9,7 @@ export function battleWorkspace(
   redraw: () => void,
   run: Run,
   currentMatch: () => Promise<Match>,
+  hasMatchBattle: boolean,
 ) {
   type Mode = BattleInput["mode"];
   function sessionFor(result: BattleResult) {
@@ -51,7 +52,9 @@ export function battleWorkspace(
       right: html`
         <div class="battle-controls">
           <div role="group" aria-label="战斗模式">
-            ${(["standard", "currencyWars"] as const).map((m) => html`<button aria-pressed=${mode === m} @click=${() => run(() => enter(m))}>${m === "standard" ? "常规战斗" : "货币战争"}</button>`)}
+            ${(["standard", "currencyWars"] as const).map((m) => html`<button aria-pressed=${mode === m}
+              ?disabled=${m === "currencyWars" && !hasMatchBattle}
+              @click=${() => run(() => enter(m))}>${m === "standard" ? "常规战斗" : "货币战争"}</button>`)}
           </div>
           ${view.tools}
         </div>
