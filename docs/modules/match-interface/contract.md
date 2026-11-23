@@ -12,7 +12,7 @@
 | `setController` | 对局 ID、预期版本、目标控制方 | 完成交接并返回新的快照。交接本身增加版本 |
 | `subscribeMatch` | 对局 ID | 首条消息返回当前快照，随后推送该局已提交的操作、控制权变化和战斗状态 |
 
-`createMatch` 接受小于 300 的有限敌人难度 `enemyDifficulty`，可使用小数。`affixCount` 为 0 到 4 的整数。参数超出范围时返回 `invalidInput`。
+`createMatch` 的敌人难度 `enemyDifficulty` 必须是小于 300 的整数。`affixCount` 为 0 到 4 的整数。参数不符合要求时返回 `invalidInput`。
 
 `affixCount` 为 0 时，快照中的 `affixes` 为空。有词条时，`affixes` 按槽位顺序返回。第一槽只允许强化类词条，例如「第一位面强化」或「首领强化」。若使用「贪饕强化」替代，该词条须对应原强化类别并占用同一槽位。
 
