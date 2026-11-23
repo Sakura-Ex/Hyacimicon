@@ -131,6 +131,7 @@ export interface MatchStep {
   id: string;
   kind?: "reward" | "battle" | "encounter" | "boss";
 }
+export type TraitMechanism = "aha" | "wishPower" | "trailblazeShop" | "chimeraGarden";
 export interface Match {
   id: string;
   revision: number;
@@ -151,6 +152,7 @@ export interface Match {
   bench: Piece[];
   benchCapacity: number;
   traits: MatchTrait[];
+  traitMechanisms?: TraitMechanism[];
   inventory: MatchItem[];
   consumables: MatchItem[];
   offers: {

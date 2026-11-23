@@ -1,11 +1,18 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece, Unit } from "./contracts";
+import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece, TraitMechanism, Unit } from "./contracts";
 import { art, icon, stats, type Run, type Spread } from "./folio";
 import { matchStatus } from "./match-status";
 import { commandsForDrop, type DropTarget } from "./match-drag";
 
 type Selection = { kind: "item" | "piece" | "event"; id: string; commandIds?: Set<string> };
+
+const traitMechanismLabels = {
+  aha: "阿哈",
+  wishPower: "幻月游戏·愿力",
+  trailblazeShop: "开拓商店",
+  chimeraGarden: "奇兽花园",
+} satisfies Record<TraitMechanism, string>;
 
 function itemPicture(item: MatchItem) {
   const artwork = art(item.image);
@@ -209,7 +216,7 @@ export function matchView(
           @drop=${(event: DragEvent) => drop(event, target)}>
         <button class="piece-main" type="button" aria-pressed=${selectedPiece?.pieceId === p.pieceId}
             aria-label=${label} title=${label} @click=${() => inspect({ kind: "piece", id: p.pieceId }, m.revision)}>
-          <span class="piece-face">${art(p.image)}</span>
+          <span class="piece-face">${cataloguePortrait(p)}</span>
           <span class="piece-stars" aria-hidden="true">${p.stars === null ? "—" : "★".repeat(p.stars)}</span>
         </button>
         <div class="piece-gear">${repeat(p.gear, item => item.itemId, item => itemCard(item, p.pieceId))}</div>
@@ -239,6 +246,9 @@ export function matchView(
       }
       return "eventId" in operation && operation.eventId === selectedEvent?.id;
     }) : [];
+    const visibleMechanisms = Object.entries(traitMechanismLabels).filter(([id]) =>
+      m.traitMechanisms?.some(mechanism => mechanism === id),
+    );
     const traits = html`<aside class="match-traits" aria-label="阵容羁绊"
         @keydown=${(event: KeyboardEvent) => {
           if (event.key === "Escape" && traitsExpanded) setTraitsExpanded(false);
@@ -270,6 +280,10 @@ export function matchView(
           }) : html`<li class="no-traits">暂无羁绊</li>`}
         </ul>
       </div>
+      ${visibleMechanisms.length ? html`<section class="trait-mechanisms" aria-labelledby="trait-mechanisms-title">
+        <h4 id="trait-mechanisms-title">羁绊机制</h4>
+        <ul>${visibleMechanisms.map(([, label]) => html`<li>${label}</li>`)}</ul>
+      </section>` : nothing}
     </aside>`;
     return {
       title: "阵容部署",

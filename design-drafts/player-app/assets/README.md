@@ -6,7 +6,7 @@
 | --- | --- |
 | [portraits](portraits/) | 风堇（1409）、景元（1204）两张彩色立绘，来自社区整理的 [StarRailRes](https://github.com/Mar-7th/StarRailRes)。原图保留透明背景，界面另加渐隐。 |
 | [avatars](avatars/) | 17 张角色头像。草稿使用的 StarRailRes 头像副本按 `head-角色ID.png` 命名。 |
-| [match-portraits](match-portraits/) | 商店预览报价所用的十张角色图，来自 S2 图鉴快照，保留原始角色 ID 和 WebP 格式。 |
+| [match-portraits](match-portraits/) | 对局阵容和商店示例用到的十七张角色图，来自 S2 图鉴快照，保留原始角色 ID 和 WebP 格式。 |
 | [light-cones](light-cones/) 与 [relics](relics/) | 账号页展示的光锥与六件遗器，取自本轮图稿使用的游戏美术 PNG。 |
 | [items](items/)、[traits](traits/)、[enemies](enemies/) | 局内装备和消耗品、羁绊与敌人。原文件来自同级数据仓库 `hsr-currency-wars-data/assets/encyclopedia/` 下的对应目录。 |
 | [book](book/) | 草稿书页与装订背景 `binding.png`、页首花饰 `letterpress.png`。 |

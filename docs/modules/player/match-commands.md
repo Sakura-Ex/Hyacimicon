@@ -31,6 +31,8 @@
 
 `traits` 提供羁绊名称、图标和说明。可选的 `progress.count` 提供当前人数，`progress.thresholds` 按升序提供激活档位。前端突出已达到的最高档位，羁绊效果由服务结算。
 
+`traitMechanisms` 为可选数组，列出当前局面需要显示的机制。键值为 `aha`（阿哈）、`wishPower`（幻月游戏·愿力）、`trailblazeShop`（开拓商店）和 `chimeraGarden`（奇兽花园）。缺省或为空时，羁绊列表下方省略机制区。该字段用于展示。
+
 `offers[].traits` 可提供报价角色的羁绊列表，每条包含 `name` 和 `image`。商店按返回列表展示，上阵羁绊的人数仍使用局面顶层的 `traits`。
 
 `experience` 可提供等级、当前经验和升级所需经验。等级达到上限时 `required` 为 `null`。购买经验的花费和收益通过指令的 `label` 与 `detail` 展示，结算后的等级、经验和上阵上限随新局面返回。

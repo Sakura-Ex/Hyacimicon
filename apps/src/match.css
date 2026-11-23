@@ -54,9 +54,11 @@
   color: var(--ink);
 }
 .piece-main {
-  display: block;
+  position: relative;
+  display: grid;
+  justify-items: center;
   width: 100%;
-  padding: 0.22rem 0.2rem 0;
+  padding: 0.16rem 0.2rem 0;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -66,18 +68,31 @@
   background: transparent;
 }
 .match-roster .slots .piece-face {
+  width: min(100%, 4.42rem);
+  height: auto;
+  aspect-ratio: 6 / 7;
+}
+.match-roster .piece-face {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.23rem;
+  background: #e8dce470;
+}
+.match-roster .piece-face img {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: 3.7rem;
-  aspect-ratio: auto;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 27%;
 }
 .match-roster .piece-stars {
-  position: static;
-  display: block;
-  transform: none;
-  background: transparent;
-  color: #87572d;
-  padding: 0.12rem;
+  bottom: 0.12rem;
+  padding: 0.08rem 0.24rem;
+  font-size: 0.8rem;
+  line-height: 1;
   letter-spacing: 0.08em;
 }
 .match-roster .empty {
@@ -137,23 +152,17 @@
   border-radius: 0.4rem;
 }
 .match-roster .bench.slots .piece-face {
-  height: 2.8rem;
-}
-.match-roster .bench .piece-stars {
-  position: absolute;
-  inset: 0.18rem 0.16rem auto auto;
-  font-size: 0.62rem;
-  background: #f7edebed;
-  border-radius: 0.25rem;
+  width: min(100%, 3.62rem);
 }
 .match-traits {
   grid-area: 1 / 2 / span 2;
-  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  contain: size;
   min-width: 0;
 }
 .traits-panel {
-  position: absolute;
-  inset: 0;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -164,13 +173,40 @@
   border-radius: 0.45rem;
 }
 .traits-panel[data-expanded] {
-  inset-inline-start: auto;
-  inset-block-end: auto;
+  position: relative;
+  justify-self: end;
   width: 17rem;
   height: min(27rem, 58vh);
   z-index: 4;
   background: #fff9f7;
   box-shadow: 0 0.55rem 1.25rem #553d5033;
+}
+.trait-mechanisms {
+  border-top: 1px solid var(--line);
+  margin: 0.55rem 0 0 0.3rem;
+  padding-top: 0.43rem;
+}
+.trait-mechanisms h4 {
+  margin: 0 0 0.28rem;
+  color: var(--muted);
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+.trait-mechanisms ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.23rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.trait-mechanisms li {
+  padding: 0.19rem 0.34rem;
+  border-radius: 0.2rem;
+  background: #f0e5ed;
+  color: #693c58;
+  font-size: 0.81rem;
+  white-space: nowrap;
 }
 .traits-heading {
   display: flex;
@@ -196,6 +232,9 @@
   scrollbar-width: thin;
   scrollbar-color: #aa91a0 transparent;
   list-style: none;
+}
+.traits-panel:not([data-expanded]) .match-trait-list {
+  max-height: 21rem;
 }
 .match-trait-list::-webkit-scrollbar {
   display: initial;
@@ -501,6 +540,7 @@
   isolation: isolate;
   display: grid;
   align-content: end;
+  aspect-ratio: 4 / 5;
   min-height: 8.4rem;
   padding-top: 4rem;
   background: #eadbe5;
@@ -583,7 +623,7 @@
 .match-offers .icon {
   width: 0.9rem;
 }
-.offer-art .portrait-initial {
+.portrait-initial {
   color: var(--wine);
   font: 1.25rem "Noto Serif SC Variable", serif;
 }
@@ -620,15 +660,23 @@
   color: var(--wine);
   border-color: var(--line);
 }
+.book:has(.match-roster) header {
+  height: 5.1rem;
+}
+.book:has(.match-roster) .heading {
+  padding-block: 0.16rem 0.32rem;
+}
+.book:has(.match-roster) .heading h1 {
+  font-size: 2.38rem;
+}
 .book:has(.match-roster) .match-route-heading strong {
-  font-size: 1.9rem;
+  font-size: 1.64rem;
 }
 .book:has(.match-roster) .tools {
-  align-self: start;
-  padding-top: 0.72rem;
+  align-self: center;
 }
 .book:has(.match-roster) .match-route-heading {
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 .book:has(.match-roster) .match-route-heading small,
 .match-economy .stat span {

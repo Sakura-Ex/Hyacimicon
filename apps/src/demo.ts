@@ -167,6 +167,7 @@ const initial: Match = {
     item("星核猎手", "/traits/100802.webp"),
     item("召唤", "/traits/200602.webp"),
   ],
+  traitMechanisms: ["aha", "wishPower", "trailblazeShop", "chimeraGarden"],
   inventory: matchItems("stock", gear),
   consumables: matchItems("supply", [
     item("精密拆装扳手", "/items/350102.webp"),
