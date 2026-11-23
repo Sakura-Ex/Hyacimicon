@@ -114,6 +114,26 @@ const previewMaxHealth = 100;
 const previewGold = 37;
 const previewExperienceCost = 4;
 const previewExperienceGain = 4;
+const offerTraitIcons: Record<string, number> = {
+  云上五骁: 100702, 召唤: 200602, 星核猎手: 100802, 持续伤害: 200202, 千星商会: 100602,
+  群攻: 200302, 黑市主理人: 300402, 小小巨人: 100902, 梦境交织: 101002, 欢愉: 200702,
+  星间旅人: 100402, 治疗: 201002, 少女乐队: 101102, 追击: 200102, 奇兽花园: 100202,
+  反击: 200802, 击破: 200502,
+};
+const offerTraitNames: Record<string, string[]> = {
+  "1204": ["云上五骁", "召唤"],
+  "1005": ["星核猎手", "持续伤害"],
+  "1314": ["千星商会", "群攻", "黑市主理人"],
+  "1306": ["小小巨人", "梦境交织", "欢愉"],
+  "1203": ["星间旅人", "治疗"],
+  "1308": ["梦境交织", "群攻"],
+  "1309": ["少女乐队", "追击"],
+  "1409": ["奇兽花园", "召唤", "治疗"],
+  "1205": ["云上五骁", "反击"],
+  "1310": ["星核猎手", "击破"],
+};
+const offerTraits = (id: string) =>
+  (offerTraitNames[id] ?? []).map(name => ({ name, image: `/traits/${offerTraitIcons[name]}.webp` }));
 const initial: Match = {
   id: "preview-match",
   revision: 1,
@@ -158,6 +178,7 @@ const initial: Match = {
     unit: unit(id),
     cost: [4, 2, 3, 4, 2][i],
     note: "",
+    traits: offerTraits(id),
   })),
   advice: [],
   commands: [],
@@ -377,7 +398,10 @@ export function demoPort(scenario?: string | null): PlayerPort {
       } else if (operation.kind === "refreshShop") {
         next.gold = (next.gold ?? 0) - 2;
         const ids = ["1308", "1309", "1409", "1205", "1310"];
-        next.offers = initial.offers.map((offer, i) => ({ ...offer, unit: unit(ids[(i + revision) % ids.length]) }));
+        next.offers = initial.offers.map((offer, i) => {
+          const id = ids[(i + revision) % ids.length];
+          return { ...offer, unit: unit(id), traits: offerTraits(id) };
+        });
       } else if (operation.kind === "buyExperience") {
         const experience = next.experience!;
         next.gold = (next.gold ?? 0) - previewExperienceCost;

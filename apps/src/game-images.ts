@@ -3,9 +3,17 @@ import { desktop } from "./windows";
 
 let available = new Set<string>();
 const draftPortraits = new Set(["/portraits/1204.png", "/portraits/1409.png"]);
+const matchArtwork = new Set(
+  Object.keys(import.meta.glob([
+    "../../design-drafts/player-app/assets/traits/*.webp",
+    "../../design-drafts/player-app/assets/match-portraits/*.webp",
+  ])).map(path => "/" + path.split("/").slice(-2).join("/")),
+);
 
 export function imageUrl(source?: string): string | undefined {
   if (!source) return;
+  if (matchArtwork.has(source)) return source;
+  if (source.startsWith("/match-portraits/")) return undefined;
   if (!desktop) {
     return source.startsWith("/portraits/") && !draftPortraits.has(source) ? undefined : source;
   }

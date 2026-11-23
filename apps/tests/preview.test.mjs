@@ -150,6 +150,7 @@ test("shop actions use the offer ID and the new snapshot carries the resulting p
   const port = demoPort();
   const before = await port.match("preview");
   const offer = before.offers[0];
+  assert.deepEqual(offer.traits.map(trait => trait.name), ["云上五骁", "召唤"]);
   const bought = await execute(port, before, "buy", operation => operation.offerId === offer.offerId);
   assert.ok(!bought.offers.some(entry => entry.offerId === offer.offerId));
   assert.equal(bought.gold, before.gold - offer.cost);
@@ -157,6 +158,7 @@ test("shop actions use the offer ID and the new snapshot carries the resulting p
   const refreshed = await execute(port, bought, "refreshShop");
   assert.equal(refreshed.gold, bought.gold - 2);
   assert.equal(refreshed.offers.length, 5);
+  assert.ok(refreshed.offers.every(entry => entry.traits.length >= 2 && entry.traits.every(trait => trait.image.startsWith("/traits/"))));
 });
 
 test("buying experience updates the team level and balance through the command port", async () => {

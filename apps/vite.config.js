@@ -7,9 +7,9 @@ const draftAssets = new URL("../design-drafts/player-app/assets/", import.meta.u
 export default defineConfig({
   plugins: [
     {
-      name: "bundle-book-and-controls",
+      name: "bundle-player-artwork",
       generateBundle() {
-        for (const folder of ["book", "ui"]) {
+        for (const folder of ["book", "ui", "traits", "match-portraits"]) {
           const directory = new URL(folder + "/", draftAssets);
           for (const name of readdirSync(directory)) {
             this.emitFile({

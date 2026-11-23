@@ -476,44 +476,116 @@
 }
 .match-offers button {
   display: grid;
-  justify-items: center;
-  gap: 0.12rem;
+  grid-template-rows: 1fr auto;
   min-width: 0;
-  padding: 0.2rem 0.32rem 0.32rem;
-  font-size: 0.84rem;
-  background: #fffaf9;
-  border: 1px solid #decad3;
-  border-radius: 0.28rem;
+  padding: 0;
+  text-align: left;
+  background: #f0e6ed80;
+  border: 1px solid #d9bdce;
+  border-radius: 0.3rem;
+  overflow: hidden;
 }
 .match-offers button:hover {
   background: #eedce5;
+  border-color: var(--wine);
 }
-.match-offers button > img {
-  width: 3.5rem;
-  height: 3.5rem;
-  object-fit: contain;
+.match-offers button:disabled {
+  opacity: 1;
+  background: #f3eaef50;
 }
-.match-offers button small {
-  display: flex;
+.match-offers button:disabled .offer-price {
+  color: var(--muted);
+}
+.offer-portrait {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-content: end;
+  min-height: 8.4rem;
+  padding-top: 4rem;
+  background: #eadbe5;
+}
+.offer-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.offer-art img {
+  display: block;
   width: 100%;
-  align-items: center;
-  justify-content: center;
-  gap: 0.15rem;
-  margin-top: 0.2rem;
-  padding: 0.06rem 0.15rem 0.1rem;
-  border-radius: 0.18rem;
-  background: #f1e4ec;
-  color: #673b56;
-  font-size: 1rem;
-  font-weight: 700;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 22%;
 }
-.match-offers button small span {
-  color: #674f5f;
-  font-size: 0.77rem;
-  margin-left: 0.3rem;
+.offer-traits {
+  display: grid;
+  background: #48283ee8;
+  color: #fff9fc;
+  font-size: 0.89rem;
+  line-height: 1.22;
+}
+.offer-trait {
+  display: grid;
+  grid-template-columns: 0.95rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.38rem;
+  min-height: 1.37rem;
+  padding: 0.13rem 0.36rem;
+}
+.offer-trait + .offer-trait,
+.offer-trait + .offer-note {
+  border-top: 1px solid #fff3fa33;
+}
+.offer-trait-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+.offer-trait-name {
+  grid-column: 2;
+}
+.offer-note {
+  padding: 0.17rem 0.36rem;
+  font-size: 0.8rem;
+}
+.offer-trait-name,
+.offer-note,
+.offer-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.offer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.23rem;
+  padding: 0.26rem 0.36rem;
+  border-top: 1px solid #ceacbf;
+  color: var(--ink);
+  font-size: 0.91rem;
+}
+.offer-price {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 0.2rem;
+  color: #673b56;
+  font-size: 1.03rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .match-offers .icon {
   width: 0.9rem;
+}
+.offer-art .portrait-initial {
+  color: var(--wine);
+  font: 1.25rem "Noto Serif SC Variable", serif;
 }
 .match-actions {
   display: flex;

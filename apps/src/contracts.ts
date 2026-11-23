@@ -153,7 +153,13 @@ export interface Match {
   traits: MatchTrait[];
   inventory: MatchItem[];
   consumables: MatchItem[];
-  offers: { offerId: string; unit: Unit; cost: number | null; note: string }[];
+  offers: {
+    offerId: string;
+    unit: Unit;
+    cost: number | null;
+    note: string;
+    traits?: Pick<MatchTrait, "name" | "image">[];
+  }[];
   commands: MatchCommand[];
   companion?: { name: string; detail: string };
   aura?: { pieceId: string; name: string; detail: string };

@@ -1,6 +1,6 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { repeat } from "lit/directives/repeat.js";
-import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece } from "./contracts";
+import type { ActionOption, Match, MatchCommand, MatchItem, MatchPort, Piece, Unit } from "./contracts";
 import { art, icon, stats, type Run, type Spread } from "./folio";
 import { matchStatus } from "./match-status";
 import { commandsForDrop, type DropTarget } from "./match-drag";
@@ -10,6 +10,15 @@ type Selection = { kind: "item" | "piece" | "event"; id: string; commandIds?: Se
 function itemPicture(item: MatchItem) {
   const artwork = art(item.image);
   return artwork === nothing ? html`<span class="item-initial">${item.name.slice(0, 1)}</span>` : artwork;
+}
+
+function cataloguePortrait(unit: Unit) {
+  const picture = art(`/match-portraits/${unit.id}.webp`);
+  if (picture !== nothing) return picture;
+  const fallback = art(unit.portrait);
+  if (fallback !== nothing) return fallback;
+  const avatar = art(unit.image);
+  return avatar !== nothing ? avatar : html`<span class="portrait-initial" aria-hidden="true">${unit.name.slice(0, 1)}</span>`;
 }
 
 function slots(
@@ -368,11 +377,24 @@ export function matchView(
                 </div></div>
                 <div class="match-offers">${m.offers.map(offer => {
                   const command = commands.find(({ operation }) => operation.kind === "buy" && operation.offerId === offer.offerId);
-                  return html`<button type="button" title=${[offer.unit.name, offer.note].filter(Boolean).join(" · ")} ?disabled=${!command}
-                    aria-label=${command ? [command.label, command.detail].filter(Boolean).join(" · ") : offer.unit.name}
+                  const traits = offer.traits ?? [];
+                  const details = [offer.note, ...traits.map(trait => trait.name)];
+                  return html`<button type="button" title=${[offer.unit.name, ...details].filter(Boolean).join(" · ")} ?disabled=${!command}
+                    aria-label=${[command?.label ?? offer.unit.name, command?.detail ?? (offer.cost === null ? "价格未知" : `${offer.cost} 金币`), ...details].filter(Boolean).join(" · ")}
                     @click=${() => command && execute(command)}>
-                    ${art(offer.unit.image)}${offer.unit.image ? nothing : html`<span class="offer-initial" aria-hidden="true">${offer.unit.name.slice(0, 1)}</span>`}
-                    <small>${icon("coin")}${offer.cost ?? "—"} <span aria-hidden="true">招募</span></small>
+                    <span class="offer-portrait" aria-hidden="true">
+                      <span class="offer-art">${cataloguePortrait(offer.unit)}</span>
+                      ${traits.length || offer.note ? html`<span class="offer-traits">
+                        ${traits.map(trait => html`<span class="offer-trait">
+                          ${art(trait.image, "offer-trait-icon")}<span class="offer-trait-name">${trait.name}</span>
+                        </span>`)}
+                        ${offer.note ? html`<span class="offer-note">${offer.note}</span>` : nothing}
+                      </span>` : nothing}
+                    </span>
+                    <span class="offer-footer" aria-hidden="true">
+                      <span class="offer-name">${offer.unit.name}</span>
+                      <span class="offer-price">${icon("coin")}${offer.cost ?? "—"}</span>
+                    </span>
                   </button>`;
                 })}${m.offers.length ? nothing : html`<p>暂无报价</p>`}</div>
                 <div class="command-list">${commands.filter(({ operation }) => operation.kind === "advance").map(commandButton)}</div>
