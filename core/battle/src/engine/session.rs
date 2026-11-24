@@ -127,7 +127,7 @@ impl<'input> BattleSession<'input> {
             seed,
             #[cfg(feature = "diagnostics")]
             trace,
-        );
+        )?;
         #[cfg(feature = "diagnostics")]
         {
             state.recorded_random = draws.map(super::recorded_rng::RecordedRandom::new);

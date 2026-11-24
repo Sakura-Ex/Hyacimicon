@@ -203,8 +203,9 @@ impl<'a> State<'a> {
         input: &'a Scenario,
         seed: u64,
         #[cfg(feature = "diagnostics")] trace: bool,
-    ) -> Self {
+    ) -> Result<Self, String> {
         let s = input;
+        let timeline = Timeline::new(s.max_av, &s.mechanics.cycles)?;
         let mut units: Vec<_> = s
             .allies
             .iter()
@@ -221,16 +222,12 @@ impl<'a> State<'a> {
                 .take(initial_count)
                 .map(|u| CombatUnit::new(u, false, &s.mechanics)),
         );
-        Self {
+        Ok(Self {
             input,
             #[cfg(feature = "diagnostics")]
             recorded_random: None,
             units,
-            timeline: Timeline::new(if s.mechanics.cycles.is_empty() {
-                vec![s.max_av]
-            } else {
-                s.mechanics.cycles.clone()
-            }),
+            timeline,
             pending: Default::default(),
             turn: None,
             hooks: s
@@ -273,7 +270,7 @@ impl<'a> State<'a> {
             damage_attack_type: None,
             event_attack_type: None,
             dynamic_scopes: Default::default(),
-        }
+        })
     }
 
     /// Instantiate opening summons after the normal roster, preserving queue slot indexes.

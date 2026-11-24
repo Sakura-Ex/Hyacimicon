@@ -16,15 +16,34 @@ pub struct Timeline {
     pub budgets: Vec<f64>,
 }
 impl Timeline {
-    /// 按所属类型的初始配置建立独立运行状态。
-    pub fn new(budgets: Vec<f64>) -> Self {
-        Self {
+    /// Initialize the clock from a finite total and optional per-cycle allowances.
+    pub fn new(max_av: f64, cycles: &[f64]) -> Result<Self, String> {
+        if !max_av.is_finite() || max_av < 0.0 {
+            return Err("max_av must be finite and non-negative".into());
+        }
+        let budgets = if cycles.is_empty() {
+            vec![max_av]
+        } else {
+            if cycles.iter().any(|av| !av.is_finite() || *av < 0.0) {
+                return Err("mechanics.cycles must contain finite, non-negative AV".into());
+            }
+            let total: f64 = cycles.iter().sum();
+            // Allow rounding when adding finite non-negative floating-point allowances.
+            let tolerance = f64::EPSILON * max_av.max(total) * cycles.len() as f64;
+            if !total.is_finite() || (total - max_av).abs() > tolerance {
+                return Err(format!(
+                    "mechanics.cycles sum to {total} AV, expected max_av {max_av}"
+                ));
+            }
+            cycles.to_vec()
+        };
+        Ok(Self {
             now: 0.0,
             cycle: 0,
             remaining: budgets[0],
             penalty: 0.0,
             budgets,
-        }
+        })
     }
     /// 返回已实际推进的 AV 时钟。
     pub fn now(&self) -> f64 {

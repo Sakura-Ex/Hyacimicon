@@ -58,7 +58,7 @@ impl ScenarioFile {
     /// 参数 bytes 为完整 UTF-8 JSON。此入口处理文件结构；静态规则与引用
     /// 由资料编译和组装方保证。文件解析失败时返回具体错误。
     pub fn from_slice(bytes: &[u8]) -> Result<Self, String> {
-        let mut value: serde_json::Value =
+        let scenario_json::UniqueValue(mut value) =
             serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         let fingerprint = format!(
             "{:x}",
@@ -144,6 +144,7 @@ pub struct BattleReport {
 
 pub mod replay;
 mod replay_checks;
+mod scenario_json;
 pub mod settlement;
 
 /// 以默认策略运行开发场景，trace 决定是否记录逐事件回放。

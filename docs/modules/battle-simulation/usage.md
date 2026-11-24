@@ -129,9 +129,11 @@ inputs unchanged.
 
 使用 [`duel.json`](../../../core/battle/examples/duel.json) 作为可运行的输入模板。正式字段由 [`Scenario`](../../../core/battle/src/model/scenario.rs) 定义，包含 `max_av`、`max_actions`、双方共享战技点、我方单位、敌方波次和 `mechanics`。开发文件中的 `schema_version`、`ruleset`（样例标为 `battle_v2`）等元数据由 [`ScenarioFile`](../../../core/battle/src/diagnostics/mod.rs) 在构造 `Scenario` 前移除。组装方负责保证静态数值和规则引用有效，`inspect` 检查 JSON 和字段结构。
 
+Scenario JSON objects must use unique keys, including inside `mechanics` and unit definitions. The diagnostic loader rejects duplicates before extracting scenario metadata.
+
 ### 2.2 核心机制字段 (`mechanics`) 说明
 
-- `cycles`：各轮次（Cycle）的 AV 额度列表。组装方保证额度之和等于 `max_av`，列表为空时使用单轮 `max_av`。
+- `cycles` lists the AV allowance for each cycle. The battle session requires finite, non-negative allowances whose sum equals `max_av` within floating-point rounding. An empty list uses `max_av` as the only allowance.
 - `ally_damage_factor` 是我方直接伤害的可选乘数。Rust `Mechanics::default()` 与省略此字段的开发 JSON 均取 `1.0`。填入有限非负数，`0.0` 表示该次直接伤害量为零。我方直接伤害命中存活目标时，在护盾和生命结算前乘算一次。敌方伤害使用 `1.0`。用于命中的值为负数或非有限值时返回 `ally_damage_factor must be finite and non-negative`。
 - `queue_capacity`：有限敌人队列的在场槽位数。启用时，组装方将所有敌人按入场顺序放入唯一一波 `waves[0]`。敌人阵亡并结束当前 Action 后，引擎依序补足空槽。
 - `triggers`: 战局全局或单位级事件监听器（`BattleStart`、`WaveStart`、`Hit`、`Break`、`Death`、`TurnEnd` 等）。

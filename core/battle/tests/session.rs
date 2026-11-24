@@ -38,6 +38,33 @@ fn turn(session: &mut BattleSession<'_>) -> Decision {
     }
 }
 
+#[test]
+fn battle_clock_validates_explicit_cycle_allowances() {
+    let mut input = scenario(vec![unit("hero", 100.0)], vec![vec![unit("enemy", 1.0)]]);
+    input.max_av = 199.0;
+    input.mechanics.cycles = vec![50.0, 100.0];
+    assert_eq!(
+        BattleSession::new(&input, 42).err().as_deref(),
+        Some("mechanics.cycles sum to 150 AV, expected max_av 199"),
+    );
+    input.mechanics.cycles = vec![f64::MAX, f64::MAX];
+    assert_eq!(
+        BattleSession::new(&input, 42).err().as_deref(),
+        Some("mechanics.cycles sum to inf AV, expected max_av 199"),
+    );
+    input.mechanics.cycles = vec![200.0, -1.0];
+    assert_eq!(
+        BattleSession::new(&input, 42).err().as_deref(),
+        Some("mechanics.cycles must contain finite, non-negative AV"),
+    );
+    input.max_av = 0.3;
+    input.mechanics.cycles = vec![0.1, 0.2];
+    let result = finish(BattleSession::new(&input, 42).unwrap());
+    assert_eq!(result.termination, Termination::AvBudgetExhausted);
+    assert_eq!(result.remaining_av, 0.0);
+    close(result.elapsed_av, 0.3);
+}
+
 fn hook(owner: &str, event: BattleEvent, effects: Vec<Effect>) -> Trigger {
     Trigger {
         owner: owner.into(),

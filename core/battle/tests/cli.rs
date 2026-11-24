@@ -53,6 +53,36 @@ fn development_cli_reuses_batch_statistics() {
     );
 }
 
+#[test]
+fn scenario_import_rejects_duplicate_keys_before_extracting_metadata() {
+    let original = fs::read_to_string(example("anaxa-s2-full-battle.json")).unwrap();
+    let file = ScenarioFile::from_slice(original.as_bytes()).unwrap();
+    assert!(file.settlement.is_some());
+
+    let overwritten = original.replacen(
+        "\"mechanics\": {",
+        "\"mechanics\": {\"settlement\": null}, \"mechanics\": {",
+        1,
+    );
+    assert!(ScenarioFile::from_slice(overwritten.as_bytes())
+        .unwrap_err()
+        .starts_with("duplicate scenario key \"mechanics\""));
+
+    let policy = original.replacen(
+        "\"settlement\": {",
+        "\"settlement\": null, \"settlement\": {",
+        1,
+    );
+    assert!(ScenarioFile::from_slice(policy.as_bytes())
+        .unwrap_err()
+        .starts_with("duplicate scenario key \"settlement\""));
+
+    let nested = original.replacen("\"level\": 80", "\"level\": 1, \"level\": 80", 1);
+    assert!(ScenarioFile::from_slice(nested.as_bytes())
+        .unwrap_err()
+        .starts_with("duplicate scenario key \"level\""));
+}
+
 /// 逐字段核对同一操作路径的最终结果，并验证步骤区间覆盖提交后的所有事件。
 fn checked_replay(name: &str, expected_steps: usize) -> Value {
     let scenario = example(&format!("{name}.json"));
