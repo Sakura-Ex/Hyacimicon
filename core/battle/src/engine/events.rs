@@ -208,7 +208,7 @@ impl State<'_> {
                 "revival hp",
             )?;
             // Revival preserves distance and clock; only current-cycle AV is charged.
-            let _applied = self.timeline.penalize(r.av_penalty);
+            let _applied = self.timeline.penalize(r.av_penalty)?;
             trace!(
                 self,
                 "revive",

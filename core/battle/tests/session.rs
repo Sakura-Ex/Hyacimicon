@@ -50,7 +50,7 @@ fn battle_clock_validates_explicit_cycle_allowances() {
     input.mechanics.cycles = vec![f64::MAX, f64::MAX];
     assert_eq!(
         BattleSession::new(&input, 42).err().as_deref(),
-        Some("mechanics.cycles sum to inf AV, expected max_av 199"),
+        Some("nonfinite mechanics.cycles total AV"),
     );
     input.mechanics.cycles = vec![200.0, -1.0];
     assert_eq!(
@@ -63,6 +63,22 @@ fn battle_clock_validates_explicit_cycle_allowances() {
     assert_eq!(result.termination, Termination::AvBudgetExhausted);
     assert_eq!(result.remaining_av, 0.0);
     close(result.elapsed_av, 0.3);
+}
+
+#[test]
+fn battle_clock_rejects_overflow_hidden_by_forward_rounding() {
+    let mut input = scenario(vec![unit("hero", 100.0)], vec![vec![unit("enemy", 1.0)]]);
+    input.max_av = f64::from_bits(f64::MAX.to_bits() - 1);
+    let half_ulp = 2.0_f64.powi(970);
+    input.mechanics.cycles = vec![input.max_av, half_ulp, half_ulp, half_ulp];
+    assert_eq!(input.mechanics.cycles.iter().sum::<f64>(), input.max_av);
+    assert_eq!(
+        BattleSession::new(&input, 42).err().as_deref(),
+        Some("nonfinite mechanics.cycles total AV"),
+    );
+    input.mechanics.cycles.pop();
+    let first = decision(&mut BattleSession::new(&input, 42).unwrap());
+    assert_eq!(first.observation.remaining_av, f64::MAX);
 }
 
 fn hook(owner: &str, event: BattleEvent, effects: Vec<Effect>) -> Trigger {

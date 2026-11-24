@@ -1,7 +1,15 @@
 //! 按剩余行动距离与速度选择下一行动者，维护轮次 AV 预算。
 //! 单位在 TurnEnd 时重排行动距离。
+use super::finite;
+
 /// 普通行动的标准距离，等待 AV 由剩余距离除以速度计算。
 pub const DISTANCE: f64 = 10000.0;
+
+struct CycleBudget {
+    allowance: f64,
+    later_allowances: f64,
+}
+
 /// 实际 AV 时钟及各倒计时轮次的剩余额度。
 pub struct Timeline {
     /// 实际推进的 AV 时钟。
@@ -13,7 +21,7 @@ pub struct Timeline {
     /// 累计实际扣除的当前轮罚时。
     pub penalty: f64,
     /// 各倒计时轮次的初始额度。
-    pub budgets: Vec<f64>,
+    budgets: Vec<CycleBudget>,
 }
 impl Timeline {
     /// Initialize the clock from a finite total and optional per-cycle allowances.
@@ -21,26 +29,36 @@ impl Timeline {
         if !max_av.is_finite() || max_av < 0.0 {
             return Err("max_av must be finite and non-negative".into());
         }
-        let budgets = if cycles.is_empty() {
-            vec![max_av]
+        let allowances = if cycles.is_empty() {
+            std::slice::from_ref(&max_av)
         } else {
-            if cycles.iter().any(|av| !av.is_finite() || *av < 0.0) {
-                return Err("mechanics.cycles must contain finite, non-negative AV".into());
-            }
-            let total: f64 = cycles.iter().sum();
-            // Allow rounding when adding finite non-negative floating-point allowances.
-            let tolerance = f64::EPSILON * max_av.max(total) * cycles.len() as f64;
-            if !total.is_finite() || (total - max_av).abs() > tolerance {
-                return Err(format!(
-                    "mechanics.cycles sum to {total} AV, expected max_av {max_av}"
-                ));
-            }
-            cycles.to_vec()
+            cycles
         };
+        if allowances.iter().any(|av| !av.is_finite() || *av < 0.0) {
+            return Err("mechanics.cycles must contain finite, non-negative AV".into());
+        }
+        let mut budgets = Vec::with_capacity(allowances.len());
+        let mut total = 0.0;
+        // Validate the same suffix sums that will be used for remaining AV.
+        for &allowance in allowances.iter().rev() {
+            budgets.push(CycleBudget {
+                allowance,
+                later_allowances: total,
+            });
+            total = finite(allowance + total, "mechanics.cycles total AV")?;
+        }
+        budgets.reverse();
+        // Allow rounding when adding finite non-negative floating-point allowances.
+        let tolerance = f64::EPSILON * max_av.max(total) * allowances.len() as f64;
+        if (total - max_av).abs() > tolerance {
+            return Err(format!(
+                "mechanics.cycles sum to {total} AV, expected max_av {max_av}"
+            ));
+        }
         Ok(Self {
             now: 0.0,
             cycle: 0,
-            remaining: budgets[0],
+            remaining: budgets[0].allowance,
             penalty: 0.0,
             budgets,
         })
@@ -55,19 +73,26 @@ impl Timeline {
     }
     /// 返回当前轮余额与后续轮初始额度之和。
     pub fn remaining_total(&self) -> f64 {
-        self.remaining + self.budgets.iter().skip(self.cycle + 1).sum::<f64>()
+        self.remaining + self.budgets[self.cycle].later_allowances
     }
     /// 最多扣光当前轮额度，累计并返回实际扣除量。
-    pub fn penalize(&mut self, amount: f64) -> f64 {
+    pub fn penalize(&mut self, amount: f64) -> Result<f64, String> {
+        if !amount.is_finite() || amount < 0.0 {
+            return Err("revival AV penalty must be finite and non-negative".into());
+        }
         let applied = amount.min(self.remaining);
+        self.penalty = finite(self.penalty + applied, "cumulative revival AV penalty")?;
         self.remaining -= applied;
-        self.penalty += applied;
-        applied
+        Ok(applied)
     }
     /// 推进实际 AV 并扣减当前轮额度。
-    pub fn advance(&mut self, delta: f64) {
-        self.now += delta;
+    pub fn advance(&mut self, delta: f64) -> Result<(), String> {
+        if delta < 0.0 {
+            return Err("AV advance must be non-negative".into());
+        }
+        self.now = finite(self.now + delta, "elapsed AV")?;
         self.remaining = (self.remaining - delta).max(0.0);
+        Ok(())
     }
     /// 存在下一轮时装载其额度并返回 true。
     pub fn next_cycle(&mut self) -> bool {
@@ -75,7 +100,7 @@ impl Timeline {
             false
         } else {
             self.cycle += 1;
-            self.remaining = self.budgets[self.cycle];
+            self.remaining = self.budgets[self.cycle].allowance;
             true
         }
     }

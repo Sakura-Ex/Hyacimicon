@@ -603,7 +603,7 @@ impl<'input> BattleSession<'input> {
             let cycle_first = self.state.timeline.remaining < wait
                 || (self.state.timeline.remaining == wait && !input.mechanics.unit_before_cycle);
             let delta = wait.min(self.state.timeline.remaining);
-            self.state.timeline.advance(delta);
+            self.state.timeline.advance(delta)?;
             for u in &mut self.state.units {
                 if u.alive() {
                     u.remaining = (u.remaining - delta * u.spec.stats.speed).max(0.0);
