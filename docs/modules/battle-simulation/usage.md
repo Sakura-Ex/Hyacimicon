@@ -69,7 +69,7 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- replay core
 
 #### 普通虚数击破伤害
 
-在动作或事件监听器中加入 `imaginary_toughness`，并给可能被击破的单位提供 `mechanics.max_toughness`。该表以单位 ID 为键，`mechanics.toughness` 仍填写当前韧性。削韧量、当前韧性、最大韧性和 `stance_unit` 使用同一单位。例如目标最大韧性为 120 时，`stance_unit` 为 10 的计算与最大韧性 360、`stance_unit` 为 30 相同。
+在动作或事件监听器中加入 `imaginary_toughness`，并给可能被击破的单位提供 `mechanics.max_toughness`。该表以单位 ID 为键，`mechanics.toughness` 仍填写当前韧性。削韧量、当前韧性、最大韧性和 `stance_unit` 使用同一单位。例如目标最大韧性为 120 时，`stance_unit` 为 10 的计算与最大韧性 360、`stance_unit` 为 30 相同。施加虚数削韧时，当前韧性须为有限非负数，并且小于或等于已配置的最大韧性。
 
 ```json
 {

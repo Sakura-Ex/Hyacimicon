@@ -118,24 +118,13 @@ impl State<'_> {
         &self,
         actor: usize,
         victim: usize,
+        max_toughness: f64,
         profile: ImaginaryBreakDamage,
     ) -> Result<f64, String> {
         let victim = &self.units[victim].spec;
-        let max_toughness = *self
-            .input
-            .mechanics
-            .max_toughness
-            .get(&victim.id)
-            .ok_or_else(|| {
-                format!(
-                    "missing max_toughness for imaginary break target {}",
-                    victim.id
-                )
-            })?;
         for (name, value) in [
             ("level_multiplier", profile.level_multiplier),
             ("stance_unit", profile.stance_unit),
-            ("max_toughness", max_toughness),
         ] {
             if !value.is_finite() || value <= 0.0 {
                 return Err(format!(

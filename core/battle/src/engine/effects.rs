@@ -466,14 +466,44 @@ impl State<'_> {
                 continue;
             }
             let before = self.units[recipient].toughness;
+            let break_input = if let Some(profile) = imaginary {
+                let id = &self.units[recipient].spec.id;
+                let max = self.input.mechanics.max_toughness.get(id).copied();
+                if !before.is_finite() || before < 0.0 {
+                    return Err(format!(
+                        "imaginary break target {id} current toughness must be finite and non-negative"
+                    ));
+                }
+                if let Some(max) = max {
+                    if !max.is_finite() || max <= 0.0 {
+                        return Err(format!(
+                            "imaginary break target {id} max_toughness must be finite and positive"
+                        ));
+                    }
+                    if before > max {
+                        return Err(format!(
+                            "imaginary break target {id} current toughness {before} exceeds max_toughness {max}"
+                        ));
+                    }
+                }
+                Some((profile, max))
+            } else {
+                None
+            };
             let after = (before - amount).max(0.0);
             if !(before > 0.0 && after == 0.0) {
                 self.units[recipient].toughness = after;
                 continue;
             }
 
-            let damage = imaginary
-                .map(|profile| self.imaginary_break_amount(actor, recipient, profile))
+            let damage = break_input
+                .map(|(profile, max)| {
+                    let id = &self.units[recipient].spec.id;
+                    let max = max.ok_or_else(|| {
+                        format!("missing max_toughness for imaginary break target {id}")
+                    })?;
+                    self.imaginary_break_amount(actor, recipient, max, profile)
+                })
                 .transpose()?;
             let revivals_left = self.units[recipient].revivals_left;
             self.units[recipient].toughness = after;
@@ -494,7 +524,11 @@ impl State<'_> {
                     && self.units[recipient].revivals_left == revivals_left
             }) {
                 if self.apply_damage("break_damage", actor, recipient, action, amount, false) {
-                    self.resolve_death(recipient, action)?;
+                    // A break triggered by a hit does not inherit that hit's category.
+                    let prior_event_attack_type = self.event_attack_type.take();
+                    let result = self.resolve_death(recipient, action);
+                    self.event_attack_type = prior_event_attack_type;
+                    result?;
                 }
             }
         }

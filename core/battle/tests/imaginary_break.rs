@@ -204,3 +204,79 @@ fn missing_max_toughness_is_reported_for_an_explicit_break() {
         "missing max_toughness for imaginary break target enemy"
     );
 }
+
+#[test]
+fn imaginary_toughness_rejects_an_invalid_current_gauge_before_reduction() {
+    let target = Target::EnemyLowestHp;
+    let oversized = battle(vec![imaginary(1.0, 30.0, target)], 360.0);
+    assert_eq!(
+        simulate(&oversized, 42).unwrap_err(),
+        "imaginary break target enemy current toughness 360 exceeds max_toughness 120"
+    );
+    for current in [-1.0, f64::INFINITY, f64::NAN] {
+        let invalid = battle(vec![imaginary(10.0, 10.0, target)], current);
+        assert_eq!(
+            simulate(&invalid, 42).unwrap_err(),
+            "imaginary break target enemy current toughness must be finite and non-negative"
+        );
+    }
+}
+
+#[test]
+fn lethal_break_inside_a_hit_has_no_attack_type_and_restores_the_hits_type() {
+    let target = Target::EnemyLowestHp;
+    let grant_on_direct = |amount| Effect::Conditional {
+        condition: Condition::HitAttackType {
+            attack_type: AttackType::Direct,
+        },
+        then_effects: vec![Effect::Energy {
+            amount,
+            target: Target::SelfUnit,
+        }],
+        else_effects: vec![],
+    };
+    let mut input = battle(vec![common::damage(20.0, target)], 10.0);
+    let enemy = &mut input.waves[0][0];
+    enemy.initial_hp = 100.0;
+    enemy.stats.max_hp = enemy.initial_hp;
+    input.mechanics.triggers = vec![
+        Trigger {
+            owner: "hero".into(),
+            event: BattleEvent::Hit,
+            subject: Some("hero".into()),
+            action: None,
+            uses: 1,
+            expires_on: None,
+            duration: 0,
+            effects: vec![imaginary(10.0, 10.0, target)],
+        },
+        Trigger {
+            owner: "hero".into(),
+            event: BattleEvent::Hit,
+            subject: Some("hero".into()),
+            action: None,
+            uses: 1,
+            expires_on: None,
+            duration: 0,
+            effects: vec![grant_on_direct(3.0)],
+        },
+        Trigger {
+            owner: "hero".into(),
+            event: BattleEvent::Death,
+            subject: Some("enemy".into()),
+            action: None,
+            uses: 1,
+            expires_on: None,
+            duration: 0,
+            effects: vec![grant_on_direct(7.0)],
+        },
+    ];
+    let result = simulate(&input, 42).unwrap();
+    assert!(!state(&result, "enemy").alive);
+    close(state(&result, "hero").energy, 3.0);
+
+    input.allies[0].actions[0].effects = vec![common::damage(300.0, target)];
+    let result = simulate(&input, 42).unwrap();
+    assert!(!state(&result, "enemy").alive);
+    close(state(&result, "hero").energy, 10.0);
+}
