@@ -156,6 +156,8 @@ export interface NodeSettlement {
   source: "battle" | "teaBreak";
   healthBefore: number;
   healthAfter: number;
+  baseHealthLost: number;
+  progressHealthLost: number;
   healthLost: number;
   fixedRecovery: number;
   otherHealthDelta: number;
@@ -217,6 +219,7 @@ export interface BattleStart<BattleInput> extends MatchRef {
 }
 export type BattleProgress =
   | { kind: "complete" }
+  /** Actual progress in [0, 100). Round down for display only. */
   | { kind: "incomplete"; percent: number };
 export interface BattleCompletion extends MatchRef {
   attemptId: string;
