@@ -1,4 +1,6 @@
 //! Fixed seed streams and replay-time selection against the current legal pool.
+#[cfg(feature = "diagnostics")]
+use super::state::CombatUnit;
 use super::{finite, State};
 use rand_chacha::ChaCha8Rng;
 use rand_core::{RngCore, SeedableRng};
@@ -36,6 +38,24 @@ pub(super) fn uniform(rng: &mut ChaCha8Rng) -> f64 {
     ((rng.next_u64() >> 11) as f64) * (1.0 / 9_007_199_254_740_992.0)
 }
 
+/// A record's name must identify the executing or struck instance at the draw.
+#[cfg(feature = "diagnostics")]
+fn recorded_unit_id<'a>(
+    units: &'a [CombatUnit],
+    index: usize,
+    role: &str,
+) -> Result<&'a str, String> {
+    let id = units[index].spec.id.as_str();
+    if units
+        .iter()
+        .enumerate()
+        .any(|(other, unit)| other != index && unit.alive() && unit.spec.id == id)
+    {
+        return Err(format!("ambiguous recorded {role} {id:?}"));
+    }
+    Ok(id)
+}
+
 impl State<'_> {
     pub(super) fn roll_critical(
         &mut self,
@@ -54,12 +74,9 @@ impl State<'_> {
             if rate <= 0.0 || rate >= 1.0 {
                 return Ok(rate >= 1.0);
             }
-            let result = recorded.take(
-                "critical",
-                &self.units[_actor].spec.id,
-                _action,
-                Some(&self.units[_victim].spec.id),
-            )?;
+            let actor = recorded_unit_id(&self.units, _actor, "actor")?;
+            let victim = recorded_unit_id(&self.units, _victim, "critical target")?;
+            let result = recorded.take("critical", actor, _action, Some(victim))?;
             return Ok(matches!(
                 result,
                 super::recorded_rng::RecordedResult::Critical { critical: true, .. }
@@ -135,7 +152,7 @@ impl State<'_> {
         if let [only] = candidates {
             return Ok(*only);
         }
-        let source = &self.units[actor].spec.id;
+        let source = recorded_unit_id(&self.units, actor, "actor")?;
         let result = self
             .recorded_random
             .as_mut()

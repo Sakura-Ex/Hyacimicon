@@ -158,6 +158,49 @@ fn chosen_primary_random_enemy_and_two_critical_outcomes_drive_damage() {
 }
 
 #[test]
+fn variable_critical_outcomes_require_unique_living_instance_ids() {
+    let mut battle = input(vec![strike(100.0, Target::AllEnemies, true)]);
+    battle.waves[0][1].id = "left".into();
+    let outcomes = vec![
+        crit(Some(1), "strike", "left", false),
+        crit(Some(1), "strike", "left", true),
+    ];
+    let with_tape = normal_script(None, outcomes);
+    let error = run(&battle, with_tape.clone(), 42).unwrap_err();
+    assert!(
+        error.contains("ambiguous recorded critical target \"left\""),
+        "{error}"
+    );
+
+    let mut seeded = with_tape;
+    seeded.as_object_mut().unwrap().remove("random_outcomes");
+    assert_eq!(damage_events(&run(&battle, seeded, 42).unwrap()).len(), 2);
+
+    // A defeated instance with the same name does not hide a single living target.
+    battle.allies[0].actions[0]
+        .effects
+        .insert(0, strike(1000.0, Target::EnemyLowestHp, false));
+    let script = normal_script(None, vec![crit(Some(1), "strike", "left", true)]);
+    let report = run(&battle, script, 42).unwrap();
+    assert_eq!(
+        damage_events(&report),
+        [("left", 1000.0, false), ("left", 200.0, true)]
+    );
+}
+
+#[test]
+fn variable_target_draws_require_a_unique_living_actor_id() {
+    let mut battle = input(vec![strike(100.0, Target::EnemyRandomUniform, false)]);
+    battle.allies.push(unit("hero", 1.0));
+    let script = normal_script(None, vec![target("uniform_enemy", "left")]);
+    let error = run(&battle, script, 42).unwrap_err();
+    assert!(
+        error.contains("ambiguous recorded actor \"hero\""),
+        "{error}"
+    );
+}
+
+#[test]
 fn opening_can_consume_randomness_and_finish_without_a_decision() {
     let mut battle = input(vec![]);
     battle.waves[0].truncate(1);

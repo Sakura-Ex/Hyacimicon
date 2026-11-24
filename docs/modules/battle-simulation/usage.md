@@ -65,7 +65,8 @@ observed result.
 The target-only result kinds are `uniform_enemy`, `taunt_enemy`, and
 `hit_retarget`. For example, use
 `{"kind":"uniform_enemy","target":"enemy_2"}`. All target results must match
-one eligible instance at the draw. Strict taunt draws require nonnegative
+one eligible instance at the draw. A recorded actor or critical target must
+also have a name that identifies its instance among units in play. Strict taunt draws require nonnegative
 weights and a positive total, with only positive-weight targets eligible.
 Hit retargeting selects from living targets already hit by the current
 action. Omit `step` for draws before the first decision. A step includes
