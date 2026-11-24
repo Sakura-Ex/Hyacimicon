@@ -81,6 +81,28 @@ fn battle_clock_rejects_overflow_hidden_by_forward_rounding() {
     assert_eq!(first.observation.remaining_av, f64::MAX);
 }
 
+#[test]
+fn battle_clock_preserves_battle_order_rounding_of_fractional_av() {
+    let mut input = scenario(vec![unit("hero", 100.0)], vec![vec![unit("enemy", 1.0)]]);
+    input.max_av = 0.61;
+    input.mechanics.cycles = vec![0.01, 0.1, 0.2, 0.3];
+    let first = decision(&mut BattleSession::new(&input, 42).unwrap());
+    assert_eq!(first.observation.remaining_av, 0.6100000000000001);
+}
+
+#[test]
+fn battle_clock_checks_aggregation_after_a_cycle_transition() {
+    let mut input = scenario(vec![unit("hero", 100.0)], vec![vec![unit("enemy", 1.0)]]);
+    input.max_av = f64::from_bits(f64::MAX.to_bits() - 1);
+    let half_ulp = 2.0_f64.powi(970);
+    input.mechanics.cycles = vec![0.0, input.max_av, half_ulp, half_ulp, half_ulp];
+    let mut battle = BattleSession::new(&input, 42).unwrap();
+    assert_eq!(
+        battle.advance().unwrap_err(),
+        "nonfinite mechanics.cycles total AV"
+    );
+}
+
 fn hook(owner: &str, event: BattleEvent, effects: Vec<Effect>) -> Trigger {
     Trigger {
         owner: owner.into(),

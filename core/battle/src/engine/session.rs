@@ -472,7 +472,7 @@ impl<'input> BattleSession<'input> {
                         None,
                     );
                     self.state.dispatch(BattleEvent::CycleEnd, None, None)?;
-                    if !self.state.timeline.next_cycle() {
+                    if !self.state.timeline.next_cycle()? {
                         self.state.exhausted = true;
                     }
                     continue;
