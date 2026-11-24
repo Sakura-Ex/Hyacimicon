@@ -58,7 +58,7 @@
 | 常规备战 | `buy`、`sell`、`refreshShop`、`lockShop`、`buyExperience`、`move`、`equip`、`combine`、`useItem`、`openCrystal`，以及当前可用的羁绊操作。准备好后 `startBattle`。符合条件的首领阶段先提供 `openSpotlight` |
 | 投资策略待选 | 选择视图可 `refreshChoice`（每格一次且保持品质）、`chooseInvestmentStrategy` 或 `returnToPreparation`。备战视图可 `openCrystal` 或 `returnToSelection`。确认策略后正式进入同编号战斗节点，发放入节点收益 |
 | 补给待选 | 选择视图可 `refreshSupply`（整组一次）、`takeSupply` 或 `returnToPreparation`。备战视图可 `openCrystal` 或 `returnToSelection`。必须从五组中选一组，领取和自动推进在一次写入内完成 |
-| 主角光环待选 | 选择视图可 `refreshChoice`（更换单个候选并扣本轮刷新价）、`chooseSpotlight` 或 `returnToPreparation`。备战视图可 `move`（含备战席与场上互换）、`openCrystal` 或 `returnToSelection`。选择后回到首领备战，旧光环留作难度记录，最新光环效果生效 |
+| 主角光环待选 | 选择视图可 `refreshChoice`（更换单个候选并扣本轮刷新价）、`chooseSpotlight` 或 `returnToPreparation`。备战视图可 `move`（含备战席与场上互换）或 `returnToSelection`。选择后回到首领备战，旧光环留作难度记录，最新光环效果生效 |
 | 幕后茶歇 | `chooseTeaBreak` 确认茶歇选项；`claimTeaBreakReward` 领取晶矿及正常战斗奖励，经验增量为 0。设计先将选择和领取表达为两个阶段，联调核对实际操作是否自动合并 |
 | 战斗中 | `restartBattle` 从头重跑并沿用本次进入的随机序列；`leaveBattle` 保留运营局面、进入暂离。战斗内技能和行动由战斗模块处理 |
 | 战斗暂离 | `move` 和 `reenterBattle`。重进按调整后站位从头开始，并采用新随机序列 |
@@ -96,7 +96,7 @@
 - 手动购买一次，脚本接管同一局并选一条合法动作，界面接收通知显示变化。交还后玩家可继续，交还前准备的模型指令被拒绝。
 - 上一场战斗结束后显示金币和晶矿，投资策略确认前保持入节点收益未发放，确认后只发一次。
 - 补给候选可整体刷新一次，领一组后自动推进，补给位置保留在路线中，触发计数保持原值。
-- 投资策略、补给、主角光环都能从选择返回备战，再回到原选择。模型能观察到每次切换及更新后的合法动作。候选和剩余刷新次数保持原值。补给与投资策略备战时只可开晶矿，主角光环备战时还可换位。
+- 投资策略、补给、主角光环都能从选择返回备战，再回到原选择。模型能观察到每次切换及更新后的合法动作。候选和剩余刷新次数保持原值。补给与投资策略的备战视图开放开晶矿；主角光环的备战视图开放换位，禁止开晶矿。
 - 羁绊满足条件时，在常规备战下发带羁绊 ID 的动作。一次性选择确认后锁定。可更改选择打开后可直接确认原选项，也可换选后确认。换选只改变待确认项，生效选项在确认时更新。三个待选阶段及其备战视图均关闭羁绊操作。
 - 直接重开使用同一随机序列，暂离再进使用新随机序列。旧战斗结果晚到不改变局面，最终尝试只结算一次。
 - 战斗进度失血的设计使用四舍五入，并验证门槛、回血上限和最终血量刚好为 0 的情况。
