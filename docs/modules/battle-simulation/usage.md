@@ -86,6 +86,41 @@ damage, resource and result values.
 
 `expect` 对照运行产生的事件。脚本提前结束、终局后多给操作、非法选择、事件不符或记录截断会返回错误。对局受动作上限等保护规则终止时，报告的 `outcome` 仍为 `incomplete`。
 
+### Optional state checks
+
+Add `expect_opening` to check the state at the first decision. If the battle
+finishes during opening, it checks the terminal state. Add `expect_after` to a
+step to check the state after submission and advance to the next decision or
+the end. This includes any insertions, wave changes, or timer events processed
+during that advance. Existing event expectations run before the step state
+check. Use `expect_result` to check the terminal outcome independently.
+
+```json
+{
+  "expect_after": {
+    "cycle": 2,
+    "cycle_remaining_av": 20,
+    "remaining_av": 20,
+    "units": [{"id": "enemy_2", "hp": {"value": 89.5, "abs_tol": 0.25}, "alive": true}]
+  }
+}
+```
+
+Opening, post-step and nested result `state` use the same fields. Check
+`wave`, `cycle`, `elapsed_av`, `cycle_remaining_av`, `remaining_av`,
+`ally_skill_points`, `enemy_skill_points` or specific units. Unit fields are
+`hp`, `shield`, `energy`, `toughness`, `alive` and `revivals_left`.
+Resolve each unit ID to a unique instance in the snapshot. A missing unit or
+ambiguous ID fails the check, including duplicate IDs in dead-unit history.
+
+Use a JSON number for exact comparison. A numeric object with `value` and a
+finite nonnegative `abs_tol` accepts values within that absolute tolerance.
+Supply tolerances from observation precision. The output keeps raw values.
+Omit unobserved fields and checkpoints. Explicit nulls are rejected.
+`expect_result` also accepts `outcome` and `termination` as snake-case strings
+and numeric `penalty_av`, `actions` and `waves_cleared`. These checks leave the report format and the simulation
+inputs unchanged.
+
 ---
 
 ## 2. 场景输入与输出格式规范

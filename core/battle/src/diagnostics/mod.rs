@@ -143,6 +143,7 @@ pub struct BattleReport {
 }
 
 pub mod replay;
+mod replay_checks;
 pub mod settlement;
 
 /// 以默认策略运行开发场景，trace 决定是否记录逐事件回放。

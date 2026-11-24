@@ -93,6 +93,15 @@ impl<'input> BattleSession<'input> {
         self.state.wave + 1
     }
 
+    /// Read the finished snapshot without advancing or copying the event trace.
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn replay_result(&self) -> Option<&BattleResult> {
+        match &self.phase {
+            Phase::Finished(result) => Some(result),
+            _ => None,
+        }
+    }
+
     /// 读取已记录的诊断事件。终局时事件已经移入结果。
     #[cfg(feature = "diagnostics")]
     pub(crate) fn replay_trace(&self) -> Result<&[crate::diagnostics::Event], String> {

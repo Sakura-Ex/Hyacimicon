@@ -1,5 +1,8 @@
 //! 使用显式操作序列驱动会话，并将每一步和诊断事件关联。
-use super::{BattleReport, Event, ScenarioFile};
+use super::{
+    replay_checks::{provided_object, ResultExpectation, StateExpectation},
+    BattleReport, Event, ScenarioFile,
+};
 use crate::{
     decision::{Decision, DecisionPoint, Observation, Operation},
     engine::{BattleSession, BattleStep, RecordedDraw},
@@ -17,6 +20,12 @@ pub struct ReplayScript {
     /// Observed branch choices for a strict replay; omission uses the seed.
     #[serde(default, deserialize_with = "deserialize_random_outcomes")]
     random_outcomes: Option<Vec<RecordedDraw>>,
+    /// State at the first decision or a battle that ended during opening.
+    #[serde(default, deserialize_with = "provided_object")]
+    expect_opening: Option<StateExpectation>,
+    /// Final outcome and state, including battles with no decisions.
+    #[serde(default, deserialize_with = "provided_object")]
+    expect_result: Option<ResultExpectation>,
 }
 
 fn deserialize_random_outcomes<'de, D: serde::Deserializer<'de>>(
@@ -36,6 +45,9 @@ struct ScriptStep {
     /// 可选的事件身份与数值检查，偏移以本步开始为基准。
     #[serde(default)]
     expect: Vec<ExpectedEvent>,
+    /// State after this submission advances to the next decision or finish.
+    #[serde(default, deserialize_with = "provided_object")]
+    expect_after: Option<StateExpectation>,
 }
 
 /// 用场景中的稳定标识指定技能，索引由当前合法列表确定。
@@ -186,6 +198,10 @@ pub fn replay<'a>(
     session
         .check_random_interval(next.is_none())
         .map_err(opening_error)?;
+    if let Some(expected) = &script.expect_opening {
+        verify_boundary(&session, next.as_ref(), expected)
+            .map_err(|error| format!("opening state: {error}"))?;
+    }
     let mut steps = Vec::new();
     for (index, entry) in script.steps.iter().enumerate() {
         let decision = next.ok_or_else(|| format!("battle finished before script step {index}"))?;
@@ -222,6 +238,10 @@ pub fn replay<'a>(
                 .verify(&trace[event_start..])
                 .map_err(|error| format!("{context}: {error}"))?;
         }
+        if let Some(expected) = &entry.expect_after {
+            verify_boundary(&session, next.as_ref(), expected)
+                .map_err(|error| format!("{context}, state after: {error}"))?;
+        }
         steps.push(ReplayStep {
             decision_id: decision.id,
             point: decision.point,
@@ -241,11 +261,36 @@ pub fn replay<'a>(
         ));
     }
     session.replay_trace()?;
+    if let Some(expected) = &script.expect_result {
+        let result = session
+            .replay_result()
+            .ok_or("battle has no terminal snapshot")?;
+        expected
+            .verify(session.replay_wave(), result)
+            .map_err(|error| format!("result: {error}"))?;
+    }
     Ok(ReplayReport {
         battle: file.report(session.into_result()?, seed),
         steps,
         random_outcomes: script.random_outcomes.as_deref(),
     })
+}
+
+/// Check a snapshot at the same boundary already used by the replay loop.
+fn verify_boundary(
+    session: &BattleSession<'_>,
+    next: Option<&Decision>,
+    expected: &StateExpectation,
+) -> Result<(), String> {
+    let wave = session.replay_wave();
+    if let Some(decision) = next {
+        expected.verify_observation(wave, &decision.observation)
+    } else {
+        let result = session
+            .replay_result()
+            .ok_or("battle has no terminal snapshot")?;
+        expected.verify_result(wave, result)
+    }
 }
 
 /// 推进到下一决策并取出快照，便于继续提交和读取事件。
