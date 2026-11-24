@@ -144,11 +144,15 @@ impl State<'_> {
         actor: usize,
         action_index: usize,
         prepaid: bool,
+        primary_enemy: Option<usize>,
     ) -> Result<(), String> {
         let action = self.units[actor].spec.actions[action_index].clone();
         // 普通选招已通过当前合法列表；排队请求在实际入口重新检查资源。
         // Bind once even when a nested conditional/loop is the first target use.
-        self.bound_target = self.targets(actor, Target::EnemyLowestHp)?.first().copied();
+        self.bound_target = match primary_enemy {
+            Some(target) => Some(target),
+            None => self.targets(actor, Target::EnemyLowestHp)?.first().copied(),
+        };
         // The event uses the follow-up queue without becoming a character follow-up.
         self.current_action_kind = (!self.is_opening_event(actor)).then_some(action.kind);
         self.attack_owner = Some(actor);
@@ -160,7 +164,15 @@ impl State<'_> {
         self.actions += 1;
         self.dispatch(BattleEvent::ActionStart, Some(actor), Some(&action.id))?;
         self.dispatch(BattleEvent::BeforeSkillUse, Some(actor), Some(&action.id))?;
-        trace!(self, "action", actor, None, Some(&action.id), None, None);
+        trace!(
+            self,
+            "action",
+            actor,
+            primary_enemy,
+            Some(&action.id),
+            None,
+            None
+        );
         self.apply_effects(actor, &action.id, &action.effects)?;
         if self.units[actor].alive() {
             self.sp[side] = self.sp[side]

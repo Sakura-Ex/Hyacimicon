@@ -157,12 +157,62 @@ impl<'input> BattleSession<'input> {
     /// 下一次推进在其实际入Turn时支付能量。`None`仅用于放弃插入机会。
     /// 执行中的错误使会话进入失败状态，调用方应重新建立会话。
     pub fn submit(&mut self, decision_id: u64, choice: Option<Operation>) -> Result<(), String> {
+        self.submit_choice(decision_id, choice, None)
+    }
+
+    /// List unambiguous living enemy IDs for a legal action that binds a primary target.
+    pub fn legal_primary_targets(
+        &self,
+        decision_id: u64,
+        choice: &Operation,
+    ) -> Result<Vec<&str>, String> {
+        let decision = self.awaiting_decision(decision_id)?;
+        if !decision.legal.contains(choice) {
+            return Err("policy returned an illegal operation".into());
+        }
+        let actor = self.state.runtime_actor_index(choice.actor);
+        let mut names = std::collections::BTreeMap::new();
+        for (_, name) in self.state.primary_enemy_candidates(actor, choice.action)? {
+            names
+                .entry(name)
+                .and_modify(|unique| *unique = false)
+                .or_insert(true);
+        }
+        Ok(names
+            .into_iter()
+            .filter_map(|(name, unique)| unique.then_some(name))
+            .collect())
+    }
+
+    /// Submit a legal operation with a primary enemy identified by its unit ID.
+    /// Validation leaves the current decision intact on error. An inserted
+    /// ultimate retains the selected instance until it reaches the queue head.
+    pub fn submit_targeted(
+        &mut self,
+        decision_id: u64,
+        choice: Operation,
+        target: &str,
+    ) -> Result<(), String> {
+        self.submit_choice(decision_id, Some(choice), Some(target))
+    }
+
+    fn awaiting_decision(&self, decision_id: u64) -> Result<&Decision, String> {
         let Phase::Awaiting(decision) = &self.phase else {
             return Err("battle is not awaiting a decision".into());
         };
         if decision.id != decision_id {
             return Err("stale decision id".into());
         }
+        Ok(decision)
+    }
+
+    fn submit_choice(
+        &mut self,
+        decision_id: u64,
+        choice: Option<Operation>,
+        target: Option<&str>,
+    ) -> Result<(), String> {
+        let decision = self.awaiting_decision(decision_id)?;
         if choice
             .as_ref()
             .is_some_and(|op| !decision.legal.contains(op))
@@ -173,7 +223,23 @@ impl<'input> BattleSession<'input> {
             return Err("turn policy declined all legal actions".into());
         }
         let point = decision.point;
-        let result = self.execute_choice(point, choice);
+        let primary_enemy = if let (Some(op), Some(target)) = (&choice, target) {
+            let actor = self.state.runtime_actor_index(op.actor);
+            let mut matches = self
+                .state
+                .primary_enemy_candidates(actor, op.action)?
+                .filter(|(_, name)| *name == target);
+            let (index, _) = matches.next().ok_or_else(|| {
+                format!("primary target {target:?} is not an active living enemy")
+            })?;
+            if matches.next().is_some() {
+                return Err(format!("ambiguous primary target {target:?}"));
+            }
+            Some(index)
+        } else {
+            None
+        };
+        let result = self.execute_choice(point, choice, primary_enemy);
         if let Err(error) = result {
             self.phase = Phase::Failed(error.clone());
             return Err(error);
@@ -195,6 +261,7 @@ impl<'input> BattleSession<'input> {
         &mut self,
         point: DecisionPoint,
         choice: Option<Operation>,
+        primary_enemy: Option<usize>,
     ) -> Result<(), String> {
         let choice = choice.map(|op| Operation {
             actor: self.state.runtime_actor_index(op.actor),
@@ -206,11 +273,12 @@ impl<'input> BattleSession<'input> {
                     actor: op.actor,
                     kind: RequestKind::Ultimate,
                     action: Some(op.action),
+                    primary_enemy,
                 })?;
             }
             self.phase = Phase::AfterInsert;
         } else if let Some(op) = choice {
-            self.state.act(op.actor, op.action, false)?;
+            self.state.act(op.actor, op.action, false, primary_enemy)?;
             if point == DecisionPoint::ExtraTurn {
                 self.state
                     .dispatch(BattleEvent::TurnEnd, Some(op.actor), None)?;
@@ -410,6 +478,21 @@ impl<'input> BattleSession<'input> {
                     return Ok(());
                 }
                 let action = request.action.ok_or("request has no preselected action")?;
+                if let Some(_target) = request
+                    .primary_enemy
+                    .filter(|&target| !self.state.is_primary_enemy(actor, target))
+                {
+                    trace!(
+                        self.state,
+                        "request_target_invalid",
+                        actor,
+                        Some(_target),
+                        None,
+                        None,
+                        None
+                    );
+                    continue;
+                }
                 if !self
                     .state
                     .affordable(actor, &self.state.units[actor].spec.actions[action])
@@ -435,8 +518,28 @@ impl<'input> BattleSession<'input> {
                         continue;
                     }
                 }
-                self.state
-                    .act(actor, action, request.kind == RequestKind::Ultimate)?;
+                if let Some(_target) = request
+                    .primary_enemy
+                    .filter(|&target| !self.state.is_primary_enemy(actor, target))
+                {
+                    // TurnStart listeners can remove a target after entry payment.
+                    trace!(
+                        self.state,
+                        "request_target_invalid",
+                        actor,
+                        Some(_target),
+                        None,
+                        None,
+                        None
+                    );
+                } else {
+                    self.state.act(
+                        actor,
+                        action,
+                        request.kind == RequestKind::Ultimate,
+                        request.primary_enemy,
+                    )?;
+                }
                 if request.kind != RequestKind::FollowUp {
                     self.state
                         .dispatch(BattleEvent::TurnEnd, Some(actor), None)?;
@@ -500,7 +603,7 @@ impl<'input> BattleSession<'input> {
                 .dispatch(BattleEvent::TurnStart, Some(actor), None)?;
             if self.state.units[actor].summon.is_some() {
                 if self.state.units[actor].alive() {
-                    self.state.act(actor, 0, false)?;
+                    self.state.act(actor, 0, false, None)?;
                 }
                 // Resume the same refill/insert/pending/TurnEnd path as a chosen action.
                 continue;

@@ -53,7 +53,16 @@ flowchart TD
 
 存活且在场的召唤物进入行动轴。单位快照和最终结果通过 `summon_owner` 标识召唤物的主人 ID，召唤物离场后仍保留记录，`alive` 为 `false`，`hp` 保留离场时的数值。
 
-`legal` 中的 `Operation` 由单位索引和动作索引组成，目标由动作配置和引擎规则决定。
+`legal` 中的 `Operation` 由单位索引和动作索引组成。
+
+Use `legal_primary_targets(decision_id, &operation)` to list selectable enemy
+unit IDs for a legal action with an unconditional damage effect bound to
+`AbilityTarget`.
+Use `submit_targeted(decision_id, operation, target_id)` to submit the choice
+in a normal, extra or insert decision. Target selection applies to bound effects.
+All other selectors follow their configured behavior, including random or
+secondary effects in the same action. `submit` uses the existing default binding.
+Ambiguous IDs and illegal targets leave the current decision open.
 
 ---
 
@@ -64,6 +73,12 @@ flowchart TD
 - 在 `Insert` 决策点提交终结技仅表示将该操作登记入待执行队列。
 - 当该终结技真正切入 Turn 获得执行权时，引擎会**二次核对单位存活性与能量资源**，并在触发 `TurnStart` 监听器前扣除能量。
 - 切入时若单位已阵亡或资源不足，引擎放弃该请求。
+
+A queued explicit target keeps its original runtime instance. If it is already
+invalid at turn entry, the request is cancelled before energy is paid. If a
+`TurnStart` listener invalidates it after payment, the turn ends without
+executing the action. Both paths record `request_target_invalid`. These
+dispatcher rules await comparison with the game.
 
 ### 3.2 轮次耗尽与回合收尾次序
 

@@ -41,6 +41,9 @@ enum Choice {
         actor: String,
         /// 该单位的技能 ID。
         action: String,
+        /// Optional stable ID of the selected primary enemy.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<String>,
     },
 }
 
@@ -174,9 +177,15 @@ pub fn replay<'a>(
         let legal = named_operations(&session, &decision);
         let choice = resolve_choice(&entry.choice, &decision.legal, &legal)
             .map_err(|error| format!("{context}: {error}"))?;
-        session
-            .submit(decision.id, choice)
-            .map_err(|error| format!("{context}: {error}"))?;
+        let target = match &entry.choice {
+            Choice::Action { target, .. } => target.as_deref(),
+            Choice::Skip {} => None,
+        };
+        match (choice, target) {
+            (Some(op), Some(target)) => session.submit_targeted(decision.id, op, target),
+            (choice, _) => session.submit(decision.id, choice),
+        }
+        .map_err(|error| format!("{context}: {error}"))?;
         let event_after_submit = session.replay_trace()?.len();
         next = advance(&mut session).map_err(|error| format!("{context}: {error}"))?;
         let trace = session.replay_trace()?;
@@ -239,7 +248,7 @@ fn resolve_choice(
     operations: &[Operation],
     names: &[NamedOperation],
 ) -> Result<Option<Operation>, String> {
-    let Choice::Action { actor, action } = choice else {
+    let Choice::Action { actor, action, .. } = choice else {
         return Ok(None);
     };
     let mut matching = operations

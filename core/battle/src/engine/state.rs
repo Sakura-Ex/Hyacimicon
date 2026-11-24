@@ -114,6 +114,8 @@ pub(super) struct Pending {
     pub(super) kind: RequestKind,
     /// 可选动作标识或该执行者动作列表中的索引。
     pub(super) action: Option<usize>,
+    /// Validated runtime instance selected when the request was registered.
+    pub(super) primary_enemy: Option<usize>,
 }
 /// 一条监听规则在本场的剩余次数与寿命。
 pub(super) struct Hook {
@@ -412,6 +414,7 @@ impl<'a> State<'a> {
             actor,
             kind: RequestKind::FollowUp,
             action: Some(0),
+            primary_enemy: None,
         })
     }
 

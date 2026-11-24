@@ -21,7 +21,8 @@ pub enum Scale {
 pub enum Target {
     /// One target explicitly bound by a Retarget effect; nested scopes restore it.
     ContextTarget,
-    /// Select lowest HP fraction once at Action entry and retain it for every hit.
+    /// Bind the selected primary enemy once at action entry. When no target was
+    /// supplied, bind the living enemy with the lowest HP fraction.
     AbilityTarget,
     /// 选择当前生命比例最低的存活敌人。
     EnemyLowestHp,

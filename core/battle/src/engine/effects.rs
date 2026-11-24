@@ -445,6 +445,7 @@ impl State<'_> {
                         actor: recipient,
                         kind,
                         action: selected,
+                        primary_enemy: None,
                     })?;
                 }
             }
