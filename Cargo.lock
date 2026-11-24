@@ -172,6 +172,8 @@ name = "run-core"
 version = "0.1.0"
 dependencies = [
  "battle-core",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

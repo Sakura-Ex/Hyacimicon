@@ -12,3 +12,5 @@ battle-core = { path = "../battle" }
 
 [dev-dependencies]
 battle-core = { path = "../battle", features = ["diagnostics"] }
+serde.workspace = true
+serde_json.workspace = true

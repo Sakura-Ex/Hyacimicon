@@ -172,6 +172,13 @@ pub struct ReplayReport<'a> {
     random_outcomes: Option<&'a [RecordedDraw]>,
 }
 
+impl ReplayReport<'_> {
+    /// Borrow the result of the same session that produced the replay.
+    pub fn battle_result(&self) -> &crate::model::BattleResult {
+        &self.battle.result
+    }
+}
+
 /// 执行完整脚本。操作缺失、多余、非法、事件不符或回放截断都会返回错误。
 pub fn replay<'a>(
     file: &ScenarioFile,
