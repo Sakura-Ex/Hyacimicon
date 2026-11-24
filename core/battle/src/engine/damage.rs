@@ -12,7 +12,7 @@ impl State<'_> {
         can_crit: bool,
         target: Target,
     ) -> Result<(), String> {
-        let factor = if self.units[actor].ally {
+        let factor = if self.units[actor].ally && !self.is_opening_event(actor) {
             self.input.mechanics.ally_damage_factor
         } else {
             1.0
@@ -92,11 +92,10 @@ impl State<'_> {
                     self.apply_damage("damage", actor, victim, action, amount, critical);
                 // The active element belongs to this hit, not nested hits
                 // dispatched by listeners. Such hits select their own panel.
+                let hit_attack_type = self.hit_attack_type(actor);
                 let active_element = self.damage_element.take();
                 let active_attack_type = self.damage_attack_type.take();
-                let prior_event_attack_type = self
-                    .event_attack_type
-                    .replace(active_attack_type.unwrap_or(AttackType::Direct));
+                let prior_event_attack_type = self.event_attack_type.replace(hit_attack_type);
                 let event_result: Result<(), String> = (|| {
                     self.dispatch(BattleEvent::Hit, Some(actor), Some(action))?;
                     if died_from_this_hit {

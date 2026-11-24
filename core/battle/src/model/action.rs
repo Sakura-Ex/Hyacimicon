@@ -329,6 +329,8 @@ pub enum AttackType {
     Direct,
     /// 技能内部标记的追加命中。
     Pursued,
+    /// 由战斗事件插入的命中。
+    Insert,
 }
 
 /// 由场景组装方提供的普通虚数击破伤害参数。

@@ -125,9 +125,7 @@ impl State<'_> {
             ally_skill_points: self.sp[0],
             enemy_skill_points: self.sp[1],
             axis,
-            units: (0..self.units.len())
-                .map(|index| self.unit_snapshot(index))
-                .collect(),
+            units: self.unit_snapshots(),
         };
         Decision {
             id,
@@ -148,7 +146,8 @@ impl State<'_> {
         // 普通选招已通过当前合法列表；排队请求在实际入口重新检查资源。
         // Bind once even when a nested conditional/loop is the first target use.
         self.bound_target = self.targets(actor, Target::EnemyLowestHp)?.first().copied();
-        self.current_action_kind = Some(action.kind);
+        // The event uses the follow-up queue without becoming a character follow-up.
+        self.current_action_kind = (!self.is_opening_event(actor)).then_some(action.kind);
         self.attack_owner = Some(actor);
         self.attack_targets.clear();
         let side = self.side(actor);

@@ -121,6 +121,14 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 
 [`anaxa-s2-full-battle.json`](../../../core/battle/examples/anaxa-s2-full-battle.json) 在种子 42 下返回 `victory / enemies_defeated`。场上容量为 2，最终清空 6 名敌人，执行 40 个 Action，消耗 1250 AV，剩余约 1150 AV。样例诊断 `settlement.hp_after` 为 63。
 
+### 开拓银轨开场事件
+
+4.7 赛季 2 配置为中立战斗事件 `62603`，伤害计入我方，初始列车在首波向全体敌人登记插入。基础列车为五段 15% 和末段 25%，模板的命中类别为 `Insert`。 [首波配置](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigAbility/BattleEvent/GridFight/4.7/OriginAbility/GridFight_Origin_100502_StageAbility.json#L193-L274) · [六段效果与结束事件](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigAbility/BattleEvent/GridFight/4.7/OriginAbility/BattleEvent_GridFight_Origin_100502_01_Ability.json#L1131-L1245)
+
+运行 `cargo test -p battle-core --features diagnostics --test opening_battle_event --locked`。合成三目标样例把 18 笔命中结算为 AV 0 的一个动作，事件来源均为 `62603`。回归还覆盖开场清空首波后的请求、来源 ID 冲突、全灭判定以及普通直伤系数的对照。
+
+样例验收事件身份、动作时序和配置接口。列车的绝对伤害仍需同场 `LevelBaseAttack`、原生 `ByBaseDamage` 乘区和有效目标面板。
+
 ### 普通虚数击破
 
 赛季 2 所用的 4.7 公共解包配置在普通虚数击破模板中读取目标最大韧性。解码后的韧性与元素项为 `0.5 × (2 + 最大韧性 / StanceUnit) / 4`。本模块以 HSR_Nous 的击破公式为数值参考，应用击破来源的等级倍率和击破特攻，以及防御、抗性、穿透和易伤乘区。普通增伤、暴击、独立增伤、通用减伤及货币战争我方直接伤害系数在这条计算中均取中性值。 [4.7 普通虚数击破模板](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigGlobalTaskListTemplate/GlobalTaskListTemplate.json#L1350-L1431) · [HSR_Nous 固定版本规则](https://github.com/pzc2004/HSR_Nous/blob/00185ddc4d57039894caf19467f602e716329e40/src/hsr_nous/sim_schema/rulebook.yaml#L389-L395)

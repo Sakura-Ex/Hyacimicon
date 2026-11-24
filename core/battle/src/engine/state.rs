@@ -134,6 +134,8 @@ pub(super) struct State<'a> {
     pub(super) timeline: Timeline,
     /// 按登记顺序排队的后续动作。
     pub(super) pending: std::collections::VecDeque<Pending>,
+    /// 独立开场事件在执行者表中的索引。
+    opening_event_actor: Option<usize>,
     /// 正在进行的普通 Turn 执行者。
     pub(super) turn: Option<usize>,
     /// 本场监听器的剩余次数和寿命。
@@ -236,6 +238,7 @@ impl<'a> State<'a> {
                 })
                 .collect(),
             event_depth: 0,
+            opening_event_actor: None,
             effect_depth: 0,
             effect_steps: 0,
             current_action_kind: None,
@@ -351,6 +354,88 @@ impl<'a> State<'a> {
         Ok(())
     }
 
+    /// 在开场监听器处理完毕后登记独立战斗事件。
+    pub(super) fn queue_opening_battle_event(&mut self) -> Result<(), String> {
+        let Some(event) = &self.input.mechanics.opening_battle_event else {
+            return Ok(());
+        };
+        let id = event.id.as_str();
+        let mut ids = self
+            .input
+            .allies
+            .iter()
+            .chain(self.input.waves.iter().flatten())
+            .map(|unit| unit.id.as_str())
+            .chain(
+                self.input
+                    .mechanics
+                    .traditional_summons
+                    .iter()
+                    .map(|summon| summon.id.as_str()),
+            );
+        if id.is_empty() || ids.any(|unit_id| unit_id == id) {
+            return Err(format!(
+                "invalid or duplicate opening battle event ID: {id:?}"
+            ));
+        }
+        let action = &event.action;
+        if action.kind != ActionKind::FollowUp
+            || action.sp_cost != 0
+            || action.sp_gain != 0
+            || action.energy_cost != 0.0
+            || action.energy_gain != 0.0
+        {
+            return Err(format!(
+                "opening battle event {id} needs a resource-free follow-up"
+            ));
+        }
+
+        // The shared action code needs a stable actor index. With no life pool,
+        // the event is excluded from combatant targeting and the natural axis.
+        let source = Unit {
+            id: event.id.clone(),
+            stats: event.stats.clone(),
+            initial_hp: 0.0,
+            initial_energy: 0.0,
+            max_energy: 0.0,
+            revival: None,
+            actions: vec![action.clone()],
+        };
+        let actor = self.units.len();
+        self.units
+            .push(CombatUnit::new(&source, true, &self.input.mechanics));
+        self.opening_event_actor = Some(actor);
+        self.enqueue(Pending {
+            actor,
+            kind: RequestKind::FollowUp,
+            action: Some(0),
+        })
+    }
+
+    /// 区分独立伤害来源与参战单位。
+    pub(super) fn is_opening_event(&self, actor: usize) -> bool {
+        self.opening_event_actor == Some(actor)
+    }
+
+    /// 开场事件的单次预登记请求仅能在首波执行。
+    pub(super) fn can_execute_request(&self, actor: usize) -> bool {
+        if self.is_opening_event(actor) {
+            self.wave == 0
+        } else {
+            self.units[actor].alive()
+        }
+    }
+
+    /// 返回显式命中类别或来源的默认类别。
+    pub(super) fn hit_attack_type(&self, actor: usize) -> AttackType {
+        self.damage_attack_type
+            .unwrap_or(if self.is_opening_event(actor) {
+                AttackType::Insert
+            } else {
+                AttackType::Direct
+            })
+    }
+
     /// Retain departed instances for snapshots and invalidate their pending requests.
     pub(super) fn dismiss_summons(&mut self, owner: usize) {
         if self.input.mechanics.traditional_summons.is_empty() {
@@ -374,13 +459,21 @@ impl<'a> State<'a> {
     }
 
     /// Build the same unit view for any observation or battle result.
-    pub(super) fn unit_snapshot(&self, index: usize) -> UnitResult {
+    fn unit_snapshot(&self, index: usize) -> UnitResult {
         let unit = &self.units[index];
         let owner = unit
             .summon
             .as_ref()
             .map(|summon| self.units[summon.owner].spec.id.clone());
         unit.snapshot(self.weakness_state(index), owner)
+    }
+
+    /// 公开的单位列表只包含参战单位和已入场召唤物。
+    pub(super) fn unit_snapshots(&self) -> Vec<UnitResult> {
+        (0..self.units.len())
+            .filter(|&index| !self.is_opening_event(index))
+            .map(|index| self.unit_snapshot(index))
+            .collect()
     }
 
     /// Reuse slots only after the previous complete Action. Revival has already resolved.

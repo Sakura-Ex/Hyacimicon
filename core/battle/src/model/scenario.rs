@@ -47,6 +47,12 @@ pub struct Mechanics {
         serde(default, skip_serializing_if = "Vec::is_empty")
     )]
     pub traditional_summons: Vec<TraditionalSummon>,
+    /// 在首波入场事件后登记一次的我方独立战斗事件。
+    #[cfg_attr(
+        feature = "diagnostics",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub opening_battle_event: Option<OpeningBattleEvent>,
     /// Explicit immutable natural weaknesses. Missing units remain unknown.
     #[cfg_attr(
         feature = "diagnostics",
@@ -110,6 +116,7 @@ impl Default for Mechanics {
         Self {
             queue_capacity: None,
             traditional_summons: vec![],
+            opening_battle_event: None,
             natural_weaknesses: Default::default(),
             modifier_weaknesses: Default::default(),
             element_profiles: Default::default(),
@@ -125,4 +132,17 @@ impl Default for Mechanics {
             unit_before_cycle: false,
         }
     }
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+/// 单次首波插入动作的独立来源。
+pub struct OpeningBattleEvent {
+    /// 本场唯一的来源 ID，用于事件和伤害归属。
+    pub id: String,
+    /// 已组装的伤害来源面板。
+    pub stats: Stats,
+    /// 以资源费用与收益均为零的 follow_up 动作承载顺序效果。
+    pub action: Action,
 }

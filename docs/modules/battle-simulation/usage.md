@@ -88,6 +88,12 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- replay core
 
 存活目标的当前韧性从正数降至零时，引擎先计算伤害，再记录 `break` 并处理其监听器。目标在同一次存活中才继续结算 `break_damage`，由现有护盾、扣血和死亡逻辑处理。普通 `toughness` 效果继续只削韧并派发击破事件。回放用 `break_damage` 核对击破伤害量，用 `hp_loss` 核对实际扣血。击破伤害无普通命中事件或暴击判定。公式核对和实机待确认项见[普通虚数击破验证](validation.md#普通虚数击破)。
 
+#### 首波独立战斗事件
+
+`mechanics.opening_battle_event` 可配置一次首波自动插入。用全场唯一的 `id` 记录来源，例如开拓银轨的 `"62603"`，填入已组装的 `stats` 和一个零费用、零收益的 `follow_up` 动作。把各段效果按执行顺序放入 `action.effects`。首波的开战与入波监听器处理完毕后登记事件，它只在首波执行。
+
+事件 ID 出现在诊断的请求和伤害来源中。事件只通过预登记动作参与战斗，生命、行动轴和策略操作由参战单位维护。`follow_up` 用于复用队列，事件以独立插入命中 `insert` 默认结算。普通追击的动作条件用于角色自身动作。伤害使用显式面板及效果参数，当前我方直伤占位系数在这条路径上取中性值。首波时序的验收方法和列车数值的实机待确认项见[开拓银轨开场事件验证](validation.md#开拓银轨开场事件)。
+
 #### 传统召唤物
 
 `mechanics.traditional_summons` 为开战时仍存活的主人配置召唤物，召唤物在 `BattleStart` 前入场。每条配置包含非空且全场唯一的 `id`、开战我方名单中的主人 `owner`、有效面板 `stats` 以及一个自动执行的 `action`。`stats.speed` 和 `stats.max_hp` 均须为有限正数。`action.kind` 设为 `follow_up`，`sp_cost`、`sp_gain`、`energy_cost` 和 `energy_gain` 均填 `0`。

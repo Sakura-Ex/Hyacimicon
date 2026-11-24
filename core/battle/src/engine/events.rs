@@ -177,8 +177,7 @@ impl State<'_> {
             action: action.map(str::to_owned),
             amount,
             critical,
-            attack_type: (kind == "damage")
-                .then_some(self.damage_attack_type.unwrap_or(AttackType::Direct)),
+            attack_type: (kind == "damage").then(|| self.hit_attack_type(actor)),
         });
     }
 

@@ -95,6 +95,7 @@ impl<'input> BattleSession<'input> {
         state.spawn_opening_summons()?;
         state.dispatch(BattleEvent::BattleStart, None, None)?;
         state.dispatch(BattleEvent::WaveStart, None, None)?;
+        state.queue_opening_battle_event()?;
         Ok(Self {
             state,
             next_decision_id: 0,
@@ -387,7 +388,7 @@ impl<'input> BattleSession<'input> {
             self.phase = Phase::Boundary;
             if let Some(request) = self.state.pending.pop_front() {
                 let actor = request.actor;
-                if !self.state.units[actor].alive() {
+                if !self.state.can_execute_request(actor) {
                     trace!(self.state, "request_invalid", actor, None, None, None, None);
                     continue;
                 }

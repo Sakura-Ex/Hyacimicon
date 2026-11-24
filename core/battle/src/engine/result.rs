@@ -41,9 +41,7 @@ impl State<'_> {
             waves_cleared,
             ally_skill_points: self.sp[0],
             enemy_skill_points: self.sp[1],
-            units: (0..self.units.len())
-                .map(|index| self.unit_snapshot(index))
-                .collect(),
+            units: self.unit_snapshots(),
             #[cfg(feature = "diagnostics")]
             events: std::mem::take(&mut self.events),
             #[cfg(feature = "diagnostics")]
