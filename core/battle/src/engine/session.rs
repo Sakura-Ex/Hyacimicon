@@ -57,7 +57,7 @@ impl<'input> BattleSession<'input> {
     /// 从当前合法操作读取单位和动作标识，供诊断脚本比对。
     #[cfg(feature = "diagnostics")]
     pub(crate) fn operation_names(&self, op: &Operation) -> (&str, &str) {
-        let unit = &self.state.units[op.actor].spec;
+        let unit = &self.state.units[self.state.runtime_actor_index(op.actor)].spec;
         (&unit.id, &unit.actions[op.action].id)
     }
 
@@ -196,6 +196,10 @@ impl<'input> BattleSession<'input> {
         point: DecisionPoint,
         choice: Option<Operation>,
     ) -> Result<(), String> {
+        let choice = choice.map(|op| Operation {
+            actor: self.state.runtime_actor_index(op.actor),
+            ..op
+        });
         if point == DecisionPoint::Insert {
             if let Some(op) = choice {
                 self.state.enqueue(Pending {
@@ -233,14 +237,6 @@ impl<'input> BattleSession<'input> {
         Ok(())
     }
 
-    /// 判断当前存活敌人与待入场有限队列是否仍有单位。
-    fn enemies_present(&self) -> bool {
-        let input = self.state.input;
-        let queued = input.mechanics.queue_capacity.is_some()
-            && self.state.queue_next < input.waves[0].len();
-        queued || self.state.units.iter().any(|u| !u.ally && u.alive())
-    }
-
     /// 保存完成结果并结束本场推进。
     fn conclude(&mut self, outcome: Outcome, termination: Termination) {
         // A terminal or safety stop can interrupt a natural turn without running TurnEnd rules.
@@ -260,14 +256,14 @@ impl<'input> BattleSession<'input> {
                 None
             );
         }
-        let cleared = self.state.wave + usize::from(!self.enemies_present());
+        let cleared = self.state.wave + usize::from(!self.state.enemies_present());
         self.phase = Phase::Finished(Box::new(self.state.finish(outcome, termination, cleared)));
     }
 
     /// 清场/全灭独立触发结算；未来波次或尚未入场的队列仍参与敌方存在判断。
     fn settle_elimination(&mut self) -> bool {
-        let allies = self.state.units.iter().any(|u| u.ally && u.regular_alive());
-        let enemies = self.enemies_present();
+        let allies = self.state.allies_present();
+        let enemies = self.state.enemies_present();
         let end = match (allies, enemies) {
             (false, false) => Some((Outcome::Draw, Termination::BothDefeated)),
             (false, true) => Some((Outcome::Defeat, Termination::AlliesDefeated)),
@@ -314,7 +310,10 @@ impl<'input> BattleSession<'input> {
                 if self.settle_elimination() {
                     return Ok(());
                 }
-                if !self.enemies_present() {
+                if !self.state.enemies_present() {
+                    if self.state.wave == 0 {
+                        self.state.expire_opening_battle_event();
+                    }
                     self.state.wave += 1;
                     for u in &input.waves[self.state.wave] {
                         self.state

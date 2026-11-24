@@ -125,7 +125,7 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 
 4.7 赛季 2 配置为中立战斗事件 `62603`，伤害计入我方，初始列车在首波向全体敌人登记插入。基础列车为五段 15% 和末段 25%，模板的命中类别为 `Insert`。 [首波配置](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigAbility/BattleEvent/GridFight/4.7/OriginAbility/GridFight_Origin_100502_StageAbility.json#L193-L274) · [六段效果与结束事件](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigAbility/BattleEvent/GridFight/4.7/OriginAbility/BattleEvent_GridFight_Origin_100502_01_Ability.json#L1131-L1245)
 
-运行 `cargo test -p battle-core --features diagnostics --test opening_battle_event --locked`。合成三目标样例把 18 笔命中结算为 AV 0 的一个动作，事件来源均为 `62603`。回归还覆盖开场清空首波后的请求、来源 ID 冲突、全灭判定以及普通直伤系数的对照。
+运行 `cargo test -p battle-core --features diagnostics --test opening_battle_event --locked`。合成三目标样例把 18 笔命中结算为 AV 0 的一个动作，事件来源均为 `62603`。开场清空首波时在换波前清理待执行的开场请求，第二波顺序保持一次插入选择后进入正常回合。换波和补位后的合法操作均使用公开单位列表的执行者索引。回归还覆盖来源 ID 冲突、全灭判定以及普通直伤系数的对照。
 
 样例验收事件身份、动作时序和配置接口。列车的绝对伤害仍需同场 `LevelBaseAttack`、原生 `ByBaseDamage` 乘区和有效目标面板。
 

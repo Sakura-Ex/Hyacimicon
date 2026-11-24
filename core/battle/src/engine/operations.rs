@@ -99,6 +99,9 @@ impl State<'_> {
                 .then(a.action.cmp(&b.action))
             });
         }
+        for operation in &mut legal {
+            operation.actor = self.observed_actor_index(operation.actor);
+        }
         legal
     }
 

@@ -121,19 +121,95 @@ fn opening_event_is_one_action_outside_the_axis_and_direct_ally_factor() {
 
 #[test]
 fn it_cannot_attack_the_second_wave_after_opening_effects_clear_the_first() {
+    let mut second = unit("second", 400.0);
+    second.actions = vec![action("counter", vec![damage(40.0, Target::AllEnemies)])];
     let mut input = with_train(
         vec![unit("ally", 200.0)],
-        vec![vec![unit("first", 100.0)], vec![unit("second", 99.0)]],
+        vec![vec![unit("first", 100.0)], vec![second]],
     );
     input.max_actions = 1;
     input
         .mechanics
         .triggers
         .push(start_effect("ally", damage(1000.0, Target::AllEnemies)));
+    let mut session = BattleSession::new(&input, 42).unwrap();
+    let BattleStep::Decision(decision) = session.advance().unwrap() else {
+        panic!("the surviving second wave should reach an insertion decision");
+    };
+    assert_eq!(decision.point, DecisionPoint::Insert);
+    let id = decision.id;
+    session.submit(id, None).unwrap();
+    let BattleStep::Decision(next) = session.advance().unwrap() else {
+        panic!("the second wave should reach the next natural turn");
+    };
+    assert_eq!(next.point, DecisionPoint::NormalTurn);
+    assert_eq!(next.observation.units[next.legal[0].actor].id, "second");
+    let (id, choice) = (next.id, next.legal.first().cloned());
+    session.submit(id, choice).unwrap();
+
     let result = simulate(&input, 42).unwrap();
     assert_eq!(result.waves_cleared, 1);
     close(state(&result, "second").hp, 1000.0);
-    close(result.elapsed_av, 50.0);
+    close(state(&result, "ally").hp, 960.0);
+    close(result.elapsed_av, 25.0);
+}
+
+#[test]
+fn finite_queue_refill_keeps_operation_actor_aligned_with_observed_units() {
+    let mut first = unit("first", 99.0);
+    first.initial_hp = 20.0;
+    let mut reserve = unit("reserve", 400.0);
+    reserve.actions = vec![action("counter", vec![damage(50.0, Target::AllEnemies)])];
+    let mut input = with_train(vec![unit("ally", 200.0)], vec![vec![first, reserve]]);
+    input.mechanics.queue_capacity = Some(1);
+    input.max_actions = 2;
+    let mut session = BattleSession::new(&input, 42).unwrap();
+    while let BattleStep::Decision(decision) = session.advance().unwrap() {
+        if decision.point == DecisionPoint::NormalTurn {
+            assert_eq!(
+                decision.observation.units[decision.legal[0].actor].id,
+                "reserve"
+            );
+        }
+        let (id, choice) = (decision.id, decision.legal.first().cloned());
+        session.submit(id, choice).unwrap();
+    }
+    let result = session.into_result().unwrap();
+    assert_eq!(result.actions, 2);
+    close(state(&result, "reserve").hp, 1000.0);
+    close(state(&result, "ally").hp, 950.0);
+}
+
+#[test]
+fn ineligible_opening_event_leaves_capacity_for_already_queued_actions() {
+    use battle_core::expression::Expression;
+
+    let mut ally = unit("ally", 200.0);
+    let mut wait = action("queued", vec![]);
+    wait.kind = ActionKind::FollowUp;
+    ally.actions.push(wait);
+    let mut input = with_train(
+        vec![ally],
+        vec![vec![unit("first", 100.0)], vec![unit("second", 99.0)]],
+    );
+    input.max_actions = 1;
+    let mut startup = start_effect(
+        "ally",
+        Effect::Repeat {
+            count: Expression::Constant { value: 10_000.0 },
+            effects: vec![Effect::Request {
+                kind: RequestKind::FollowUp,
+                action: Some("queued".into()),
+                target: Target::SelfUnit,
+            }],
+        },
+    );
+    startup.effects.push(damage(1000.0, Target::AllEnemies));
+    input.mechanics.triggers.push(startup);
+    let result = simulate(&input, 42).unwrap();
+    assert_eq!(result.waves_cleared, 1);
+    assert_eq!(result.actions, 1);
+    close(state(&result, "second").hp, 1000.0);
 }
 
 #[test]

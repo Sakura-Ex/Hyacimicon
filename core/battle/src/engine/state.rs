@@ -389,6 +389,9 @@ impl<'a> State<'a> {
                 "opening battle event {id} needs a resource-free follow-up"
             ));
         }
+        if !self.allies_present() || !self.enemies_present() {
+            return Ok(());
+        }
 
         // The shared action code needs a stable actor index. With no life pool,
         // the event is excluded from combatant targeting and the natural axis.
@@ -417,6 +420,23 @@ impl<'a> State<'a> {
         self.opening_event_actor == Some(actor)
     }
 
+    /// 将执行者索引转换为公开单位列表中的位置。
+    pub(super) fn observed_actor_index(&self, actor: usize) -> usize {
+        actor - usize::from(self.opening_event_actor.is_some_and(|event| event < actor))
+    }
+
+    /// 将已核对的公开操作索引还原为内部执行者位置。
+    pub(super) fn runtime_actor_index(&self, actor: usize) -> usize {
+        actor + usize::from(self.opening_event_actor.is_some_and(|event| event <= actor))
+    }
+
+    /// 首波结束时清除尚未执行的开场请求，保留其他已登记动作。
+    pub(super) fn expire_opening_battle_event(&mut self) {
+        if let Some(actor) = self.opening_event_actor {
+            self.pending.retain(|request| request.actor != actor);
+        }
+    }
+
     /// 开场事件的单次预登记请求仅能在首波执行。
     pub(super) fn can_execute_request(&self, actor: usize) -> bool {
         if self.is_opening_event(actor) {
@@ -424,6 +444,20 @@ impl<'a> State<'a> {
         } else {
             self.units[actor].alive()
         }
+    }
+
+    /// 当前仍有参战队员。
+    pub(super) fn allies_present(&self) -> bool {
+        self.units
+            .iter()
+            .any(|unit| unit.ally && unit.regular_alive())
+    }
+
+    /// 当前仍有敌方单位或本波有限队列中的替补。
+    pub(super) fn enemies_present(&self) -> bool {
+        let queued = self.input.mechanics.queue_capacity.is_some()
+            && self.queue_next < self.input.waves[0].len();
+        queued || self.units.iter().any(|unit| !unit.ally && unit.alive())
     }
 
     /// 返回显式命中类别或来源的默认类别。
