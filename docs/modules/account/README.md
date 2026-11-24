@@ -38,7 +38,7 @@ core/account/
     └── fixtures/       # 人工构造的最小样例
 ```
 
-Rust crate 通过根 `Cargo.toml` 的 workspace 管理，当前成员为 `core/account`、`core/battle` 和 `research/account_generation`。账号生成器通过路径依赖使用账号核心。后续训练绑定放在 `research/sim_native/`。
+The root [Cargo workspace](../../../Cargo.toml) includes the account crate. The account generator uses it as a path dependency. Training bindings are planned under `research/sim_native/`.
 
 原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
 
