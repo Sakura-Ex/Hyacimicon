@@ -130,6 +130,8 @@ pub(super) struct Hook {
 pub(super) struct State<'a> {
     /// 借用的组装后配置。
     pub(super) input: &'a Scenario,
+    #[cfg(feature = "diagnostics")]
+    pub(super) recorded_random: Option<super::recorded_rng::RecordedRandom>,
     /// 已经入场的单位，死亡记录保留。
     pub(super) units: Vec<CombatUnit>,
     /// 本场时钟及各轮剩余额度。
@@ -221,6 +223,8 @@ impl<'a> State<'a> {
         );
         Self {
             input,
+            #[cfg(feature = "diagnostics")]
+            recorded_random: None,
             units,
             timeline: Timeline::new(if s.mechanics.cycles.is_empty() {
                 vec![s.max_av]

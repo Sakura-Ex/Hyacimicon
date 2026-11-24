@@ -45,13 +45,39 @@ impl<'input> BattleSession<'input> {
             seed,
             #[cfg(feature = "diagnostics")]
             false,
+            #[cfg(feature = "diagnostics")]
+            None,
         )
     }
 
     /// 创建开发会话；trace 指定是否收集回放，规则执行与正式入口共用。
     #[cfg(feature = "diagnostics")]
     pub fn with_trace(input: &'input Scenario, seed: u64, trace: bool) -> Result<Self, String> {
-        Self::create(input, seed, trace)
+        Self::create(input, seed, trace, None)
+    }
+
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn with_recorded_random(
+        input: &'input Scenario,
+        seed: u64,
+        draws: Option<Vec<RecordedDraw>>,
+    ) -> Result<Self, String> {
+        Self::create(input, seed, true, draws)
+    }
+
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn set_random_step(&mut self, step: usize) {
+        if let Some(recorded) = &mut self.state.recorded_random {
+            recorded.set_step(step);
+        }
+    }
+
+    #[cfg(feature = "diagnostics")]
+    pub(crate) fn check_random_interval(&self, terminal: bool) -> Result<(), String> {
+        self.state
+            .recorded_random
+            .as_ref()
+            .map_or(Ok(()), |recorded| recorded.check_remaining(terminal))
     }
 
     /// 从当前合法操作读取单位和动作标识，供诊断脚本比对。
@@ -85,6 +111,7 @@ impl<'input> BattleSession<'input> {
         input: &'input Scenario,
         seed: u64,
         #[cfg(feature = "diagnostics")] trace: bool,
+        #[cfg(feature = "diagnostics")] draws: Option<Vec<RecordedDraw>>,
     ) -> Result<Self, String> {
         let mut state = State::new(
             input,
@@ -92,6 +119,10 @@ impl<'input> BattleSession<'input> {
             #[cfg(feature = "diagnostics")]
             trace,
         );
+        #[cfg(feature = "diagnostics")]
+        {
+            state.recorded_random = draws.map(super::recorded_rng::RecordedRandom::new);
+        }
         state.spawn_opening_summons()?;
         state.dispatch(BattleEvent::BattleStart, None, None)?;
         state.dispatch(BattleEvent::WaveStart, None, None)?;

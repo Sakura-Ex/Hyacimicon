@@ -151,7 +151,10 @@ impl State<'_> {
         // Bind once even when a nested conditional/loop is the first target use.
         self.bound_target = match primary_enemy {
             Some(target) => Some(target),
-            None => self.targets(actor, Target::EnemyLowestHp)?.first().copied(),
+            None => self
+                .targets(actor, &action.id, Target::EnemyLowestHp)?
+                .first()
+                .copied(),
         };
         // The event uses the follow-up queue without becoming a character follow-up.
         self.current_action_kind = (!self.is_opening_event(actor)).then_some(action.kind);

@@ -19,7 +19,7 @@ impl State<'_> {
         };
         let valid_factor = factor.is_finite() && factor >= 0.0;
         for _ in 0..hits {
-            for victim in self.targets(actor, target)? {
+            for victim in self.targets(actor, action, target)? {
                 // Earlier recipients can dispatch immediate damage. A
                 // cached AoE target list is not proof this victim lives.
                 if !self.units[victim].alive() {
@@ -44,7 +44,6 @@ impl State<'_> {
                         + self.units[actor].modifiers.delta(Property::DamageBonus)?,
                     "modified damage bonus",
                 )?;
-                let defender = &self.units[victim].spec.stats;
                 let resistance = if let Some(element) = self.damage_element {
                     let profiles = &self.input.mechanics.element_profiles;
                     let source = profiles
@@ -66,9 +65,11 @@ impl State<'_> {
                         .get(&element)
                         .ok_or("missing element resistance")?
                 } else {
-                    defender.resistance
+                    self.units[victim].spec.stats.resistance
                 };
-                let critical = can_crit && uniform(&mut self.criticals) < attacker.crit_rate;
+                let critical =
+                    self.roll_critical(actor, action, victim, can_crit, attacker.crit_rate)?;
+                let defender = &self.units[victim].spec.stats;
                 let amount = math::damage(
                     &math::DamageInput {
                         base_damage: base,

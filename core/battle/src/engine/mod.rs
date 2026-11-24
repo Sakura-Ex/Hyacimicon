@@ -21,6 +21,8 @@ mod damage;
 mod effects;
 mod events;
 mod operations;
+#[cfg(feature = "diagnostics")]
+mod recorded_rng;
 mod result;
 mod rng;
 mod session;
@@ -30,6 +32,8 @@ mod timeline;
 mod values;
 
 use effects::finite;
+#[cfg(feature = "diagnostics")]
+pub(crate) use recorded_rng::RecordedDraw;
 use rng::{stream, uniform};
 use state::{CombatUnit, Pending, State};
 

@@ -2,7 +2,7 @@
 use super::{BattleReport, Event, ScenarioFile};
 use crate::{
     decision::{Decision, DecisionPoint, Observation, Operation},
-    engine::{BattleSession, BattleStep},
+    engine::{BattleSession, BattleStep, RecordedDraw},
 };
 use serde::{Deserialize, Serialize};
 
@@ -14,6 +14,15 @@ pub struct ReplayScript {
     schema_version: u32,
     /// 每个决策点所需的一个显式选择。
     steps: Vec<ScriptStep>,
+    /// Observed branch choices for a strict replay; omission uses the seed.
+    #[serde(default, deserialize_with = "deserialize_random_outcomes")]
+    random_outcomes: Option<Vec<RecordedDraw>>,
+}
+
+fn deserialize_random_outcomes<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Vec<RecordedDraw>>, D::Error> {
+    Vec::deserialize(deserializer).map(Some)
 }
 
 /// 一个决策点及对应的选择与观察检查。
@@ -146,6 +155,9 @@ pub struct ReplayReport<'a> {
     battle: BattleReport,
     /// 按会话决策顺序排列的记录。
     steps: Vec<ReplayStep<'a>>,
+    /// All recorded outcomes were consumed on a successful strict replay.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    random_outcomes: Option<&'a [RecordedDraw]>,
 }
 
 /// 执行完整脚本。操作缺失、多余、非法、事件不符或回放截断都会返回错误。
@@ -160,8 +172,20 @@ pub fn replay<'a>(
             script.schema_version
         ));
     }
-    let mut session = BattleSession::with_trace(&file.battle, seed, true)?;
-    let mut next = advance(&mut session)?;
+    let opening_error = |error| {
+        if script.random_outcomes.is_some() {
+            format!("opening: {error}")
+        } else {
+            error
+        }
+    };
+    let mut session =
+        BattleSession::with_recorded_random(&file.battle, seed, script.random_outcomes.clone())
+            .map_err(opening_error)?;
+    let mut next = advance(&mut session).map_err(opening_error)?;
+    session
+        .check_random_interval(next.is_none())
+        .map_err(opening_error)?;
     let mut steps = Vec::new();
     for (index, entry) in script.steps.iter().enumerate() {
         let decision = next.ok_or_else(|| format!("battle finished before script step {index}"))?;
@@ -177,6 +201,7 @@ pub fn replay<'a>(
         let legal = named_operations(&session, &decision);
         let choice = resolve_choice(&entry.choice, &decision.legal, &legal)
             .map_err(|error| format!("{context}: {error}"))?;
+        session.set_random_step(index);
         let target = match &entry.choice {
             Choice::Action { target, .. } => target.as_deref(),
             Choice::Skip {} => None,
@@ -188,6 +213,9 @@ pub fn replay<'a>(
         .map_err(|error| format!("{context}: {error}"))?;
         let event_after_submit = session.replay_trace()?.len();
         next = advance(&mut session).map_err(|error| format!("{context}: {error}"))?;
+        session
+            .check_random_interval(next.is_none())
+            .map_err(|error| format!("{context}: {error}"))?;
         let trace = session.replay_trace()?;
         for check in &entry.expect {
             check
@@ -216,6 +244,7 @@ pub fn replay<'a>(
     Ok(ReplayReport {
         battle: file.report(session.into_result()?, seed),
         steps,
+        random_outcomes: script.random_outcomes.as_deref(),
     })
 }
 

@@ -100,6 +100,10 @@ impl State<'_> {
                 let element = match element {
                     DamageElement::Fixed { element } => element,
                     DamageElement::RandomAll => {
+                        #[cfg(feature = "diagnostics")]
+                        if self.recorded_random.is_some() {
+                            return Err(format!("recorded replay does not yet support random elements in {action:?}"));
+                        }
                         Element::ALL[(uniform(&mut self.elements) * 7.0) as usize]
                     }
                 };
@@ -150,7 +154,7 @@ impl State<'_> {
                     self.apply_effects(actor, action, empty_effects)?;
                 } else {
                     let selected =
-                        choices[(uniform(&mut self.targets) * choices.len() as f64) as usize];
+                        self.draw_target(actor, action, &choices, rng::TargetDraw::HitRetarget)?;
                     let saved = self.context_target.replace(selected);
                     let result = self.apply_effects(actor, action, effects);
                     self.context_target = saved;
@@ -179,7 +183,7 @@ impl State<'_> {
                     .map(|p| self.evaluate(actor, &p.value).map(|v| (p.property, v)))
                     .collect::<Result<Vec<_>, _>>()?;
                 let source = self.units[actor].spec.id.clone();
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     #[cfg(feature = "diagnostics")]
                     let weakness_before = self.weakness_state(recipient);
                     let _count = self.units[recipient].modifiers.apply(
@@ -208,7 +212,7 @@ impl State<'_> {
                 target,
             } => {
                 let source = self.units[actor].spec.id.clone();
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     #[cfg(feature = "diagnostics")]
                     let weakness_before = self.weakness_state(recipient);
                     let removed = self.units[recipient]
@@ -259,7 +263,7 @@ impl State<'_> {
                 ref value,
                 target,
             } => {
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     let amount = self.evaluate(recipient, value)?;
                     self.units[recipient]
                         .dynamic_values
@@ -307,7 +311,7 @@ impl State<'_> {
                     self.units[actor].scale(scale) * ratio + flat,
                     "base healing",
                 )?;
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     let raw = math::heal(
                         base,
                         self.units[actor].spec.stats.healing_bonus,
@@ -337,7 +341,7 @@ impl State<'_> {
             } => {
                 let base = finite(self.units[actor].scale(scale) * ratio + flat, "base shield")?;
                 let raw = math::shield(base, self.units[actor].spec.stats.shield_bonus)?;
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     let before = self.units[recipient].shield;
                     // A lower cap never removes a pre-existing stronger shield.
                     let actual = raw.min((max_total - before).max(0.0));
@@ -356,7 +360,7 @@ impl State<'_> {
                 }
             }
             Effect::Energy { amount, target } => {
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     let before = self.units[recipient].energy;
                     self.units[recipient].energy =
                         (before + amount).clamp(0.0, self.units[recipient].spec.max_energy);
@@ -372,7 +376,7 @@ impl State<'_> {
                 }
             }
             Effect::Advance { fraction, target } | Effect::AdvanceNext { fraction, target } => {
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     if matches!(effect, Effect::AdvanceNext { .. }) {
                         self.units[recipient].next_shift += DISTANCE * fraction;
                     } else if self.turn != Some(recipient) {
@@ -391,7 +395,7 @@ impl State<'_> {
                 }
             }
             Effect::Speed { value, target } => {
-                for recipient in self.targets(actor, target)? {
+                for recipient in self.targets(actor, action, target)? {
                     let unit = &mut self.units[recipient];
                     if unit.summon.is_some() && (!value.is_finite() || value <= 0.0) {
                         return Err(format!(
@@ -426,11 +430,11 @@ impl State<'_> {
             }
             Effect::Request {
                 kind,
-                ref action,
+                action: ref requested_action,
                 target,
             } => {
-                for recipient in self.targets(actor, target)? {
-                    let selected = action
+                for recipient in self.targets(actor, action, target)? {
+                    let selected = requested_action
                         .as_ref()
                         .map(|id| {
                             self.units[recipient]
@@ -462,7 +466,7 @@ impl State<'_> {
         target: Target,
         imaginary: Option<ImaginaryBreakDamage>,
     ) -> Result<(), String> {
-        for recipient in self.targets(actor, target)? {
+        for recipient in self.targets(actor, action, target)? {
             if !self.units[recipient].alive() {
                 continue;
             }

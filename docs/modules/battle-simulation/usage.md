@@ -53,6 +53,33 @@ The action event includes the explicit target. Check the damage events to
 verify the units actually hit. Omit the field or pass `null` to use the scene's default
 targeting behavior. The replay schema remains at version 1.
 
+For strict replay of observed random branches, supply a top-level
+`random_outcomes` array in execution order. Each entry identifies the
+zero-based replay step, the executing unit, and the action, followed by the
+observed result.
+
+```json
+{"step":2,"actor":"fighter","action":"skill","result":{"kind":"critical","target":"enemy_2","critical":true}}
+```
+
+The target-only result kinds are `uniform_enemy`, `taunt_enemy`, and
+`hit_retarget`. For example, use
+`{"kind":"uniform_enemy","target":"enemy_2"}`. All target results must match
+one eligible instance at the draw. Strict taunt draws require nonnegative
+weights and a positive total, with only positive-weight targets eligible.
+Hit retargeting selects from living targets already hit by the current
+action. Omit `step` for draws before the first decision. A step includes
+submission and advance to its next decision or the end, so use the step
+where a queued action executes.
+
+An empty array enables strict replay with no expected variable outcomes.
+Omitting the array uses seeded replay. In strict mode, guaranteed critical or
+noncritical hits and single eligible targets follow from the scene and consume
+no entries. Random element effects are explicitly rejected until supported.
+Errors give the opening or step and the failing draw or illegal target. A
+successful report echoes the consumed inputs. The engine still calculates all
+damage, resource and result values.
+
 例如，复活罚时事件 `revival_av_penalty` 的 `amount: 25` 表示实际扣除 25 AV。生命减少量用 `hp_loss` 核对，名义伤害用 `damage` 核对。填入数值后，回放在对应事件缺少数值或数值不一致时报错，给出步骤、事件和预期与实际值。录像只显示舍入结果时，可以保留原读数并另按游戏显示精度对照报告。
 
 报告保留常规战斗字段和 `events`，另有 `steps`，每步包含决策编号、波次、提交前观测、合法列表和选择。用 `[event_start, event_after_submit)` 查看提交期间的事件，用 `[event_after_submit, event_end)` 查看推进到下一决策或终局期间的事件。提交终结技登记入队。实际扣能和执行发生在它获准进入回合的推进阶段；队首可能先产生其他决策，已登记的请求也可能因战斗状态变化而失效。`expect` 的偏移以该事件实际出现的步骤为准。同一 AV 上的事件按索引区分。首个决策前的开战事件保留在全局 `events` 中。每步后的状态参照下一步的 `observation`，最后一步参照报告中的终局状态。

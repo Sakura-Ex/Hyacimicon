@@ -29,7 +29,12 @@ impl State<'_> {
     }
 
     /// 按 target 取得当前存活目标，随机选择消耗目标随机流。
-    pub(super) fn targets(&mut self, actor: usize, target: Target) -> Result<Vec<usize>, String> {
+    pub(super) fn targets(
+        &mut self,
+        actor: usize,
+        action: &str,
+        target: Target,
+    ) -> Result<Vec<usize>, String> {
         if target == Target::ContextTarget {
             let index = self
                 .context_target
@@ -79,28 +84,18 @@ impl State<'_> {
                     .ok_or("target selection unexpectedly empty")?;
                 Ok(vec![selected])
             }
-            Target::EnemyRandomUniform => Ok(vec![
-                candidates[(uniform(&mut self.targets) * candidates.len() as f64) as usize],
-            ]),
-            Target::EnemyRandomTaunt => {
-                let total: f64 = candidates
-                    .iter()
-                    .map(|&i| self.units[i].spec.stats.taunt)
-                    .sum();
-                finite(total, "taunt sum")?;
-                let mut draw = uniform(&mut self.targets) * total;
-                for &i in &candidates {
-                    let weight = self.units[i].spec.stats.taunt;
-                    if draw < weight {
-                        return Ok(vec![i]);
-                    }
-                    draw -= weight;
-                }
-                // A final ulp at the upper edge belongs to the last interval.
-                Ok(vec![*candidates
-                    .last()
-                    .ok_or("target selection unexpectedly empty")?])
-            }
+            Target::EnemyRandomUniform => Ok(vec![self.draw_target(
+                actor,
+                action,
+                &candidates,
+                rng::TargetDraw::UniformEnemy,
+            )?]),
+            Target::EnemyRandomTaunt => Ok(vec![self.draw_target(
+                actor,
+                action,
+                &candidates,
+                rng::TargetDraw::TauntEnemy,
+            )?]),
             Target::AbilityTarget => unreachable!("bound target handled above"),
             Target::ContextTarget => unreachable!("context target handled above"),
             Target::SelfUnit => unreachable!("self target handled before candidate selection"),
