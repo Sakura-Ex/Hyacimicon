@@ -1,15 +1,15 @@
-# 整局结算
+# Run settlement
 
-`run-core` 提供已完成的限时普通节点的小队血量结算预览。调用方先完成单场战斗，保留 `BattleResult` 的节点胜负、结束原因与剩余总行动值，再调用 [`settle_ordinary_timed_node_hp`](../../../core/run/src/lib.rs) 得到小队血量变化。接口只计算一次预览，由整局状态的持有方决定何时入账。
+`run-core` previews squad HP changes for completed ordinary timed nodes. Keep the battle outcome, termination reason, and remaining total action value (AV) from `BattleResult`, and call [`settle_ordinary_timed_node_hp`](../../../core/run/src/lib.rs) to calculate the HP changes. The caller that owns the run state decides when to apply them.
 
-## 输入与适用规则
+## Inputs and rules
 
-该入口适用于没有额外门槛罚血的限时普通节点。调用方提供当前生效的基础扣血、进度扣血系数、小队血量及其上限。进度使用场景规则处理后的有效整数百分比。回血量使用已经确认生效的数值。
+Use this interface for ordinary timed nodes without an additional threshold penalty. Supply the effective base loss and progress loss coefficient, the squad's current HP and cap, the effective whole-number progress percentage after node adjustments, and the resolved recovery amount.
 
-规则依据是 4.7 普通节点的公开罚则 `90013`、`90017` 与 March7thHoney 4.7 的参考计算。两个罚则的基础扣血均为 5、进度扣血系数均为 10。进度达到 100% 时免两项扣血。进度未满时先扣基础值，再取 `(100 - 有效进度) × 进度系数 / 100` 向下取整。小队血量扣至零后跳过回血，存活时按血量上限裁剪回血。结算保留每项应扣或应回和实际变化。 [4.7 公开罚则](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/ExcelOutput/GridFightPenaltyRule.json#L823-L956) · [4.7 参考结算](https://github.com/Mar7thDev/March7thHoney/blob/d729daba9604e1e183e52519d0bc5590cb6f2bef/GameServer/Game/GridFight/GridFightSession.cs#L1835-L1883)
+The 4.7 rules `90013` and `90017` specify a base loss of 5 and a progress loss coefficient of 10. The March7thHoney 4.7 reference calculation waives both losses at 100% progress. Below 100%, apply the base loss first, then round `(100 - effective progress) × coefficient / 100` down and apply the progress loss. A squad at zero HP skips recovery. Otherwise, recovery is limited by the HP cap. The preview reports the requested and applied amount for each step. [4.7 penalty table](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/ExcelOutput/GridFightPenaltyRule.json#L823-L956) · [4.7 reference settlement](https://github.com/Mar7thDev/March7thHoney/blob/d729daba9604e1e183e52519d0bc5590cb6f2bef/GameServer/Game/GridFight/GridFightSession.cs#L1835-L1883)
 
-`Incomplete` 表示战斗未完成，当前调用还未到结算阶段。`ProgressUnknown` 表示有效进度缺失。`RecoveryUnknown` 保留已确定的两项扣血和扣血后血量。明确无回血时传入 `Some(0)`，将得到完整结算。输入的有效进度和天赋状态由调用方解析。真实样本的进度形成过程与完整结算仍待同场核对。
+`Incomplete` means the battle has yet to reach settlement. `ProgressUnknown` means the effective progress is missing. `RecoveryUnknown` retains the two loss components and the HP after applying them. Pass `Some(0)` when the caller has established that no recovery applies. The caller resolves effective progress and talent activation. Verifying them against a complete in-game settlement remains separate from the reference calculation.
 
-## 验证
+## Validation
 
-在仓库根目录运行 `cargo test -p run-core --locked`。测试借用战斗模块的开发样例取得真实引擎输出，使用手算预期对照结算。在 150 AV、轮次为 50 和 100 的人造场景，AV 100 清场时剩 50 AV，只打掉一名小怪时在 AV 150 超时、余额为零。提供有效进度 20%、战后回血 2 点和起始 92 HP 后，扣血明细为 5 和 8，扣后 79，最终 81。
+Run `cargo test -p run-core --locked` from the repository root. The tests run the existing battle engine with synthetic fixtures and compare the HP preview with independently calculated values. A 150 AV fixture with rounds of 50 and 100 AV clears at AV 100 with 50 AV remaining, or times out at AV 150 with zero remaining after one enemy is defeated. With 20% effective progress, 2 points of recovery, and 92 starting HP, the losses are 5 and 8. The squad goes to 79 HP before recovery and finishes at 81 HP.
