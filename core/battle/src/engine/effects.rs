@@ -412,26 +412,17 @@ impl State<'_> {
                 }
             }
             Effect::Toughness { amount, target } => {
-                for recipient in self.targets(actor, target)? {
-                    if !self.units[recipient].alive() {
-                        continue;
-                    }
-                    let before = self.units[recipient].toughness;
-                    self.units[recipient].toughness = (before - amount).max(0.0);
-                    if before > 0.0 && self.units[recipient].toughness == 0.0 {
-                        self.units[recipient].spec.stats.toughness_broken = true;
-                        trace!(
-                            self,
-                            "break",
-                            actor,
-                            Some(recipient),
-                            Some(action),
-                            None,
-                            None
-                        );
-                        self.dispatch(BattleEvent::Break, Some(recipient), Some(action))?;
-                    }
+                self.reduce_toughness(actor, action, amount, target, None)?;
+            }
+            Effect::ImaginaryToughness {
+                amount,
+                break_damage,
+                target,
+            } => {
+                if !amount.is_finite() || amount < 0.0 {
+                    return Err("imaginary toughness damage must be finite and non-negative".into());
                 }
+                self.reduce_toughness(actor, action, amount, target, Some(break_damage))?;
             }
             Effect::Request {
                 kind,
@@ -455,6 +446,55 @@ impl State<'_> {
                         kind,
                         action: selected,
                     })?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 扣除韧性，只有当活着的目标韧性从正数降到零时产生击破。
+    fn reduce_toughness(
+        &mut self,
+        actor: usize,
+        action: &str,
+        amount: f64,
+        target: Target,
+        imaginary: Option<ImaginaryBreakDamage>,
+    ) -> Result<(), String> {
+        for recipient in self.targets(actor, target)? {
+            if !self.units[recipient].alive() {
+                continue;
+            }
+            let before = self.units[recipient].toughness;
+            let after = (before - amount).max(0.0);
+            if !(before > 0.0 && after == 0.0) {
+                self.units[recipient].toughness = after;
+                continue;
+            }
+
+            let damage = imaginary
+                .map(|profile| self.imaginary_break_amount(actor, recipient, profile))
+                .transpose()?;
+            let revivals_left = self.units[recipient].revivals_left;
+            self.units[recipient].toughness = after;
+            self.units[recipient].spec.stats.toughness_broken = true;
+            trace!(
+                self,
+                "break",
+                actor,
+                Some(recipient),
+                Some(action),
+                None,
+                None
+            );
+            self.dispatch(BattleEvent::Break, Some(recipient), Some(action))?;
+            // Break listeners can kill the target or end its current life by reviving it.
+            if let Some(amount) = damage.filter(|_| {
+                self.units[recipient].alive()
+                    && self.units[recipient].revivals_left == revivals_left
+            }) {
+                if self.apply_damage("break_damage", actor, recipient, action, amount, false) {
+                    self.resolve_death(recipient, action)?;
                 }
             }
         }

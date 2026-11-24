@@ -121,6 +121,14 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle --release --lo
 
 [`anaxa-s2-full-battle.json`](../../../core/battle/examples/anaxa-s2-full-battle.json) 在种子 42 下返回 `victory / enemies_defeated`。场上容量为 2，最终清空 6 名敌人，执行 40 个 Action，消耗 1250 AV，剩余约 1150 AV。样例诊断 `settlement.hp_after` 为 63。
 
+### 普通虚数击破
+
+赛季 2 所用的 4.7 公共解包配置在普通虚数击破模板中读取目标最大韧性。解码后的韧性与元素项为 `0.5 × (2 + 最大韧性 / StanceUnit) / 4`。本模块以 HSR_Nous 的击破公式为数值参考，应用击破来源的等级倍率和击破特攻，以及防御、抗性、穿透和易伤乘区。普通增伤、暴击、独立增伤、通用减伤及货币战争我方直接伤害系数在这条计算中均取中性值。 [4.7 普通虚数击破模板](https://github.com/DimbreathBot/TurnBasedGameData/blob/dad9155eb00fdeda31fb8456507c53590d49071f/Config/ConfigGlobalTaskListTemplate/GlobalTaskListTemplate.json#L1350-L1431) · [HSR_Nous 固定版本规则](https://github.com/pzc2004/HSR_Nous/blob/00185ddc4d57039894caf19467f602e716329e40/src/hsr_nous/sim_schema/rulebook.yaml#L389-L395)
+
+从仓库根目录运行 `cargo test -p battle-core --features diagnostics --test imaginary_break --locked`。基准用 80 级来源、100% 击破特攻、1000 目标防御、120 最大韧性和 10 韧性单位，击破伤害为 `6593.218275`。回归核对单次归零、多目标、护盾吸收、监听器导致的复活、缺少最大韧性和直接伤害乘区隔离。
+
+护盾优先吸收沿用本引擎的结算约定。游戏中普通虚数击破与护盾、通用减伤及货币战争难度系数的关系待实机确认。虚数禁锢单独核对。4.7 货币战争 1-1 开战录像出现的三次 `231` 仍需确认伤害来源、目标有效面板和削韧时序。
+
 ## 4. 实机核对
 
 当前验证覆盖人工场景和参考公式。那刻夏样例的资料版本、近似规则和覆盖范围见场景的 `provenance` 与 `mechanics.assumptions`，技能链、队列补位和轮次同刻顺序待按实机样本核对。

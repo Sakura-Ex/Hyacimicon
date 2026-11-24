@@ -67,6 +67,27 @@ cargo run -p battle-core --features diagnostics --bin hcwa-battle -- replay core
 - `queue_capacity`：有限敌人队列的在场槽位数。启用时，组装方将所有敌人按入场顺序放入唯一一波 `waves[0]`。敌人阵亡并结束当前 Action 后，引擎依序补足空槽。
 - `triggers`: 战局全局或单位级事件监听器（`BattleStart`、`WaveStart`、`Hit`、`Break`、`Death`、`TurnEnd` 等）。
 
+#### 普通虚数击破伤害
+
+在动作或事件监听器中加入 `imaginary_toughness`，并给可能被击破的单位提供 `mechanics.max_toughness`。该表以单位 ID 为键，`mechanics.toughness` 仍填写当前韧性。削韧量、当前韧性、最大韧性和 `stance_unit` 使用同一单位。例如目标最大韧性为 120 时，`stance_unit` 为 10 的计算与最大韧性 360、`stance_unit` 为 30 相同。
+
+```json
+{
+  "type": "imaginary_toughness",
+  "amount": 10,
+  "target": "all_enemies",
+  "break_damage": {
+    "level_multiplier": 3767.5533,
+    "break_effect": 1.0,
+    "stance_unit": 10
+  }
+}
+```
+
+示例采用 80 级参考倍率与 100% 击破特攻。组装方填入伤害来源对应的 `level_multiplier` 和 `break_effect`。目标有 `element_profiles` 条目时须填虚数抗性，省略目标条目时使用 `stats.resistance`。
+
+存活目标的当前韧性从正数降至零时，引擎先计算伤害，再记录 `break` 并处理其监听器。目标在同一次存活中才继续结算 `break_damage`，由现有护盾、扣血和死亡逻辑处理。普通 `toughness` 效果继续只削韧并派发击破事件。回放用 `break_damage` 核对击破伤害量，用 `hp_loss` 核对实际扣血。击破伤害无普通命中事件或暴击判定。公式核对和实机待确认项见[普通虚数击破验证](validation.md#普通虚数击破)。
+
 #### 传统召唤物
 
 `mechanics.traditional_summons` 为开战时仍存活的主人配置召唤物，召唤物在 `BattleStart` 前入场。每条配置包含非空且全场唯一的 `id`、开战我方名单中的主人 `owner`、有效面板 `stats` 以及一个自动执行的 `action`。`stats.speed` 和 `stats.max_hp` 均须为有限正数。`action.kind` 设为 `follow_up`，`sp_cost`、`sp_gain`、`energy_cost` 和 `energy_gain` 均填 `0`。

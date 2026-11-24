@@ -208,6 +208,15 @@ pub enum Effect {
         /// 效果目标选择器或记录中的目标 ID。
         target: Target,
     },
+    /// 已组装的虚数削韧。目标韧性归零时结算一次虚数弱点击破伤害。
+    ImaginaryToughness {
+        /// 本次削韧量。
+        amount: f64,
+        /// 此效果的虚数击破伤害参数。
+        break_damage: ImaginaryBreakDamage,
+        /// 本次削韧的目标选择器。
+        target: Target,
+    },
     /// 登记后续终结技、额外回合或追击。
     Request {
         /// 本对象的动作、请求或记录类别。
@@ -320,6 +329,19 @@ pub enum AttackType {
     Direct,
     /// 技能内部标记的追加命中。
     Pursued,
+}
+
+/// 由场景组装方提供的普通虚数击破伤害参数。
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "diagnostics", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "diagnostics", serde(deny_unknown_fields))]
+pub struct ImaginaryBreakDamage {
+    /// 来源单位等级对应的正数击破系数。
+    pub level_multiplier: f64,
+    /// 组装后的非负击破特攻，`1.0` 表示 100%。
+    pub break_effect: f64,
+    /// 公式的正数 `StanceUnit`，与目标配置的最大韧性单位相同。
+    pub stance_unit: f64,
 }
 
 #[derive(Clone, Debug)]

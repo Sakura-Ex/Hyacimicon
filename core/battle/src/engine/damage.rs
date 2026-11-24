@@ -88,38 +88,8 @@ impl State<'_> {
                     critical,
                 )? * factor;
                 finite(amount, "mode damage")?;
-                let absorbed = amount.min(self.units[victim].shield);
-                self.units[victim].shield -= absorbed;
-                let hp_loss = (amount - absorbed).min(self.units[victim].hp);
-                self.units[victim].hp -= hp_loss;
-                let died_from_this_hit = self.units[victim].hp == 0.0;
-                trace!(
-                    self,
-                    "damage",
-                    actor,
-                    Some(victim),
-                    Some(action),
-                    Some(amount),
-                    Some(critical),
-                );
-                trace!(
-                    self,
-                    "shield_absorbed",
-                    actor,
-                    Some(victim),
-                    Some(action),
-                    Some(absorbed),
-                    None,
-                );
-                trace!(
-                    self,
-                    "hp_loss",
-                    actor,
-                    Some(victim),
-                    Some(action),
-                    Some(hp_loss),
-                    None,
-                );
+                let died_from_this_hit =
+                    self.apply_damage("damage", actor, victim, action, amount, critical);
                 // The active element belongs to this hit, not nested hits
                 // dispatched by listeners. Such hits select their own panel.
                 let active_element = self.damage_element.take();
@@ -141,5 +111,124 @@ impl State<'_> {
             }
         }
         Ok(())
+    }
+
+    /// 计算没有暴击的普通虚数击破，沿用已组装面板的防御、抗性和易伤项。
+    pub(super) fn imaginary_break_amount(
+        &self,
+        actor: usize,
+        victim: usize,
+        profile: ImaginaryBreakDamage,
+    ) -> Result<f64, String> {
+        let victim = &self.units[victim].spec;
+        let max_toughness = *self
+            .input
+            .mechanics
+            .max_toughness
+            .get(&victim.id)
+            .ok_or_else(|| {
+                format!(
+                    "missing max_toughness for imaginary break target {}",
+                    victim.id
+                )
+            })?;
+        for (name, value) in [
+            ("level_multiplier", profile.level_multiplier),
+            ("stance_unit", profile.stance_unit),
+            ("max_toughness", max_toughness),
+        ] {
+            if !value.is_finite() || value <= 0.0 {
+                return Err(format!(
+                    "imaginary break {name} must be finite and positive"
+                ));
+            }
+        }
+        if !profile.break_effect.is_finite() || profile.break_effect < 0.0 {
+            return Err("imaginary break break_effect must be finite and non-negative".into());
+        }
+
+        let base = finite(
+            profile.level_multiplier
+                * (0.5 * (2.0 + max_toughness / profile.stance_unit) / 4.0)
+                * (1.0 + profile.break_effect),
+            "imaginary break base damage",
+        )?;
+        let attacker = &self.units[actor].spec.stats;
+        let defender = &victim.stats;
+        let resistance = match self.input.mechanics.element_profiles.get(&victim.id) {
+            Some(panel) => *panel
+                .resistance
+                .get(&Element::Imaginary)
+                .ok_or("missing imaginary resistance for break target")?,
+            None => defender.resistance,
+        };
+        let amount = math::damage(
+            &math::DamageInput {
+                base_damage: base,
+                attacker_level: attacker.level,
+                defense: defender.defense,
+                defense_reduction: attacker.defense_reduction,
+                defense_ignore: attacker.defense_ignore,
+                resistance,
+                resistance_penetration: attacker.resistance_penetration,
+                damage_bonus: 0.0,
+                vulnerability: defender.vulnerability,
+                toughness_broken: true,
+                damage_reduction: 0.0,
+                independent_multiplier: 1.0,
+                crit_damage: 0.0,
+            },
+            false,
+        )?;
+        if amount < 0.0 {
+            return Err("imaginary break damage must be non-negative".into());
+        }
+        Ok(amount)
+    }
+
+    /// 使用已计算的伤害扣盾和生命，返回目标是否因本次伤害倒下。
+    pub(super) fn apply_damage(
+        &mut self,
+        _kind: &str,
+        _actor: usize,
+        victim: usize,
+        _action: &str,
+        amount: f64,
+        _critical: bool,
+    ) -> bool {
+        let target = &mut self.units[victim];
+        let absorbed = amount.min(target.shield);
+        target.shield -= absorbed;
+        let hp_loss = (amount - absorbed).min(target.hp);
+        target.hp -= hp_loss;
+        let died = target.hp == 0.0;
+        trace!(
+            self,
+            _kind,
+            _actor,
+            Some(victim),
+            Some(_action),
+            Some(amount),
+            Some(_critical)
+        );
+        trace!(
+            self,
+            "shield_absorbed",
+            _actor,
+            Some(victim),
+            Some(_action),
+            Some(absorbed),
+            None
+        );
+        trace!(
+            self,
+            "hp_loss",
+            _actor,
+            Some(victim),
+            Some(_action),
+            Some(hp_loss),
+            None
+        );
+        died
     }
 }

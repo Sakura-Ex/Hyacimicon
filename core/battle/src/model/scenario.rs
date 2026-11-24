@@ -81,6 +81,12 @@ pub struct Mechanics {
     #[cfg_attr(feature = "diagnostics", serde(default))]
     /// 单位当前韧性或按单位关联的初始韧性。
     pub toughness: std::collections::BTreeMap<String, f64>,
+    /// 按单位 ID 组装的击破公式用最大韧性，与其 `stance_unit` 同单位。
+    #[cfg_attr(
+        feature = "diagnostics",
+        serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")
+    )]
+    pub max_toughness: std::collections::BTreeMap<String, f64>,
     #[cfg_attr(feature = "diagnostics", serde(default))]
     /// 按单位 ID 关联的终结技优先级。
     pub ultimate_priority: std::collections::BTreeMap<String, i32>,
@@ -113,6 +119,7 @@ impl Default for Mechanics {
             ally_damage_factor: 1.0,
             triggers: vec![],
             toughness: Default::default(),
+            max_toughness: Default::default(),
             ultimate_priority: Default::default(),
             larger_priority_first: false,
             unit_before_cycle: false,
