@@ -7,7 +7,7 @@
 下图约定各模块的位置，表格说明职责与依赖。模块的实现状态、内部结构、接口和验证方式集中在各自的模块文档，通过[模块文档入口](../modules/README.md)查阅。
 
 ```text
-hsr-currency-wars-ai/
+Hyacimicon/
 ├── core/
 │   ├── account/
 │   ├── battle/
@@ -19,7 +19,9 @@ hsr-currency-wars-ai/
 │   ├── training/
 │   └── evaluation/
 └── apps/
-    └── player/
+    ├── src/
+    ├── src-tauri/
+    └── tests/
 ```
 
 | 目录 | 职责与依赖 |
@@ -31,7 +33,7 @@ hsr-currency-wars-ai/
 | `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
 | `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
 | `research/training/`、`research/evaluation/` | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
-| `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
+| `apps/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
 
 候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
 
@@ -46,7 +48,9 @@ hsr-currency-wars-ai/
 
 ## 构建配置
 
-Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
+核心和研究模块的 Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
+
+桌面应用的 Cargo 清单与锁文件放在 `apps/src-tauri/`。它通过路径依赖调用根工作区中的库，前端从 `apps/` 执行 npm 命令。
 
 The root workspace includes `core/account`, `core/battle`, `core/run`, and `research/account_generation`. `core/run` provides [squad HP previews for ordinary timed nodes](../modules/run/README.md). The battle crate uses edition 2021, and the other three use edition 2024. The root `Cargo.lock` and `rust-toolchain.toml` pin the dependencies and toolchain for builds from the root or a module directory. Planned modules such as `research/sim_native` join the workspace when their implementation is ready. See the [battle simulation module](../modules/battle-simulation/README.md) for commands and validation.
 
@@ -58,7 +62,7 @@ Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.to
 | --- | --- |
 | `tests/<模块>/`、`examples/<模块>/` | Python 模块的自动测试和调用示例，目录名与模块对应。 |
 | Rust crate 内的 `tests/`、`tests/fixtures/` 和 `examples/` | 对应 crate 的集成测试、测试样例和可运行示例。单元测试放在源码旁。 |
-| `docs/project/`、`docs/game-data/`、`docs/development/`、`docs/modules/<模块>/` | 分别存放项目架构与规则、共用游戏数值、开发规范、模块设计与使用说明。 |
+| `docs/project/`、`docs/game-data/`、`docs/development/`、`docs/modules/<模块>/` | 分别存放项目架构与规则、精确规则与数值、开发规范、模块设计与使用说明。 |
 | `local-data/`、`runs/`、`checkpoints/` | 本地输入、运行记录和模型权重等产物，跨仓库资料按 [AGENTS.md](../../AGENTS.md) 的分工维护。 |
 
 各模块的示例和测试通过对应模块的公开接口调用实现。

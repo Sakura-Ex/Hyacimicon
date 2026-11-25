@@ -42,6 +42,8 @@ The root [Cargo workspace](../../../Cargo.toml) includes the account crate. The 
 
 原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
 
+`account_core::raw::validate_raw_account` 检查统一账号格式版本、原始练度和完整库存引用。读取原始账号 JSON 后可调用该入口；角色映射和生效面板计算由玩法转换按对应资料处理。
+
 ## 统一配置
 
 | 类型 | 保存内容 |

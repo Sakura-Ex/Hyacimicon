@@ -36,3 +36,9 @@ Use `null` or omit the progress or recovery value to report it as unknown. Use `
 ## Validation
 
 Run `cargo test -p run-core --locked` from the repository root. The tests run the existing battle engine with synthetic fixtures and compare the HP preview with independently calculated values. A 150 AV fixture with rounds of 50 and 100 AV clears at AV 100 with 50 AV remaining, or times out at AV 150 with zero remaining after one enemy is defeated. With 20% effective progress, 2 points of recovery, and 92 starting HP, the losses are 5 and 8. The squad goes to 79 HP before recovery and finishes at 81 HP.
+
+## 整局路线
+
+`run_core::route` 保存 4.7 S2 的路线配置和阶段推进，区分补给、投资待选、正式节点进入和结束。该规则原型来自 `f6a56916`，保留其完整路线及错误阶段回归测试；正式运营接入应复用此路线或由同一版本规则数据生成路线，避免重复维护。早期独立 `match-session` crate 的向上取整结算不再接入。
+
+普通计时节点 HP 预览仍按当前参考实现进行整数截断；早期玩家观察记录中的四舍五入、门槛、回血及保底顺序尚需核对，正式结算不得将两种算法视为已统一。详见[整局规则](../../game-data/match.md)及[观察记录](../../game-data/match-observations.md)。

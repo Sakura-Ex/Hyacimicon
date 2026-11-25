@@ -190,6 +190,16 @@ struct TraceLevel {
 
 /// 创建内置或外部的生成参考资料。
 impl AccountReference {
+    /// 返回生成器内置资料支持的角色 ID。
+    pub fn character_ids(&self) -> impl Iterator<Item = &str> {
+        self.characters.keys().map(String::as_str)
+    }
+
+    /// 返回生成器内置资料支持的光锥 ID。
+    pub fn light_cone_ids(&self) -> impl Iterator<Item = &str> {
+        self.light_cones.keys().map(String::as_str)
+    }
+
     /// 加载随程序提供的 4.7 生成资料，采用资料中的分类、推荐光锥及行迹。
     pub fn bundled() -> Result<Self, GenerationError> {
         Self::bundled_with(&ReferenceOverrides::default())

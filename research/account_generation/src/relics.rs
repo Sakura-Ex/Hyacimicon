@@ -6,7 +6,7 @@ mod middle_grid;
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat, RelicSlot, RelicSubStat};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{AccountRequest, GenerationError, RngCore, Search, allocation, invalid};
 use candidates::{Candidates, PieceSearch};
@@ -28,7 +28,7 @@ const QUALITY_RATIOS: [f64; 6] = [0.0, 0.35, 0.5, 0.65, 0.8, 1.0];
 const MAX_STAT_WEIGHT: f64 = 100.0;
 
 /// 一个部位的配装条件，留空字段采用该部位的合法候选。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RelicSpec {
     /// 遗器部位。
@@ -104,7 +104,7 @@ impl RelicSpec {
 }
 
 /// 一组遗器的覆盖、计分、数值档位和整体分数条件。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct RelicRequest {
     /// 显式覆盖的部位；未列出的部位由生成器补齐。

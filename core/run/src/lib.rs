@@ -1,4 +1,6 @@
-//! Pure squad-health settlement after an ordinary timed Currency Wars node.
+//! Match route progression and squad-health settlement reference.
+
+pub mod route;
 
 use battle_core::model::{BattleResult, Outcome};
 

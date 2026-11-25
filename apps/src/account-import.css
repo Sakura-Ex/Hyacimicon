@@ -1,0 +1,491 @@
+﻿.account-workspace-tools,
+.account-workspace-tools > div,
+.account-workspace-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.account-workspace-tools {
+  justify-content: space-between;
+  padding-right: 3rem;
+}
+
+.account-workspace {
+  padding: 1.25rem 1.25rem 2.5rem 0;
+}
+
+.account-workspace h2 {
+  font-size: 2rem;
+  font-weight: 670;
+  margin-bottom: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.account-lead,
+.account-provenance {
+  color: var(--muted);
+}
+
+.account-provenance {
+  margin: 0.9rem 0;
+  overflow-wrap: anywhere;
+}
+
+.account-drop {
+  position: relative;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0.9rem;
+  min-height: 13rem;
+  margin-top: 1.9rem;
+  padding: 1.3rem;
+  border: 1px dashed #b99ca8;
+  background: #fff8f5;
+  text-align: center;
+  cursor: pointer;
+}
+
+.account-drop.dragging,
+.account-drop:has(input:focus-visible) {
+  outline: 2px solid var(--wine);
+  outline-offset: 2px;
+}
+
+.account-drop input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.account-pick {
+  background: var(--wine);
+  border-radius: 0.28rem;
+  color: white;
+  padding: 0.6rem 1.5rem;
+  font-weight: 650;
+}
+
+.account-file-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.account-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.account-fields + .account-fields,
+.account-group + .account-group,
+.account-fold .account-field + .account-field {
+  margin-top: 0.9rem;
+}
+
+.account-field {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  font-size: 0.93rem;
+  font-weight: 570;
+}
+
+.account-field input,
+.account-field select,
+.account-field textarea {
+  width: 100%;
+  color: var(--ink);
+  font: inherit;
+  padding: 0.52rem 0.66rem;
+  background: #fffcf9;
+  border: 1px solid var(--line);
+  border-radius: 0.25rem;
+}
+
+.account-field textarea {
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+  font-weight: 400;
+}
+
+.import-name,
+.request-editor {
+  margin-top: 1.25rem;
+}
+
+.account-group {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 1.05rem 0 0;
+  padding: 0.5rem 0 0;
+  min-width: 0;
+}
+
+.account-group legend {
+  color: var(--muted);
+  padding-right: 0.65rem;
+  font-weight: 620;
+}
+
+.account-group > .account-field + .account-fields {
+  margin-top: 0.75rem;
+}
+
+.account-workspace-actions {
+  margin-top: 1.25rem;
+}
+
+.account-fold,
+.account-warnings {
+  border-top: 1px solid var(--line);
+  padding: 0.75rem 0;
+}
+
+.account-fold summary,
+.account-warnings summary,
+.account-catalogue summary {
+  cursor: pointer;
+  font-weight: 620;
+}
+
+.account-fold[open] > summary {
+  margin-bottom: 0.8rem;
+}
+
+.account-catalogue {
+  margin-top: 0.75rem;
+}
+
+.account-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-bottom: 0.8rem;
+}
+
+.account-checks label {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.account-error {
+  color: #852f47;
+  margin: 0.8rem 0;
+  overflow-wrap: anywhere;
+}
+
+.account-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 1.2rem 0;
+  padding: 0.9rem 0;
+  border-block: 1px solid var(--line);
+}
+
+.account-metrics > div + div {
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
+.account-metrics dt {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.account-metrics dd {
+  margin: 0.15rem 0 0;
+  font-family: "Noto Serif SC Variable", serif;
+  font-size: 2rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-metrics small {
+  display: block;
+}
+
+.account-generated-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.account-generated-summary dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  font-weight: 580;
+}
+
+.local-account-list button {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.account-library,
+.account-workspace-pane {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.account-workspace-pane > :not(.scroll-area, form),
+.account-library > :not(scroll-list, .account-warnings) {
+  flex: none;
+}
+
+.account-library > .account-warnings {
+  max-height: 35%;
+}
+
+.account-workspace-pane > form,
+.account-workspace-pane > .scroll-area {
+  flex: 1;
+}
+
+.local-account-list button[aria-pressed="true"] {
+  color: var(--wine);
+  background: #f0e4ea;
+  border-bottom-color: var(--line);
+}
+
+.local-account-list button span {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-rename {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.7rem;
+  margin-top: 1.2rem;
+}
+
+.account-remove,
+.account-delete {
+  margin-top: 1.1rem;
+}
+
+.account-remove {
+  color: #852f47;
+}
+
+.account-delete p {
+  color: #852f47;
+  margin-bottom: 0.45rem;
+}
+
+.account-request-file {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: #fffcf9;
+  font-weight: 600;
+  padding: 0.45rem 0.95rem;
+  cursor: pointer;
+}
+
+.account-request-file:has(input:focus-visible) {
+  outline: 2px solid var(--wine);
+  outline-offset: 2px;
+}
+
+.account-request-file input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.account-back {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.account-workspace-tools [aria-pressed] {
+  padding: 0.7rem 0.85rem;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-weight: 550;
+}
+
+.account-workspace-tools [aria-pressed="true"] {
+  color: var(--wine);
+  border-color: var(--wine);
+}
+
+.account-drop.selected-file {
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 0;
+  padding: 0.85rem 0;
+  border: 0;
+  border-block: 1px solid var(--line);
+  background: transparent;
+}
+
+.selected-file .account-pick {
+  flex-shrink: 0;
+  color: var(--wine);
+  background: transparent;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.9rem;
+}
+
+.selected-file .account-file-label {
+  color: var(--ink);
+}
+
+.account-review-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.9rem;
+}
+
+.account-status {
+  color: #365b4a;
+  font-size: 0.85rem;
+  font-weight: 550;
+}
+
+.account-core-fields {
+  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr);
+  margin-bottom: 0.9rem;
+}
+
+.account-field input,
+.account-field select {
+  font-weight: 400;
+  border-inline-color: transparent;
+  border-top-color: transparent;
+  border-radius: 0;
+  background: #fffaf678;
+}
+
+.account-fold > summary,
+.account-catalogue > summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-weight: 550;
+}
+
+.account-fold > summary::after,
+.account-catalogue > summary::after {
+  content: "";
+  width: 0.44rem;
+  height: 0.44rem;
+  margin-inline: 0.2rem 0.35rem;
+  border: solid var(--muted);
+  border-width: 0 1px 1px 0;
+  transform: rotate(45deg);
+}
+
+.account-fold[open] > summary::after,
+.account-catalogue[open] > summary::after {
+  transform: rotate(225deg);
+}
+
+.account-workspace-tools [aria-pressed] {
+  padding: 0.4rem 0 0.48rem;
+}
+
+.account-workspace-tools > div {
+  gap: 1.35rem;
+}
+
+.account-workspace {
+  padding-top: 1.65rem;
+  padding-right: 0;
+}
+
+.account-workspace h2 {
+  font-size: 1.7rem;
+}
+
+.account-core-fields > .account-field + .account-field {
+  margin-top: 0;
+}
+
+.account-group {
+  border-top: 0;
+  margin-top: 1.3rem;
+}
+
+.account-group legend {
+  color: var(--ink);
+  font-size: 1.08rem;
+  font-family: "Noto Serif SC Variable", serif;
+}
+
+.account-drop.selected-file {
+  display: inline-flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 0.7rem;
+  max-width: 100%;
+}
+
+.selected-file .account-pick {
+  order: 1;
+}
+
+.account-catalogue-content {
+  margin-top: 0.75rem;
+}
+
+.account-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.account-candidates-scroll {
+  max-height: 9rem;
+  margin-top: 0.7rem;
+}
+
+.account-candidates button {
+  font-size: 0.88rem;
+  padding: 0.22rem 0.5rem;
+}
+
+.account-candidates button[aria-pressed="true"] {
+  color: var(--wine);
+  background: #f1e3ea;
+  border-color: #c7a3b6;
+}

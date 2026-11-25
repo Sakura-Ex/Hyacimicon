@@ -19,6 +19,8 @@ pub use relics::{
     RelicRequest, RelicSpec, generate_character_relics, generate_relic,
     maximum_character_relic_score, score_relic,
 };
+/// 生成结果记录使用的 crate 版本。
+pub const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
 use serde::{Deserialize, Serialize};
 
 /// 五星角色和光锥的投入类别，计数单位为一份本体、星魂或叠影。
@@ -48,7 +50,7 @@ impl GoldCategory {
 }
 
 /// 原始光锥练度及可选的显式光锥 ID。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct LightConeSpec {
     /// 指定已收录的光锥 ID。留空时，[`generate_character`] 从推荐列表抽取，[`generate_account`] 在池内按命途筛选。
@@ -79,7 +81,7 @@ impl Default for LightConeSpec {
 /// `traces` 留空时，根据参考资料中的行迹前置和角色等级生成；显式设置时原样使用。
 /// 角色级 `relic_quality_tier` 约束该角色得分，同时账号级档位仍约束全账号总分。
 /// `relics` 提供该角色的遗器请求。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct CharacterSpec {
     /// 角色原始等级。
@@ -119,7 +121,7 @@ impl Default for CharacterSpec {
 /// `gold_count` 指定精确总金数；留空时只受类别、候选和配装约束。
 /// 显式核心名单优先于 `core_count`，并作为必需持有人纳入角色候选。
 /// 金数和遗器集中度可分别设置；各自留空时沿用 `resource_concentration`。
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AccountRequest {
     /// 写入原始账号并用作装备实例前缀的 ID。省略时在配装完成后从调用方的随机源生成。

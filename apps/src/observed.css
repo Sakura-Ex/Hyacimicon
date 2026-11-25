@@ -1,0 +1,11 @@
+.observed-workspace { height: 100%; overflow: auto; display: grid; gap: .65rem; align-content: start; padding: 0 .35rem .75rem; }
+.observed-workspace h2, .observed-workspace h3, .observed-workspace p { margin: 0; }
+.observed-help { font-size: .8em; color: var(--muted, #766761); }
+.observed-field { display: grid; gap: .25rem; min-width: 0; font-size: .85em; }
+.observed-field input, .observed-field textarea { width: 100%; min-width: 0; box-sizing: border-box; font: inherit; color: inherit; background: rgba(255,255,255,.48); border: 1px solid #cbbcb4; border-radius: .3rem; padding: .4rem; }
+.observed-field textarea { resize: vertical; }
+.observed-slots, .observed-shop { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: .4rem; }
+.observed-slots[data-zone="front"] { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.observed-shop { grid-template-columns: repeat(5,minmax(0,1fr)); }
+.observed-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .5rem; }
+.observed-workspace details li { display: flex; justify-content: space-between; gap: .5rem; margin-block: .3rem; }
