@@ -58,15 +58,15 @@ npm run tauri dev
 
 ### 游戏图像
 
-Windows 版启动时校验程序旁的 `images/StarRailRes.pack`，并按清单下载缺失或损坏的图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/src-tauri/star-rail-images.tsv)，货币战争局内装备和消耗品来自 [Nanoka 装备清单](../../../apps/src-tauri/nanoka-equipment.tsv)。图像供所有账号共用。安装包包含来源、路径、字节数和 Git blob 校验值，游戏美术由应用启动后写入本地。
+Windows 版安装并启动后校验程序旁的 `images/StarRailRes.pack`，按清单自动下载缺失或损坏的全部游戏图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/src-tauri/star-rail-images.tsv)，货币战争局内装备、消耗品、对局角色图、羁绊图标与敌人图像来自 [Nanoka 货币战争图像清单](../../../apps/src-tauri/nanoka-images.tsv)。图像供所有账号共用。仓库和安装包仅包含来源、路径、字节数与 Git blob 校验值，不打包任何游戏美术原图。
 
 Rust 校验下载的 PNG，优先转成无损 WebP，再按条目尝试 Zstandard 压缩并写入容器。每一步保留体积更小且像素无损的结果。启动时复用旧 `images/StarRailRes/` 中有效的 PNG 或 WebP，归档提交后清理对应散文件。窗口按需读取容器中的图片。TypeScript 启动校验并显示进度，文件齐全时可离线启动。普通页面禁止框选和全选文字、拖出图片以及默认右键菜单，编辑字段保留选择、复制和粘贴。
 
-角色和账号装备图像来自 StarRailRes 4.7.0 的 [03907e7 提交](https://github.com/Mar-7th/StarRailRes/commit/03907e798b46f9eb109a1f882055cdf49ce3d374)。清单取自该提交文件树中的角色头像、完整立绘、光锥图标和遗器图标，源 PNG 合计约 372 MiB。桌面版的账号和战斗预览也读取这套立绘。浏览器开发预览使用风堇和景元两张本地草稿立绘。帕姆王图像缺失，预览所用的羁绊和敌人图像可在开发服务器查看。
+角色和账号装备图像来自 StarRailRes 4.7.0 的 [03907e7 提交](https://github.com/Mar-7th/StarRailRes/commit/03907e798b46f9eb109a1f882055cdf49ce3d374)。清单取自该提交文件树中的角色头像、完整立绘、光锥图标和遗器图标，共 567 张，源 PNG 合计约 372 MiB。桌面版的账号、对局和战斗预览均读取这套本地缓存。浏览器开发预览不包含游戏图像，未加载图像的位置以文字或首字占位显示。
 
-Nanoka 装备来源为 `static.nanoka.cc/assets/hsr/gridfight/equipment/`。装备清单沿用私有数据仓库 S2 `encyclopedia-4.6.54-679438c4be1c` 快照对应的素材记录，共 117 张 WebP。生成清单时先核对素材清单中的 SHA256，再记录图像长度和下载程序复用的 Git blob 校验值。原始 WebP 保留像素，并直接进入资源容器。
+Nanoka 图像来源为 `static.nanoka.cc/assets/hsr/`（包括 `gridfight/equipment/`、`avatarshopicon/`、`gridfight/icon/` 与 `monsterfigure/`）。清单沿用私有数据仓库 S2 `encyclopedia-4.6.54-679438c4be1c` 快照对应的素材记录，共 332 张 WebP（装备与消耗品 117 张、对局角色图 60 张、羁绊图标 35 张、敌人图像 120 张）。生成清单时先核对素材清单中的 SHA256，再记录图像长度和下载程序复用的 Git blob 校验值。原始 WebP 保留像素，并直接进入资源容器。
 
-本机完整资源包含 684 张图片。离线验收用的副本保存在仓库根目录下的 `local-data/player-test-images/StarRailRes.pack`，由 Git 忽略。测试独立的 EXE 副本前，将资源包复制到该 EXE 旁的 `images/StarRailRes.pack`，启动后即可读取。容器和本机测试副本均在安装包之外。
+本机完整资源包含 899 张图片。离线验收用的副本保存在仓库根目录下的 `local-data/player-test-images/StarRailRes.pack`，由 Git 忽略。测试独立的 EXE 副本前，将资源包复制到该 EXE 旁的 `images/StarRailRes.pack`，启动后即可读取。容器和本机测试副本均在安装包之外。
 
 ## 对局
 

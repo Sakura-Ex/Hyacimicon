@@ -9,15 +9,18 @@ export default defineConfig({
     {
       name: "bundle-player-artwork",
       generateBundle() {
-        for (const folder of ["book", "ui", "traits", "match-portraits"]) {
-          const directory = new URL(folder + "/", draftAssets);
-          for (const name of readdirSync(directory)) {
-            this.emitFile({
-              type: "asset",
-              fileName: folder + "/" + name,
-              source: readFileSync(new URL(name, directory)),
-            });
-          }
+        this.emitFile({
+          type: "asset",
+          fileName: "book/letterpress.png",
+          source: readFileSync(new URL("book/letterpress.png", draftAssets)),
+        });
+        const directory = new URL("ui/", draftAssets);
+        for (const name of readdirSync(directory)) {
+          this.emitFile({
+            type: "asset",
+            fileName: "ui/" + name,
+            source: readFileSync(new URL(name, directory)),
+          });
         }
       },
     },

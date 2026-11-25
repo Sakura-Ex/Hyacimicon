@@ -11,7 +11,7 @@ use tauri::{
 };
 
 const STAR_RAIL_RES: &str = "https://raw.githubusercontent.com/Mar-7th/StarRailRes/03907e798b46f9eb109a1f882055cdf49ce3d374";
-const NANOKA_EQUIPMENT: &str = "https://static.nanoka.cc/assets/hsr/gridfight/equipment";
+const NANOKA_ASSETS: &str = "https://static.nanoka.cc/assets/hsr";
 const PARALLEL_IMAGES: usize = 4;
 
 pub type SyncLock = Mutex<()>;
@@ -29,7 +29,7 @@ fn images() -> &'static BTreeMap<&'static str, Image> {
     IMAGES.get_or_init(|| {
         [
             (STAR_RAIL_RES, include_str!("../star-rail-images.tsv")),
-            (NANOKA_EQUIPMENT, include_str!("../nanoka-equipment.tsv")),
+            (NANOKA_ASSETS, include_str!("../nanoka-images.tsv")),
         ]
         .into_iter()
         .flat_map(|(source, manifest)| {
@@ -252,4 +252,50 @@ pub fn serve(request: Request<Vec<u8>>) -> Response<Vec<u8>> {
             .body(Vec::new()),
     }
     .expect("valid image response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifests_cover_all_game_asset_categories_with_valid_metadata() {
+        let manifest_lines = include_str!("../star-rail-images.tsv").lines().count()
+            + include_str!("../nanoka-images.tsv").lines().count();
+        let all = images();
+        assert_eq!(all.len(), manifest_lines, "duplicate local image key");
+        assert_eq!(all.len(), 899);
+
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for (&local, image) in all {
+            assert!(!local.starts_with('/') && !local.contains(".."), "{local}");
+            assert!(
+                !image.remote.is_empty()
+                    && !image.remote.starts_with('/')
+                    && !image.remote.contains(".."),
+                "{}",
+                image.remote
+            );
+            assert!(image.bytes > 0, "{local}");
+            assert_eq!(image.blob.len(), 40, "{local}");
+            assert!(
+                image
+                    .blob
+                    .bytes()
+                    .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+                "{local}"
+            );
+            let category = local.split('/').next().expect("category prefix");
+            *counts.entry(category).or_insert(0) += 1;
+        }
+
+        assert_eq!(counts.get("avatars"), Some(&100));
+        assert_eq!(counts.get("portraits"), Some(&99));
+        assert_eq!(counts.get("light-cones"), Some(&172));
+        assert_eq!(counts.get("relics"), Some(&196));
+        assert_eq!(counts.get("items"), Some(&117));
+        assert_eq!(counts.get("match-portraits"), Some(&60));
+        assert_eq!(counts.get("traits"), Some(&35));
+        assert_eq!(counts.get("enemies"), Some(&120));
+    }
 }
