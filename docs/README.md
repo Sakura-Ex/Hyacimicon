@@ -5,20 +5,10 @@
 | 入口 | 主要内容 | 适用场景 |
 | --- | --- | --- |
 | [项目总览](project/README.md) | 目标、系统设计、实施计划和共用游戏规则 | 了解项目或确认模块之间的关系 |
-| [私有规则与数值资料](https://github.com/Sakura-Ex/Hyacimicon-rules) | 精确规则、角色、光锥、遗器数值和 ID 对照 | 有权限的开发者核对规则和数据 |
+| [游戏规则与数值资料](https://github.com/Sakura-Ex/Hyacimicon-rules) | 精确规则、角色、光锥、遗器数值和 ID 对照 | 查阅具体机制和数值 |
 | [开发约定](development/README.md) | 目录职责、开发测试、Git 协作和文档组织 | 开始开发或调整已有实现 |
 | [模块文档](modules/README.md) | 各模块的范围、状态和设计约定 | 领取模块任务或查阅具体设计 |
 
 开始新任务时，先阅读项目总览中相关的设计，再进入对应模块。开发与协作要求统一在开发约定中维护。
 
-## 私有规则资料
-
-`docs/game-data/` 是指向 `Hyacimicon-rules` 私有仓库的 Git 子模块。获得该仓库访问权限后，在主仓库根目录执行：
-
-```powershell
-git submodule update --init -- docs/game-data
-```
-
-初始化后，查阅本地 `docs/game-data/README.md`。主仓库记录子模块的固定提交；切换主仓库版本后，重新运行上述命令同步资料版本。文档中的 GitHub 链接指向规则仓库的最新主分支；核对某个历史版本时，以本地子模块固定提交中的资料为准。仅开发公开代码时可正常克隆主仓库，公开文档及构建无需初始化私有子模块。
-
-更新私有资料时，先在子模块内按规则仓库流程提交并推送，再在主仓库任务分支提交更新后的 `docs/game-data` 引用。
+游戏规则与数值资料位于 `docs/game-data/`，获取和版本管理见[Git 协作规范](development/git-workflow.md#规则资料版本管理)。

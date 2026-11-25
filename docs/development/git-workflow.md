@@ -28,6 +28,18 @@
 
 Git 官方命令手册：[pull](https://git-scm.com/docs/git-pull)、[fetch](https://git-scm.com/docs/git-fetch)、[switch](https://git-scm.com/docs/git-switch)、[merge](https://git-scm.com/docs/git-merge)。
 
+## 规则资料版本管理
+
+`docs/game-data/` 对应 `Hyacimicon-rules` 私有仓库，通过 Git 子模块固定版本。具备访问权限的开发者在主仓库根目录执行：
+
+```powershell
+git submodule update --init -- docs/game-data
+```
+
+切换主仓库版本后重新运行此命令。本地 `docs/game-data/README.md` 为资料入口，文档中的 GitHub 链接指向规则仓库最新主分支；核对历史版本时，以当前主仓库固定版本的本地资料为准。公开项目的构建无需初始化此子模块。
+
+更新规则资料时，先进入 `docs/game-data/`，切换到对应开发分支，提交并推送规则仓库改动；再在主仓库任务分支提交更新后的 `docs/game-data` 引用。子模块引用应指向已推送的提交。
+
 ## 任务与评审流程
 
 每个任务写明目标、输入输出、验收条件和负责人。划分任务时，确保每项任务都能独立演示和评审。
