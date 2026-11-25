@@ -1,6 +1,6 @@
 # 单件遗器生成与评分
 
-`generate_relic` 按部位、配装约束和目标分数生成一件五星 +15 遗器，返回成品和得分。属性键、部位与套装 ID 见[五星遗器数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/relic-data.md)。
+`generate_relic` 按部位、配装约束和目标分数生成一件五星 +15 遗器，返回成品和得分。属性键、部位与套装 ID 见[五星遗器数据](../../game-data/relic-data.md)。
 
 ## 调用
 

@@ -21,7 +21,7 @@
 
 ## 商店等级与刷新概率
 
-商店按等级和费用配置刷新概率，经验需求与概率随游戏版本变化。具体数值见[商店与牌库精确规则](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/economy-rules.md)，本地路径为 `docs/game-data/economy-rules.md`。适用版本与实测核对状态在该页记录。
+商店按等级和费用配置刷新概率，经验需求与概率随游戏版本变化。具体数值见[商店与牌库精确规则](../game-data/economy-rules.md)。适用版本与实测核对状态在该页记录。
 
 ## 牌库与角色出现概率
 
