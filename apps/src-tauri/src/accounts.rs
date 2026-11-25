@@ -47,6 +47,11 @@ fn runtime_data_root() -> Result<PathBuf, String> {
     Ok(root)
 }
 
+fn load_trace_catalog(root: &Path) -> Result<TraceCatalog, String> {
+    let path = root.join("account/reliquary-traces-v4.json");
+    TraceCatalog::from_path(&path).map_err(|error| format!("读取账号资料失败：{error}"))
+}
+
 fn account_files() -> Result<AccountFiles, String> {
     let exe = std::env::current_exe().map_err(|error| format!("无法定位程序文件：{error}"))?;
     let directory = exe
@@ -63,10 +68,7 @@ fn account_files() -> Result<AccountFiles, String> {
 impl AccountStore {
     fn data(&self) -> Result<&TraceCatalog, String> {
         self.data
-            .get_or_init(|| {
-                let path = runtime_data_root()?.join("account/reliquary-traces-v4.json");
-                TraceCatalog::from_path(&path).map_err(|error| format!("读取账号资料失败：{error}"))
-            })
+            .get_or_init(|| load_trace_catalog(&runtime_data_root()?))
             .as_ref()
             .map_err(Clone::clone)
     }
@@ -583,6 +585,21 @@ mod tests {
         assert_eq!(report.unwrap().trace_bindings_snapshot, "synthetic-traces");
     }
 
+    #[test]
+    fn runtime_trace_file_errors_identify_missing_and_malformed_paths() {
+        let root = std::env::temp_dir().join(format!("hyacimicon-data-test-{}", Uuid::new_v4()));
+        let file = root.join("account/reliquary-traces-v4.json");
+        let missing = load_trace_catalog(&root).unwrap_err();
+        assert!(missing.contains(&file.display().to_string()));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "invalid json").unwrap();
+        let malformed = load_trace_catalog(&root).unwrap_err();
+        assert!(malformed.contains(&file.display().to_string()));
+        std::fs::remove_file(&file).unwrap();
+        std::fs::remove_dir(file.parent().unwrap()).unwrap();
+        std::fs::remove_dir(&root).unwrap();
+    }
+
     #[cfg(all(feature = "research", feature = "private-data-tests"))]
     #[test]
     fn research_generator_loads_and_reuses_external_snapshot() {
@@ -592,12 +609,13 @@ mod tests {
         assert!(reference.light_cone_ids().count() > 0);
         assert!(std::ptr::eq(reference, store.generator().unwrap()));
         let generated = generate_account(
-            &AccountRequest::new("external-snapshot", 0),
+            &AccountRequest::new("external-snapshot", 1),
             reference,
             &mut ChaCha8Rng::seed_from_u64(42),
         )
         .unwrap();
         assert_eq!(generated.account.game_version.as_deref(), Some("4.7"));
+        assert_eq!(generated.account.characters.len(), 1);
     }
 
     #[cfg(feature = "private-data-tests")]
