@@ -1,15 +1,17 @@
+#![cfg(feature = "private-data-tests")]
+
 //! 核对静态计算资料、试用模板与映射模板的关联。
 
 use std::collections::BTreeSet;
 
 use account_core::{
     playable::{PlayableRelics, attributes::Attribute},
-    reference::{PlayableData, SkillKind},
+    reference::SkillKind,
 };
 
 #[test]
 fn loads_all_documented_records_and_preserves_cross_references() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     assert_eq!(data.manifest.game_version, "4.7");
     assert_eq!(data.manifest.season, "S2");
     assert_eq!(data.characters.len(), 61);
@@ -64,7 +66,7 @@ fn loads_all_documented_records_and_preserves_cross_references() {
 
 #[test]
 fn binds_the_last_two_minor_nodes_and_keeps_fully_unlocked_trials() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let welt = data
         .minor_traces
         .iter()
@@ -103,7 +105,7 @@ fn binds_the_last_two_minor_nodes_and_keeps_fully_unlocked_trials() {
 
 #[test]
 fn keeps_trial_and_mapping_values_distinct() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let trial = data
         .trials
         .iter()
@@ -126,7 +128,7 @@ fn keeps_trial_and_mapping_values_distinct() {
 
 #[test]
 fn preserves_light_cone_base_speed_as_a_distinct_property_at_every_rank() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     for id in ["23036", "23044", "23065"] {
         let cone = data
             .light_cones
@@ -143,7 +145,7 @@ fn preserves_light_cone_base_speed_as_a_distinct_property_at_every_rank() {
 
 #[test]
 fn preserves_aggregate_trial_relics_and_special_characters() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let welt = data
         .trials
         .iter()
@@ -188,3 +190,5 @@ fn preserves_aggregate_trial_relics_and_special_characters() {
         .unwrap();
     assert_eq!(normal.base.crit_rate(), 0.05);
 }
+
+mod support;
