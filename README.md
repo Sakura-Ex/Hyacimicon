@@ -1,4 +1,4 @@
-# HSR Currency Wars AI
+# Hyacimicon
 
 English | [简体中文](README.zh-CN.md)
 
