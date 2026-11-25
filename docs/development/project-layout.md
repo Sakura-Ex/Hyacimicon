@@ -52,6 +52,8 @@ Hyacimicon/
 
 桌面应用的 Cargo 清单与锁文件放在 `apps/src-tauri/`。它通过路径依赖调用根工作区中的库，前端从 `apps/` 执行 npm 命令。
 
+The root workspace includes `core/account`, `core/battle`, `core/run`, and `research/account_generation`. `core/run` provides [squad HP previews for ordinary timed nodes](../modules/run/README.md). The battle crate uses edition 2021, and the other three use edition 2024. The root `Cargo.lock` and `rust-toolchain.toml` pin the dependencies and toolchain for builds from the root or a module directory. Planned modules such as `research/sim_native` join the workspace when their implementation is ready. See the [battle simulation module](../modules/battle-simulation/README.md) for commands and validation.
+
 Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 
 ## 配套目录

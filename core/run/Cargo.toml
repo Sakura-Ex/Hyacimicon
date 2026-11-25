@@ -1,0 +1,16 @@
+[package]
+name = "run-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Match route and node health settlement for Currency Wars"
+
+[dependencies]
+battle-core = { path = "../battle" }
+serde.workspace = true
+
+[dev-dependencies]
+battle-core = { path = "../battle", features = ["diagnostics"] }
+serde_json.workspace = true

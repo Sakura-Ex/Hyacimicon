@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "steps": [
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"normal_turn","choice":{"kind":"action","actor":"reviver","action":"basic"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {
+      "point": "normal_turn",
+      "choice": {"kind":"action","actor":"striker","action":"basic"},
+      "expect": [
+        {"offset":6,"kind":"revive","actor":"reviver","action":"basic","target":"reviver","amount":100},
+        {"offset":7,"kind":"revival_av_penalty","actor":"reviver","action":"basic","target":"reviver","amount":25}
+      ]
+    },
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"normal_turn","choice":{"kind":"action","actor":"reviver","action":"basic"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}},
+    {
+      "point": "normal_turn",
+      "choice": {"kind":"action","actor":"striker","action":"basic"},
+      "expect": [
+        {"offset":6,"kind":"revive","actor":"reviver","action":"basic","target":"reviver","amount":100},
+        {"offset":7,"kind":"revival_av_penalty","actor":"reviver","action":"basic","target":"reviver","amount":25}
+      ]
+    },
+    {"point":"insert","choice":{"kind":"skip"}},
+    {"point":"insert","choice":{"kind":"skip"}}
+  ]
+}

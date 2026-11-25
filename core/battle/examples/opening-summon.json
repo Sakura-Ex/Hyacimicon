@@ -1,0 +1,164 @@
+{
+  "provenance": {
+    "game_version": "Synthetic",
+    "data_snapshot": "none",
+    "description": "An opening summon takes a scheduled automatic turn."
+  },
+  "mechanics": {
+    "traditional_summons": [
+      {
+        "id": "summon",
+        "owner": "owner",
+        "stats": {
+          "level": 1,
+          "max_hp": 1000,
+          "attack": 10,
+          "defense": 0,
+          "speed": 80,
+          "taunt": 1,
+          "crit_rate": 0,
+          "crit_damage": 1,
+          "damage_bonus": 0,
+          "defense_reduction": 0,
+          "defense_ignore": 0,
+          "resistance": 0,
+          "resistance_penetration": 0,
+          "vulnerability": 0,
+          "damage_reduction": 0,
+          "independent_multiplier": 1,
+          "toughness_broken": true,
+          "healing_bonus": 0,
+          "incoming_healing_bonus": 0,
+          "shield_bonus": 0
+        },
+        "action": {
+          "id": "summon_strike",
+          "kind": "follow_up",
+          "sp_cost": 0,
+          "sp_gain": 0,
+          "energy_cost": 0,
+          "energy_gain": 0,
+          "effects": [
+            {
+              "type": "damage",
+              "scale": "attack",
+              "ratio": 0,
+              "flat": 40,
+              "hits": 1,
+              "can_crit": false,
+              "target": "enemy_lowest_hp"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "max_av": 140,
+  "max_actions": 1000,
+  "ally_skill_points": {
+    "initial": 0,
+    "maximum": 5
+  },
+  "enemy_skill_points": {
+    "initial": 0,
+    "maximum": 5
+  },
+  "allies": [
+    {
+      "id": "owner",
+      "stats": {
+        "level": 1,
+        "max_hp": 1000,
+        "attack": 10,
+        "defense": 0,
+        "speed": 100,
+        "taunt": 1,
+        "crit_rate": 0,
+        "crit_damage": 1,
+        "damage_bonus": 0,
+        "defense_reduction": 0,
+        "defense_ignore": 0,
+        "resistance": 0,
+        "resistance_penetration": 0,
+        "vulnerability": 0,
+        "damage_reduction": 0,
+        "independent_multiplier": 1,
+        "toughness_broken": true,
+        "healing_bonus": 0,
+        "incoming_healing_bonus": 0,
+        "shield_bonus": 0
+      },
+      "initial_hp": 1000,
+      "initial_energy": 0,
+      "max_energy": 100,
+      "revival": null,
+      "actions": [
+        {
+          "id": "wait",
+          "kind": "basic",
+          "sp_cost": 0,
+          "sp_gain": 0,
+          "energy_cost": 0,
+          "energy_gain": 0,
+          "effects": [
+            {
+              "type": "energy",
+              "amount": 0,
+              "target": "self_unit"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "waves": [
+    [
+      {
+        "id": "enemy",
+        "stats": {
+          "level": 1,
+          "max_hp": 1000,
+          "attack": 10,
+          "defense": 0,
+          "speed": 1,
+          "taunt": 1,
+          "crit_rate": 0,
+          "crit_damage": 1,
+          "damage_bonus": 0,
+          "defense_reduction": 0,
+          "defense_ignore": 0,
+          "resistance": 0,
+          "resistance_penetration": 0,
+          "vulnerability": 0,
+          "damage_reduction": 0,
+          "independent_multiplier": 1,
+          "toughness_broken": true,
+          "healing_bonus": 0,
+          "incoming_healing_bonus": 0,
+          "shield_bonus": 0
+        },
+        "initial_hp": 1000,
+        "initial_energy": 0,
+        "max_energy": 100,
+        "revival": null,
+        "actions": [
+          {
+            "id": "wait",
+            "kind": "basic",
+            "sp_cost": 0,
+            "sp_gain": 0,
+            "energy_cost": 0,
+            "energy_gain": 0,
+            "effects": [
+              {
+                "type": "energy",
+                "amount": 0,
+                "target": "self_unit"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  ]
+}
