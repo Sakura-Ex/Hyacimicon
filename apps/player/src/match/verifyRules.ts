@@ -231,6 +231,20 @@ async function main(): Promise<void> {
     assert.equal(wrongCaller.error.code, 'controllerMismatch');
   }
 
+  // Different modelId must also trigger controllerMismatch
+  const wrongModel = await svc.executeAction(
+    {
+      matchId: handoff.value.matchId,
+      revision: handoff.value.revision,
+      actionId: handoffFirstAct.actionId,
+    },
+    { kind: 'model', modelId: 'other-model' },
+  );
+  assert.equal(wrongModel.ok, false);
+  if (!wrongModel.ok) {
+    assert.equal(wrongModel.error.code, 'controllerMismatch');
+  }
+
   // Hand back to manual and verify battle restart (same seed) vs leave -> reenter (new seed)
   const backManual = await svc.setController({
     matchId: handoff.value.matchId,

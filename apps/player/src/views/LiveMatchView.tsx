@@ -161,6 +161,7 @@ export function LiveMatchView() {
     setSelectedPieceId(null);
     setSelectedInvItemId(null);
     setSelectedTraitId(null);
+    setSpotlightTargetPieceId(null);
     refreshInspect(svc, res.value.matchId);
   };
 
@@ -1400,6 +1401,11 @@ export function LiveMatchView() {
 
       {snapshot.phase.kind === 'spotlight' && snapshot.phase.view === 'selection' && (() => {
         const spotlightPhase = snapshot.phase;
+        const resolvedTargetId =
+          spotlightTargetPieceId &&
+          spotlightPhase.eligiblePieceIds.includes(spotlightTargetPieceId)
+            ? spotlightTargetPieceId
+            : (spotlightPhase.eligiblePieceIds[0] ?? '');
         return (
         <div className="hsr-modal-overlay">
           <HsrPanel
@@ -1418,7 +1424,7 @@ export function LiveMatchView() {
                   const name = piece
                     ? (catalog.charactersById[piece.unitId]?.name ?? piece.unitId)
                     : pid;
-                  const active = (spotlightTargetPieceId ?? spotlightPhase.eligiblePieceIds[0]) === pid;
+                  const active = resolvedTargetId === pid;
                   return (
                     <button
                       key={pid}
@@ -1436,13 +1442,11 @@ export function LiveMatchView() {
                 2. 选择或刷新光环（当前刷新价：{spotlightPhase.refreshPrice} 金）：
               </div>
               {spotlightPhase.options.map((opt) => {
-                const targetId =
-                  spotlightTargetPieceId ?? spotlightPhase.eligiblePieceIds[0] ?? '';
                 const chooseAct = findAction(
                   (a) =>
                     a.kind === 'chooseSpotlight' &&
                     a.optionId === opt.optionId &&
-                    a.pieceId === targetId,
+                    a.pieceId === resolvedTargetId,
                 );
                 const refreshAct = findAction(
                   (a) => a.kind === 'refreshChoice' && a.optionId === opt.optionId,

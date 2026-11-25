@@ -312,7 +312,12 @@ export class LocalSimulatedMatchService implements MatchService {
         currentRevision: state.revision,
       });
     }
-    if (state.controller.kind !== callerController.kind) {
+    const controllerMatches =
+      state.controller.kind === callerController.kind &&
+      (state.controller.kind !== 'model' ||
+        callerController.kind !== 'model' ||
+        state.controller.modelId === callerController.modelId);
+    if (!controllerMatches) {
       return fail({
         code: 'controllerMismatch',
         controller: state.controller,
@@ -459,7 +464,7 @@ export class LocalSimulatedMatchService implements MatchService {
     const grantedCrystals: CrystalStack[] = [];
     for (const drop of completion.crystalDrops) {
       if (drop.count > 0) {
-        const added = this.addCrystalToPrep(prep, drop.quality, drop.count);
+        const added = this.addCrystalToPrep(state, prep, drop.quality, drop.count);
         grantedCrystals.push(added);
       }
     }
@@ -1007,7 +1012,7 @@ export class LocalSimulatedMatchService implements MatchService {
           anchor.stars = starLevel + 1;
           anchor.equipment = combinedEquip;
           for (const ret of returnedEquip) {
-            this.addItemToInventory(prep, ret.definitionId, ret.count);
+            this.addItemToInventory(state, prep, ret.definitionId, ret.count);
           }
 
           mergedAny = true;
@@ -1024,6 +1029,7 @@ export class LocalSimulatedMatchService implements MatchService {
   }
 
   private addItemToInventory(
+    state: InternalMatchState,
     prep: Preparation,
     definitionId: string,
     count = 1,
@@ -1033,14 +1039,18 @@ export class LocalSimulatedMatchService implements MatchService {
       existing.count += count;
     } else {
       prep.inventory.push({
-        itemId: `inv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        itemId: `inv-${state.nextIdCounter++}`,
         definitionId,
         count,
       });
     }
   }
 
-  private consumeInventoryItem(prep: Preparation, itemId: string): ItemStack | null {
+  private consumeInventoryItem(
+    state: InternalMatchState,
+    prep: Preparation,
+    itemId: string,
+  ): ItemStack | null {
     const idx = prep.inventory.findIndex((i) => i.itemId === itemId);
     if (idx === -1) {
       return null;
@@ -1055,13 +1065,14 @@ export class LocalSimulatedMatchService implements MatchService {
       prep.inventory.splice(idx, 1);
     }
     return {
-      itemId: `eq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      itemId: `eq-${state.nextIdCounter++}`,
       definitionId: stack.definitionId,
       count: 1,
     };
   }
 
   private addCrystalToPrep(
+    state: InternalMatchState,
     prep: Preparation,
     quality: CrystalQuality,
     count: number,
@@ -1072,7 +1083,7 @@ export class LocalSimulatedMatchService implements MatchService {
       return { ...existing, count };
     }
     const created: CrystalStack = {
-      crystalId: `cry-${quality}-${Date.now().toString(36)}`,
+      crystalId: `cry-${state.nextIdCounter++}`,
       quality,
       count,
     };
@@ -1259,6 +1270,11 @@ export class LocalSimulatedMatchService implements MatchService {
           state.phase.kind === 'spotlight'
         ) {
           state.phase.view = 'selection';
+          if (state.phase.kind === 'spotlight' && prep) {
+            state.phase.eligiblePieceIds = prep.board.pieces
+              .filter((p) => p.slot.zone !== 'bench')
+              .map((p) => p.pieceId);
+          }
           return '回到选择界面';
         }
         return '回到选择界面';
@@ -1311,7 +1327,11 @@ export class LocalSimulatedMatchService implements MatchService {
           const opt = state.phase.options.find((o) => o.optionId === action.optionId);
           if (opt) {
             const benchSlot = this.findFirstEmptyBenchIndex(prep);
-            if (benchSlot !== null) {
+            const canMergeWithFullBench =
+              prep.board.pieces.filter(
+                (p) => p.unitId === opt.unitId && p.stars === 1,
+              ).length >= 2;
+            if (benchSlot !== null || canMergeWithFullBench) {
               const pool = state.poolCounts[opt.unitId] ?? 0;
               if (pool > 0) {
                 state.poolCounts[opt.unitId] = pool - 1;
@@ -1320,13 +1340,13 @@ export class LocalSimulatedMatchService implements MatchService {
                 pieceId: `piece-${state.nextIdCounter++}`,
                 unitId: opt.unitId,
                 stars: 1,
-                slot: { zone: 'bench', index: benchSlot },
+                slot: { zone: 'bench', index: benchSlot ?? 8 },
                 equipment: [],
               });
               this.tryAutoMerge(state, opt.unitId);
             }
             for (const itemDef of opt.itemDefinitionIds) {
-              this.addItemToInventory(prep, itemDef, 1);
+              this.addItemToInventory(state, prep, itemDef, 1);
             }
             this.recomputeBoardAndTraits(state);
             const charName = this.catalog.charactersById[opt.unitId]?.name ?? opt.unitId;
@@ -1435,7 +1455,7 @@ export class LocalSimulatedMatchService implements MatchService {
         const copies = pieceCopiesCount(piece.stars);
         state.poolCounts[piece.unitId] = (state.poolCounts[piece.unitId] ?? 0) + copies;
         for (const eq of piece.equipment) {
-          this.addItemToInventory(prep, eq.definitionId, eq.count);
+          this.addItemToInventory(state, prep, eq.definitionId, eq.count);
         }
         prep.board.pieces.splice(idx, 1);
         this.recomputeBoardAndTraits(state);
@@ -1459,6 +1479,11 @@ export class LocalSimulatedMatchService implements MatchService {
         piece.slot = { ...action.destination };
         if (occupant) {
           occupant.slot = prevSlot;
+        }
+        if (state.phase.kind === 'spotlight') {
+          state.phase.eligiblePieceIds = prep.board.pieces
+            .filter((p) => p.slot.zone !== 'bench')
+            .map((p) => p.pieceId);
         }
         this.recomputeBoardAndTraits(state);
         const charName = this.catalog.charactersById[piece.unitId]?.name ?? piece.unitId;
@@ -1531,7 +1556,7 @@ export class LocalSimulatedMatchService implements MatchService {
         const itemDef = state.rng.pick(itemPool);
         let itemLabel = '';
         if (itemDef) {
-          this.addItemToInventory(prep, itemDef, 1);
+          this.addItemToInventory(state, prep, itemDef, 1);
           itemLabel = ` + 【${this.catalog.itemsById[itemDef]?.name ?? itemDef}】`;
         }
 
@@ -1552,9 +1577,9 @@ export class LocalSimulatedMatchService implements MatchService {
         if (!resultId) {
           return '无效合成配方';
         }
-        this.consumeInventoryItem(prep, action.itemId);
-        this.consumeInventoryItem(prep, action.otherItemId);
-        this.addItemToInventory(prep, resultId, 1);
+        this.consumeInventoryItem(state, prep, action.itemId);
+        this.consumeInventoryItem(state, prep, action.otherItemId);
+        this.addItemToInventory(state, prep, resultId, 1);
         const resultName = this.catalog.itemsById[resultId]?.name ?? resultId;
         return `合成进阶装备【${resultName}】`;
       }
@@ -1568,7 +1593,7 @@ export class LocalSimulatedMatchService implements MatchService {
         if (!piece || !invStack) {
           return '目标无效';
         }
-        const consumed = this.consumeInventoryItem(prep, action.itemId);
+        const consumed = this.consumeInventoryItem(state, prep, action.itemId);
         if (!consumed) {
           return '物品不足';
         }

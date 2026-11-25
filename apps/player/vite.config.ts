@@ -34,6 +34,12 @@ function serveSafeFile(
     return;
   }
 
+  if (decodedPath.includes('\0')) {
+    res.statusCode = 400;
+    res.end('Bad Request');
+    return;
+  }
+
   const normalizedRel = decodedPath.replace(/^\/+/, '');
   const resolvedBase = path.resolve(baseDir);
   const resolvedFile = path.resolve(resolvedBase, normalizedRel);
