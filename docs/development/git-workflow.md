@@ -36,7 +36,7 @@ Git 官方命令手册：[pull](https://git-scm.com/docs/git-pull)、[fetch](htt
 git submodule update --init -- docs/game-data
 ```
 
-切换主仓库版本后重新运行此命令。本地 `docs/game-data/README.md` 为资料入口，文档中的 GitHub 链接指向规则仓库最新主分支；核对历史版本时，以当前主仓库固定版本的本地资料为准。公开项目的构建无需初始化此子模块。
+切换主仓库版本后重新运行此命令。本地 `docs/game-data/README.md` 为资料入口，文档中的 GitHub 链接指向规则仓库最新主分支；核对历史版本时，以当前主仓库固定版本的本地资料为准。没有规则仓库访问权限的开发者可以正常克隆主仓库、查阅公开文档和构建公开项目。
 
 更新规则资料时，先进入 `docs/game-data/`，切换到对应开发分支，提交并推送规则仓库改动；再在主仓库任务分支提交更新后的 `docs/game-data` 引用。子模块引用应指向已推送的提交。
 
