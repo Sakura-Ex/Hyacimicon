@@ -8,7 +8,12 @@ pub use models::*;
 pub use templates::*;
 pub use traces::*;
 
-use std::collections::BTreeMap;
+use serde::de::DeserializeOwned;
+use std::{
+    collections::BTreeMap,
+    fmt, fs,
+    path::{Path, PathBuf},
+};
 
 use crate::{RelicMainStat, playable::attributes::AttributeValues};
 
@@ -37,28 +42,52 @@ pub struct PlayableData {
     pub mainstats: BTreeMap<RelicMainStat, f64>,
 }
 
+/// A missing or invalid reference file, including its path.
+#[derive(Debug)]
+pub struct ReferenceLoadError {
+    /// The file that could not be loaded.
+    pub path: PathBuf,
+    /// The original I/O or deserialization error.
+    pub cause: Box<dyn std::error::Error + Send + Sync>,
+}
+
+impl fmt::Display for ReferenceLoadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.path.display(), self.cause)
+    }
+}
+
+impl std::error::Error for ReferenceLoadError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.cause.as_ref())
+    }
+}
+
+fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T, ReferenceLoadError> {
+    let source = fs::read(path).map_err(|cause| ReferenceLoadError {
+        path: path.to_owned(),
+        cause: Box::new(cause),
+    })?;
+    serde_json::from_slice(&source).map_err(|cause| ReferenceLoadError {
+        path: path.to_owned(),
+        cause: Box::new(cause),
+    })
+}
+
 impl PlayableData {
-    /// 加载随 crate 内置的文档数据，解析失败时返回原始错误。
-    pub fn bundled() -> Result<Self, serde_json::Error> {
+    /// Loads one versioned playable snapshot with an explicitly selected trace catalog.
+    pub fn from_dir(dir: &Path, trace_catalog: &Path) -> Result<Self, ReferenceLoadError> {
         Ok(Self {
-            manifest: serde_json::from_str(include_str!("../../data/s2-v4.7/manifest.json"))?,
-            characters: serde_json::from_str(include_str!("../../data/s2-v4.7/characters.json"))?,
-            light_cones: serde_json::from_str(include_str!("../../data/s2-v4.7/light-cones.json"))?,
-            trials: serde_json::from_str(include_str!("../../data/s2-v4.7/trial-templates.json"))?,
-            mappings: serde_json::from_str(include_str!(
-                "../../data/s2-v4.7/mapping-templates.json"
-            ))?,
-            default_light_cones: serde_json::from_str(include_str!(
-                "../../data/s2-v4.7/default-light-cones.json"
-            ))?,
-            minor_traces: serde_json::from_str(include_str!(
-                "../../data/s2-v4.7/minor-traces.json"
-            ))?,
-            traces: TraceCatalog::bundled()?,
-            set_properties: serde_json::from_str(include_str!(
-                "../../data/s2-v4.7/set-properties.json"
-            ))?,
-            mainstats: serde_json::from_str(include_str!("../../data/s2-v4.7/mainstats.json"))?,
+            manifest: read_json(&dir.join("manifest.json"))?,
+            characters: read_json(&dir.join("characters.json"))?,
+            light_cones: read_json(&dir.join("light-cones.json"))?,
+            trials: read_json(&dir.join("trial-templates.json"))?,
+            mappings: read_json(&dir.join("mapping-templates.json"))?,
+            default_light_cones: read_json(&dir.join("default-light-cones.json"))?,
+            minor_traces: read_json(&dir.join("minor-traces.json"))?,
+            traces: TraceCatalog::from_path(trace_catalog)?,
+            set_properties: read_json(&dir.join("set-properties.json"))?,
+            mainstats: read_json(&dir.join("mainstats.json"))?,
         })
     }
 }

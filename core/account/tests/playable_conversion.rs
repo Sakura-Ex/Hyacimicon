@@ -1,3 +1,5 @@
+#![cfg(feature = "private-data-tests")]
+
 //! 完整转换的数值、保底和资源约束回归。
 
 use std::collections::BTreeMap;
@@ -9,7 +11,6 @@ use account_core::{
         CharacterOrigin, EquipmentOrigin, PlayableRelicGroup, PlayableRelics,
         conversion::{ConversionRequest, convert_playable_account},
     },
-    reference::PlayableData,
 };
 
 /// 瓦尔特普通能力版本的最小本体账号，保留低等级 S5 光锥。
@@ -72,7 +73,7 @@ fn close(actual: f64, expected: f64) {
 fn converts_owned_progression_to_a_complete_panel_without_reducing_resources() {
     let raw = account();
     let original = raw.clone();
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let result = convert_playable_account(&raw, &data, &request()).unwrap();
     let welt = result
         .characters
@@ -164,8 +165,7 @@ fn equip_outer(raw: &mut RawAccount) {
 fn counts_owned_mainstats_substats_and_set_bonuses_once_with_mapped_inner_relics() {
     let mut raw = account();
     equip_outer(&mut raw);
-    let result =
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    let result = convert_playable_account(&raw, &support::playable_data(), &request()).unwrap();
     let welt = result
         .characters
         .iter()
@@ -202,7 +202,7 @@ fn light_cone_base_speed_scales_with_percent_speed_only_when_its_path_matches() 
             relic.mainstat = RelicMainStat::HpPercent;
         }
     }
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     for (cone_id, rank, base, added) in [
         ("23044", 1, 106.0, 18.26),
         ("23044", 5, 114.0, 18.74),
@@ -227,8 +227,7 @@ fn empty_owned_roster_is_filled_with_trial_eidolons_skills_and_equipment() {
     let mut raw = account();
     raw.characters.clear();
     let before = raw.clone();
-    let result =
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    let result = convert_playable_account(&raw, &support::playable_data(), &request()).unwrap();
     assert_eq!(raw, before);
     assert_eq!(result.characters.len(), 61);
     assert_eq!(result.owned_light_cones[0].superimposition, 5);
@@ -286,8 +285,7 @@ fn four_star_eidolons_are_raised_to_six_before_per_skill_rank_bonuses() {
     .into_iter()
     .map(|suffix| (format!("1105{suffix}"), false))
     .collect();
-    let result =
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    let result = convert_playable_account(&raw, &support::playable_data(), &request()).unwrap();
     let natasha = result
         .characters
         .iter()
@@ -306,7 +304,7 @@ fn four_star_eidolons_are_raised_to_six_before_per_skill_rank_bonuses() {
 fn reports_missing_required_data_and_shared_equipment_instead_of_filling_zeroes() {
     let mut raw = account();
     equip_outer(&mut raw);
-    let mut data = PlayableData::bundled().unwrap();
+    let mut data = support::playable_data();
     data.mainstats.clear();
     assert!(
         convert_playable_account(&raw, &data, &request())
@@ -319,7 +317,7 @@ fn reports_missing_required_data_and_shared_equipment_instead_of_filling_zeroes(
     second.character_id = "1105".to_owned();
     raw.characters.push(second);
     assert_eq!(
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request())
+        convert_playable_account(&raw, &support::playable_data(), &request())
             .unwrap_err()
             .0,
         "光锥实例 test:cone 被多个角色装备"
@@ -360,8 +358,7 @@ fn fully_equipped_account() -> RawAccount {
 fn fills_trial_sources_and_keeps_owned_inventory_available() {
     let raw = account();
     let before = raw.clone();
-    let result =
-        convert_playable_account(&raw, &PlayableData::bundled().unwrap(), &request()).unwrap();
+    let result = convert_playable_account(&raw, &support::playable_data(), &request()).unwrap();
     assert_eq!(
         result
             .characters
@@ -407,7 +404,7 @@ fn explicit_form_aliases_preserve_source_and_do_not_raise_five_stars_to_trial_ei
     .into_iter()
     .map(|suffix| (format!("8010{suffix}"), false))
     .collect();
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let mut options = request();
     let without = convert_playable_account(&raw, &data, &options).unwrap();
     let trial = without
@@ -448,7 +445,7 @@ fn explicit_form_aliases_preserve_source_and_do_not_raise_five_stars_to_trial_ei
 
 #[test]
 fn maps_each_whole_group_for_every_underleveled_or_empty_slot() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let options = request();
     let full = convert_playable_account(&fully_equipped_account(), &data, &options).unwrap();
     let welt = full
@@ -498,7 +495,7 @@ fn maps_each_whole_group_for_every_underleveled_or_empty_slot() {
 
 #[test]
 fn rejects_duplicate_ids_unknown_alias_targets_and_incompatible_versions() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let mut raw = account();
     raw.characters.push(raw.characters[0].clone());
     assert_eq!(
@@ -529,7 +526,7 @@ fn rejects_duplicate_ids_unknown_alias_targets_and_incompatible_versions() {
 
 #[test]
 fn rejects_bad_relic_references_even_when_another_piece_triggers_mapping() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let mut raw = fully_equipped_account();
     raw.relics.push(raw.relics[0].clone());
     assert_eq!(
@@ -559,7 +556,7 @@ fn rejects_bad_relic_references_even_when_another_piece_triggers_mapping() {
 
 #[test]
 fn rejects_panels_that_overflow_when_finite_percent_bonuses_are_scaled() {
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     for stat in [
         RelicSubStat::HpPercent,
         RelicSubStat::AtkPercent,
@@ -587,7 +584,7 @@ fn rejects_panels_that_overflow_when_finite_percent_bonuses_are_scaled() {
 
 #[test]
 fn rejects_panels_whose_finite_base_and_added_overflow_when_combined() {
-    let mut data = PlayableData::bundled().unwrap();
+    let mut data = support::playable_data();
     data.characters
         .iter_mut()
         .find(|role| role.id == "1004")
@@ -601,3 +598,5 @@ fn rejects_panels_whose_finite_base_and_added_overflow_when_combined() {
     };
     assert_eq!(error.0, "角色 1004 的静态面板包含非有限数值");
 }
+
+mod support;

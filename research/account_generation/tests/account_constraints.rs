@@ -1,12 +1,13 @@
+#![cfg(feature = "private-data-tests")]
+
 //! 验证账号金数、装备唯一性、资源集中度和角色覆盖约束。
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicMainStat, RelicSlot, RelicSubStat, TraceConfig};
 use account_generator::{
-    AccountReference, AccountRequest, ChaCha8Rng, CharacterSpec, GeneratedAccount, GenerationError,
-    GoldCategory, LightConeSpec, RelicRequest, RelicSpec, SeedableRng, generate_account,
-    generate_character,
+    AccountRequest, ChaCha8Rng, CharacterSpec, GeneratedAccount, GenerationError, GoldCategory,
+    LightConeSpec, RelicRequest, RelicSpec, SeedableRng, generate_account, generate_character,
 };
 
 /// 构造包含两个指定候选角色和一个核心角色的基础请求。
@@ -30,9 +31,10 @@ fn with_cone(id: &str) -> CharacterSpec {
 }
 
 /// 验证分类金数统计、装备引用完整性及预算不足时的失败结果。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn gold_counts_and_equipment_references_follow_the_budget_categories() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
     let mut request = AccountRequest {
         gold_count: Some(6.0),
@@ -86,9 +88,10 @@ fn gold_counts_and_equipment_references_follow_the_budget_categories() {
 }
 
 /// 验证免费资源可排除在金数外，也可显式计入预算。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn free_resources_are_counted_and_can_be_included_in_the_budget() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut spec = with_cone("24006");
     spec.eidolons = 2;
     spec.light_cone.superimposition = 5;
@@ -113,9 +116,10 @@ fn free_resources_are_counted_and_can_be_included_in_the_budget() {
 }
 
 /// 验证半金精度的自动配装及唯一光锥实例约束。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn automatic_builds_respect_half_gold_and_unique_cones() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
     let half_gold = AccountRequest {
         gold_count: Some(0.5),
@@ -168,9 +172,10 @@ fn automatic_builds_respect_half_gold_and_unique_cones() {
 }
 
 /// 验证覆盖角色仍可成为自动核心角色。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn ownership_overrides_still_allow_either_character_to_be_the_automatic_core() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let request = AccountRequest {
         character_overrides: BTreeMap::from([("1004".into(), CharacterSpec::default())]),
         core_character_ids: Vec::new(),
@@ -200,9 +205,10 @@ fn ownership_overrides_still_allow_either_character_to_be_the_automatic_core() {
 }
 
 /// 验证资源集中度提高核心角色获得的金数和遗器分数占比。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn concentrating_resources_changes_the_core_shares_under_the_same_constraints() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let generate = |request: &AccountRequest| {
         generate_account(request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap()
     };
@@ -235,9 +241,10 @@ fn concentrating_resources_changes_the_core_shares_under_the_same_constraints() 
 }
 
 /// 验证账号品质档位及独立平均分上下限作用于生成结果。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn account_quality_and_independent_average_bounds_apply_to_the_result() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut request = AccountRequest {
         relic_quality_tier: Some(5),
         ..two_characters()
@@ -263,9 +270,10 @@ fn account_quality_and_independent_average_bounds_apply_to_the_result() {
 }
 
 /// 验证负遗器评分在角色和账号汇总时保持符号与目标值。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn signed_relic_scores_survive_character_and_account_aggregation() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut pieces = vec![RelicSpec {
         required_substats: vec![RelicSubStat::Spd],
         ..RelicSpec::new(RelicSlot::Head)
@@ -309,9 +317,10 @@ fn signed_relic_scores_survive_character_and_account_aggregation() {
 }
 
 /// 验证显式行迹与单件遗器覆盖保留其他推荐配置。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn explicit_character_traces_and_partial_relic_overrides_preserve_other_recommendations() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let traces = TraceConfig {
         skill_levels: BTreeMap::from([("1310001".into(), 3)]),
         node_unlocks: BTreeMap::from([("1310101".into(), true), ("1310102".into(), false)]),
@@ -374,3 +383,6 @@ fn explicit_character_traces_and_partial_relic_overrides_preserve_other_recommen
             .all(|(first, second)| first.instance_id != second.instance_id)
     );
 }
+
+#[cfg(feature = "private-data-tests")]
+mod support;

@@ -188,15 +188,19 @@ fn read_record(path: &Path, id: Uuid) -> Result<StoredAccount, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use account_core::import::reliquary::import_reliquary_archive;
+    use account_core::{import::reliquary::import_reliquary_archive, reference::TraceCatalog};
 
     #[test]
     fn writes_complete_records_and_recovers_other_accounts_from_corruption() {
         let root = std::env::temp_dir().join(format!("hyacimicon-test-{}", Uuid::new_v4()));
         let directory = root.join("accounts");
         let files = AccountFiles::new(directory.clone());
-        let original = include_str!("../../../core/account/tests/fixtures/reliquary_v4.json");
-        let imported = import_reliquary_archive(original, "import").expect("valid source");
+        let original = include_str!("../tests/fixtures/synthetic-reliquary.json");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../core/account/tests/fixtures/reference/traces.json");
+        let catalog = TraceCatalog::from_path(&path).expect("synthetic catalog");
+        let imported =
+            import_reliquary_archive(original, "import", &catalog).expect("valid source");
         let id = Uuid::new_v4();
         let mut account = StoredAccount::new(
             id,

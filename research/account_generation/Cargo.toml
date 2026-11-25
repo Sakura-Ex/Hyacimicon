@@ -10,3 +10,6 @@ account-core = { path = "../../core/account" }
 rand_chacha.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+
+[features]
+private-data-tests = ["account-core/private-data-tests"]

@@ -1,6 +1,6 @@
 //! 从 reliquary-archiver 文件生成完整游玩配置。
 
-use std::{collections::BTreeMap, env, error::Error, fs, io};
+use std::{collections::BTreeMap, env, error::Error, fs, io, path::Path};
 
 use account_core::{
     import::reliquary::import_reliquary_archive,
@@ -10,15 +10,15 @@ use account_core::{
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = env::args().skip(1).collect();
-    if arguments.len() < 2 {
+    if arguments.len() < 4 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "用法：convert_playable <导出文件> <输出文件> [原始角色ID=模板角色ID ...]",
+            "用法：convert_playable <导出文件> <输出文件> <参考数据目录> <行迹 JSON> [原始角色ID=模板角色ID ...]",
         )
         .into());
     }
     let mut aliases = BTreeMap::new();
-    for argument in &arguments[2..] {
+    for argument in &arguments[4..] {
         if let Some((source, target)) = argument.split_once('=') {
             if aliases
                 .insert(source.to_owned(), target.to_owned())
@@ -34,8 +34,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             .into());
         }
     }
-    let imported = import_reliquary_archive(&fs::read_to_string(&arguments[0])?, "player-account")?;
-    let data = PlayableData::bundled()?;
+    let data = PlayableData::from_dir(Path::new(&arguments[2]), Path::new(&arguments[3]))?;
+    let imported = import_reliquary_archive(
+        &fs::read_to_string(&arguments[0])?,
+        "player-account",
+        &data.traces,
+    )?;
     let result = convert_playable_account(
         &imported.account,
         &data,

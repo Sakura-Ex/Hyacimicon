@@ -340,7 +340,7 @@ export function accountImportView(
     </div>`,
     left: mode === "import" ? html`<div class="account-workspace">
       <h2>账号文件</h2>
-      <p class="account-lead">支持 Fribbels v4 导出文件和统一账号 JSON。</p>
+      <p class="account-lead">支持统一账号 JSON。Fribbels v4 导出文件需要配置对应版本的行迹绑定资料。</p>
       <form id=${importForm} @submit=${submit}>
         <label class=${"account-drop" + (source ? " selected-file" : "") + (dragging ? " dragging" : "")}
           @dragover=${(event: DragEvent) => {

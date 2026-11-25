@@ -33,7 +33,7 @@
 
 ## 计算资料
 
-`PlayableData::bundled()` 读取以下运行数据：
+`PlayableData::from_dir(snapshot_dir, trace_path)` 从[运行数据目录](../../development/runtime-data.md)读取以下资料：
 
 | 文件 | 内容 |
 | --- | --- |
@@ -71,8 +71,8 @@
 在仓库根目录运行，输出目录需预先存在：
 
 ```powershell
-cargo run --locked -p account-core --example convert_playable -- <导出.json> <静态配置.json> 8010=8009
-cargo test --locked -p account-core
+cargo run --locked -p account-core --example convert_playable -- <导出.json> <静态配置.json> "$env:HYACIMICON_DATA_DIR/account/s2-v4.7" "$env:HYACIMICON_DATA_DIR/account/reliquary-traces-v4.json" 8010=8009
+cargo test --locked -p account-core --features private-data-tests
 cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings
 ```

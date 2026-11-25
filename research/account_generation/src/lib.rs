@@ -7,6 +7,12 @@ mod allocation;
 mod reference;
 mod relics;
 
+#[cfg(all(test, feature = "private-data-tests"))]
+#[path = "../tests/support/mod.rs"]
+mod private_test_data;
+#[cfg(all(test, feature = "private-data-tests"))]
+extern crate self as account_generator;
+
 use std::{collections::BTreeMap, fmt};
 
 use account_core::{

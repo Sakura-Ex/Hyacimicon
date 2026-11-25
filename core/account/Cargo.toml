@@ -8,3 +8,6 @@ description = "货币战争原始账号数据与来源导入"
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+
+[features]
+private-data-tests = []
