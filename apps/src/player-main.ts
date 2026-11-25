@@ -4,6 +4,7 @@ import { desktopAccounts } from "./account-port.ts";
 import { observedView } from "./observed-view.ts";
 import type { Account, AccountPort } from "./contracts.ts";
 import { icon } from "./folio.ts";
+import { installFolioInputGuards } from "./folio-input.ts";
 import { centerBook, control, desktop } from "./windows.ts";
 import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/noto-sans-sc";
@@ -13,6 +14,7 @@ import "./observed.css";
 const root = document.querySelector("main");
 if (!root) throw new Error("找不到书册容器");
 const container = root;
+installFolioInputGuards(container);
 const desktopOnly = async (): Promise<never> => { throw new Error("账号文件管理请使用 Windows 桌面版。"); };
 const browserPort: AccountPort = {
   accounts: async () => ({ accounts: [], warnings: [] }),

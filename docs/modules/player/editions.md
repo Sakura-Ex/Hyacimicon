@@ -25,7 +25,9 @@ Hyacimicon 提供两个应用入口，共用书册装帧、账号导入与档案
 
 玩家版独立入口为 `apps/src/player-main.ts`，研究版入口为 `apps/src/main.ts`。Vite 按构建模式选择入口；研究版 Tauri 配置使用独立应用标识、前端目录和可执行文件名，开启 Rust `research` 特性。两版生成到各自的 Cargo 目录：玩家版 `apps/src-tauri/target-player/`，研究版 `apps/src-tauri/target/`。玩家版默认不编译随机账号生成与游戏图像下载模块。账号导入仍使用内置行迹绑定；账号展示读取名称、ID 和命途对照，并不读取完整游戏数值文档。
 
-研究版保留已有 `accounts/` 目录。玩家版的账号在程序旁的 `player-accounts/` 保存，已有账号可通过研究版导出统一账号 JSON，再导入玩家版。
+研究版继续读取程序旁的 `accounts/` 目录。如果安装路径变化，将旧程序旁的 `accounts/` 复制到新研究版程序旁即可。玩家版的账号在程序旁的 `player-accounts/` 保存，已有账号可通过研究版导出统一账号 JSON，再导入玩家版。
+
+三个名称对照文件 `character-names.tsv`、`light-cone-names.tsv` 和 `relic-set-names.tsv` 位于 `apps/src-tauri/`，初始内容取自原项目 4.7 S2 的角色、光锥、遗器资料（`66103e32` 中的 `docs/game-data/`）。仅保留展示使用的 ID、名称和角色命途。版本更新时依据对应规则资料同步名称与 ID，确认条目唯一、名称非空，非必要的属性和倍率继续留在规则数据中。
 
 ## 玩家版实战局面
 

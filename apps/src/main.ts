@@ -12,6 +12,7 @@ import { openDeveloperPreview, type DeveloperPreview } from "./developer-preview
 import { playerSettings } from "./settings";
 import type { Account } from "./contracts";
 import { icon, type Spread } from "./folio";
+import { installFolioInputGuards } from "./folio-input";
 import { syncGameImages } from "./game-images";
 import { centerBook, control, desktop } from "./windows";
 import "@fontsource-variable/noto-serif-sc";
@@ -22,25 +23,7 @@ import "./match.css";
 const root = document.querySelector("main");
 if (!root) throw new Error("找不到书册容器");
 const container = root;
-function editing(target: EventTarget | null) {
-  return target instanceof Element && target.closest('input, textarea, [contenteditable]:not([contenteditable="false"])') !== null;
-}
-container.addEventListener("contextmenu", (event) => {
-  if (!editing(event.target)) event.preventDefault();
-});
-container.addEventListener("dragstart", (event) => {
-  if (event.target instanceof HTMLImageElement) event.preventDefault();
-});
-window.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a" && !editing(event.target)) {
-    event.preventDefault();
-  }
-});
-for (const type of ["dragover", "drop"] as const) {
-  window.addEventListener(type, (event) => {
-    if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
-  });
-}
+installFolioInputGuards(container);
 const tabs = { account: "账号", match: "对局", battle: "战斗" };
 type Page = keyof typeof tabs;
 const params = new URLSearchParams(location.search);

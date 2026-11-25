@@ -455,6 +455,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn display_catalogues_have_unique_ids_and_names() {
+        for catalogue in [CHARACTERS, CONES, RELICS] {
+            let mut ids = BTreeSet::new();
+            for line in catalogue.lines() {
+                let mut columns = line.split('\t');
+                let id = columns.next().expect("catalogue ID");
+                let name = columns.next().expect("catalogue name");
+                assert!(!id.is_empty() && id.bytes().all(|byte| byte.is_ascii_digit()));
+                assert!(!name.trim().is_empty());
+                assert!(ids.insert(id), "duplicate catalogue ID {id}");
+                assert_eq!(catalogue_name(catalogue, id), Some(name));
+            }
+        }
+        assert_eq!(catalogue_path("1004"), Some("虚无"));
+        assert_eq!(catalogue_path("6042"), None);
+    }
+
+    #[test]
     fn raw_export_can_be_reimported_and_invalid_inventory_is_rejected() {
         let input = include_str!("../../../core/account/tests/fixtures/raw_account.json");
         let expected: RawAccount = serde_json::from_str(input).expect("raw fixture");
