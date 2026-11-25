@@ -8,6 +8,7 @@ license = "GPL-3.0-only"
 
 [features]
 default = []
+private-data-tests = []
 research = ["dep:account-generator", "dep:futures-util", "dep:image-webp", "dep:png", "dep:reqwest", "dep:rusqlite", "dep:sha1", "dep:zstd"]
 
 [build-dependencies]

@@ -1,6 +1,6 @@
 # 账号数据生成
 
-Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色、光锥、遗器和装备关系。`GeneratedAccount.account` 是 `account_core::RawAccount`，可与对应版本的转换资料和转换请求一起交给 [`convert_playable_account`](data-flow.md#调用实际配置转换)。
+Rust crate `account-generator` 使用外部参考快照离线生成角色、光锥、遗器和装备关系。`GeneratedAccount.account` 是 `account_core::RawAccount`，可与对应版本的转换资料和转换请求一起交给 [`convert_playable_account`](data-flow.md#调用实际配置转换)。
 
 ## 用请求文件生成账号
 
@@ -18,17 +18,20 @@ Rust crate `account-generator` 使用内置 4.7 参考资料离线生成角色�
 ```
 
 ```powershell
-cargo run --locked -p account-generator --example generate_account -- request.json 42
+cargo run --locked -p account-generator --example generate_account -- "$env:HYACIMICON_DATA_DIR/account-generation" "$env:HYACIMICON_DATA_DIR/account/reliquary-traces-v4.json" request.json 42
 ```
 
 ## 调用 Rust 接口
 
 ```rust
 use account_generator::{
-    AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, generate_account,
+    AccountReference, AccountRequest, ChaCha8Rng, ReferenceOverrides, SeedableRng, generate_account,
 };
+use account_core::reference::TraceCatalog;
+use std::path::Path;
 
-let reference = AccountReference::bundled()?;
+let traces = TraceCatalog::from_path(Path::new("docs/game-data/runtime/account/reliquary-traces-v4.json"))?;
+let reference = AccountReference::from_dir(Path::new("docs/game-data/runtime/account-generation"), Some(&traces), &ReferenceOverrides::default())?;
 let mut request = AccountRequest {
     gold_count: Some(20.0),
     core_character_ids: vec!["1310".into(), "1225".into()],
@@ -45,9 +48,9 @@ let result = generate_account(&request, &reference, &mut rng)?;
 
 ### 外部参考资料
 
-`AccountReference::from_dir` 加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照，校验各角色的推荐主词条和套装，错误信息包含角色 ID。`ReferenceOverrides` 可覆盖角色和光锥分类、五星专锥及原始能力版本。五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。
+`AccountReference::from_dir` 加载包含 `source-manifest.json`、`character.json`、`character/` 和 `lightcone.json` 的外部快照，校验各角色的推荐主词条和套装，错误信息包含角色 ID。传入同版本 `TraceCatalog` 可匹配能力版本；未提供时仅使用显式覆盖。`ReferenceOverrides` 可覆盖角色和光锥分类、五星专锥及原始能力版本。五星类别须与条目稀有度相符，统一配装的专锥须为同命途五星光锥。
 
-外部快照沿用内置 4.7 资料的行迹格式。每个节点在第一级的 `pre_point` 列出解锁所需的前置节点，后续等级填 `[]`。加载器用第一级的前置关系检查缺失节点和循环。生成器按该关系解锁节点，再按各级的角色等级和突破要求选择行迹等级。高等级单独声明的前置条件会被忽略。
+外部快照沿用 4.7 资料的行迹格式。每个节点在第一级的 `pre_point` 列出解锁所需的前置节点，后续等级填 `[]`。加载器用第一级的前置关系检查缺失节点和循环。生成器按该关系解锁节点，再按各级的角色等级和突破要求选择行迹等级。高等级单独声明的前置条件会被忽略。
 
 ### 复现生成结果
 

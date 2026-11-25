@@ -30,11 +30,13 @@ Git 官方命令手册：[pull](https://git-scm.com/docs/git-pull)、[fetch](htt
 
 ## 规则资料版本管理
 
-`docs/game-data/` 对应 [Hyacimicon-rules](https://github.com/Sakura-Ex/Hyacimicon-rules) 私有仓库，通过 Git 子模块固定版本。具备访问权限的开发者在主仓库根目录执行：
+`docs/game-data/` 对应 [Hyacimicon-data](https://github.com/Sakura-Ex/Hyacimicon-data) 私有仓库，通过 Git 子模块固定规则与运行数据版本。具备访问权限的开发者在主仓库根目录执行：
 
 ```powershell
 git submodule update --init -- docs/game-data
 ```
+
+运行数据加载、环境变量和分层测试见[运行数据说明](runtime-data.md)。
 
 切换主仓库版本后重新运行此命令。本地 `docs/game-data/README.md` 为资料入口，项目文档使用相对路径，查阅当前主仓库固定版本的本地资料。在 GitHub 网页上可通过规则仓库入口查阅资料。没有规则仓库访问权限的开发者可以正常克隆主仓库、查阅公开文档和构建公开项目。
 

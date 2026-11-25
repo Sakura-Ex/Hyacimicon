@@ -5,9 +5,6 @@ use serde::{Deserialize, de::DeserializeOwned};
 
 use crate::{CharacterSpec, GenerationError, GoldCategory};
 
-/// 由构建脚本生成的内置角色 ID 与 JSON 文本索引。
-const BUNDLED_PROFILES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/profiles.rs"));
-
 /// 可复用的同版本生成资料，包含角色、光锥、推荐配装和行迹条件。
 ///
 /// 加载时校验推荐主词条、套装、五星专锥及一级行迹前置关系。可在多次生成间共享同一份资料。
@@ -188,47 +185,29 @@ struct TraceLevel {
     pre_point: Vec<u32>,
 }
 
-/// 创建内置或外部的生成参考资料。
+/// 创建外部的生成参考资料。
 impl AccountReference {
-    /// 返回生成器内置资料支持的角色 ID。
+    /// 返回当前参考快照支持的角色 ID。
     pub fn character_ids(&self) -> impl Iterator<Item = &str> {
         self.characters.keys().map(String::as_str)
     }
 
-    /// 返回生成器内置资料支持的光锥 ID。
+    /// 返回当前参考快照支持的光锥 ID。
     pub fn light_cone_ids(&self) -> impl Iterator<Item = &str> {
         self.light_cones.keys().map(String::as_str)
     }
 
-    /// 加载随程序提供的 4.7 生成资料，采用资料中的分类、推荐光锥及行迹。
-    pub fn bundled() -> Result<Self, GenerationError> {
-        Self::bundled_with(&ReferenceOverrides::default())
-    }
-
-    /// 加载内置 4.7 资料并应用指定的金数类别、专锥和能力版本。
-    pub fn bundled_with(overrides: &ReferenceOverrides) -> Result<Self, GenerationError> {
-        Self::load(
-            include_str!("../data/source-manifest.json"),
-            include_str!("../data/character.json"),
-            include_str!("../data/lightcone.json"),
-            |id| {
-                BUNDLED_PROFILES
-                    .iter()
-                    .find(|(key, _)| *key == id)
-                    .ok_or_else(|| error(format!("缺少角色 {id} 的内置生成资料")))
-                    .and_then(|(_, source)| parse(source, id))
-            },
-            overrides,
-        )
-    }
-
-    /// 加载外部资料目录，文件格式与内置资料相同。
+    /// 加载外部资料目录。调用方可提供配套行迹资料以识别能力版本。
     ///
     /// 目录需包含 `source-manifest.json`、`character.json`、`character/<角色 ID>.json`
     /// 和 `lightcone.json`。清单版本决定游戏版本标记；清单中的 `catalog_snapshot`
     /// 会保留到生成的原始账号。角色资料须覆盖目录列出的角色，并为每个行迹节点
     /// 提供一级 `pre_point`；缺少前置节点或存在循环依赖时加载失败。
-    pub fn from_dir(path: &Path, overrides: &ReferenceOverrides) -> Result<Self, GenerationError> {
+    pub fn from_dir(
+        path: &Path,
+        trace_catalog: Option<&TraceCatalog>,
+        overrides: &ReferenceOverrides,
+    ) -> Result<Self, GenerationError> {
         Self::load(
             &read(&path.join("source-manifest.json"))?,
             &read(&path.join("character.json"))?,
@@ -242,6 +221,7 @@ impl AccountReference {
                     id,
                 )
             },
+            trace_catalog,
             overrides,
         )
     }
@@ -252,6 +232,7 @@ impl AccountReference {
         characters: &str,
         cones: &str,
         profile: impl Fn(&str) -> Result<ProfileSource, GenerationError>,
+        trace_catalog: Option<&TraceCatalog>,
         overrides: &ReferenceOverrides,
     ) -> Result<Self, GenerationError> {
         let manifest: Manifest = parse(manifest, "source-manifest.json")?;
@@ -280,11 +261,6 @@ impl AccountReference {
                 },
             );
         }
-        let trace_catalog = if manifest.version == "4.7" {
-            Some(TraceCatalog::bundled().map_err(|cause| error(cause.to_string()))?)
-        } else {
-            None
-        };
         let mut characters = BTreeMap::new();
         for id in catalog.into_keys() {
             let source = profile(&id)?;
@@ -307,8 +283,7 @@ impl AccountReference {
             }
             // 推荐资料可能保留旧版行迹。用实际节点确定原始配置的能力版本。
             let ability_version = overrides.ability_versions.get(&id).copied().or_else(|| {
-                trace_catalog
-                    .as_ref()?
+                trace_catalog?
                     .characters
                     .iter()
                     .filter(|binding| binding.character_id == id)
@@ -627,7 +602,7 @@ fn error(message: impl Into<String>) -> GenerationError {
 }
 
 /// 覆盖参考资料解析、校验和外部快照传递的单元测试。
-#[cfg(test)]
+#[cfg(all(test, feature = "private-data-tests"))]
 mod tests {
     use super::*;
     use crate::{AccountRequest, ChaCha8Rng, SeedableRng, generate_account};
@@ -636,8 +611,10 @@ mod tests {
     /// 验证非法推荐主词条、套装和未知属性会在随机选择前被拒绝。
     #[test]
     fn loading_rejects_invalid_recommendations_before_random_selection() {
-        let original: Value =
-            serde_json::from_str(include_str!("../data/character/1310.json")).unwrap();
+        let original: Value = serde_json::from_str(&crate::private_test_data::read_reference(
+            "character/1310.json",
+        ))
+        .unwrap();
         for (field, candidates, message) in [
             ("set4_id_list", json!([101, 999]), "1310 的推荐套装 999"),
             ("set2_id_list", json!([301, 101]), "1310 的推荐套装 101"),
@@ -655,10 +632,11 @@ mod tests {
             let mut profile = original.clone();
             profile["relics"][field] = candidates;
             let result = AccountReference::load(
-                include_str!("../data/source-manifest.json"),
+                &crate::private_test_data::read_reference("source-manifest.json"),
                 r#"{"1310":null}"#,
-                include_str!("../data/lightcone.json"),
+                &crate::private_test_data::read_reference("lightcone.json"),
                 |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                Some(&crate::private_test_data::trace_catalog()),
                 &ReferenceOverrides::default(),
             );
             assert!(
@@ -670,8 +648,10 @@ mod tests {
     /// 验证分类冲突、无效专锥、缺失前置和循环前置均导致加载失败。
     #[test]
     fn edited_references_reject_inconsistent_categories_signatures_and_prerequisites() {
-        let original: Value =
-            serde_json::from_str(include_str!("../data/character/1310.json")).unwrap();
+        let original: Value = serde_json::from_str(&crate::private_test_data::read_reference(
+            "character/1310.json",
+        ))
+        .unwrap();
         for (profile, overrides, expected) in [
             (
                 original.clone(),
@@ -724,10 +704,11 @@ mod tests {
             ),
         ] {
             let loaded = AccountReference::load(
-                include_str!("../data/source-manifest.json"),
+                &crate::private_test_data::read_reference("source-manifest.json"),
                 r#"{"1310":null}"#,
-                include_str!("../data/lightcone.json"),
+                &crate::private_test_data::read_reference("lightcone.json"),
                 |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                Some(&crate::private_test_data::trace_catalog()),
                 &overrides,
             );
             assert!(
@@ -740,15 +721,18 @@ mod tests {
     /// 验证统一五星配装从推荐列表筛选五星光锥并拒绝无效专锥覆盖。
     #[test]
     fn uniform_welt_build_uses_a_five_star_cone_when_a_four_star_is_recommended_first() {
-        let mut profile: Value =
-            serde_json::from_str(include_str!("../data/character/1004.json")).unwrap();
+        let mut profile: Value = serde_json::from_str(&crate::private_test_data::read_reference(
+            "character/1004.json",
+        ))
+        .unwrap();
         profile["lightcones"] = json!([21001, 23004]);
         let load = |overrides: &ReferenceOverrides| {
             AccountReference::load(
-                include_str!("../data/source-manifest.json"),
+                &crate::private_test_data::read_reference("source-manifest.json"),
                 r#"{"1004":null}"#,
-                include_str!("../data/lightcone.json"),
+                &crate::private_test_data::read_reference("lightcone.json"),
                 |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                Some(&crate::private_test_data::trace_catalog()),
                 overrides,
             )
         };
@@ -773,15 +757,18 @@ mod tests {
     /// 验证外部快照标识会写入 RawAccount，且专锥覆盖可补齐缺失推荐。
     #[test]
     fn external_snapshot_retains_its_id_and_can_provide_a_missing_signature() {
-        let mut profile: Value =
-            serde_json::from_str(include_str!("../data/character/1004.json")).unwrap();
+        let mut profile: Value = serde_json::from_str(&crate::private_test_data::read_reference(
+            "character/1004.json",
+        ))
+        .unwrap();
         profile["lightcones"] = json!([]);
         let load = |overrides: &ReferenceOverrides| {
             AccountReference::load(
                 r#"{"version":"4.7","catalog_snapshot":"test-snapshot"}"#,
                 r#"{"1004":null}"#,
-                include_str!("../data/lightcone.json"),
+                &crate::private_test_data::read_reference("lightcone.json"),
                 |_| Ok(serde_json::from_value(profile.clone()).unwrap()),
+                Some(&crate::private_test_data::trace_catalog()),
                 overrides,
             )
         };

@@ -1,6 +1,6 @@
 //! 导入 reliquary-archiver v4 的原始账号。
 //!
-//! 来源语义依据导出器 v0.19.0 的格式与转换实现；行迹绑定使用随 crate
+//! 来源语义依据导出器 v0.19.0 的格式与转换实现；行迹绑定使用调用方
 //! 提供的版本快照。调用方接收统一账号和导入报告。
 
 mod equipment;
@@ -89,11 +89,13 @@ impl From<serde_json::Error> for ImportError {
 /// `config_id` 由调用方分配，同时作为装备实例 ID 的命名空间。成功时保留
 /// 原始练度和完整库存；未知行迹留空并写入报告。游戏版本与完整游戏快照由
 /// 后续配置转换入口关联，本函数将这两个字段保留为 `None`。
+/// `catalog` 是调用方已加载的对应版本行迹资料。
 ///
 /// 错误覆盖格式标识、字段类型、支持范围、重复 ID、装备归属与未知属性键。
 pub fn import_reliquary_archive(
     input: &str,
     config_id: &str,
+    catalog: &crate::reference::TraceCatalog,
 ) -> Result<ReliquaryImport, ImportError> {
     if config_id.trim().is_empty() {
         return Err(invalid("config_id", "配置标识应包含有效字符"));
@@ -109,7 +111,6 @@ pub fn import_reliquary_archive(
     if export.build.trim().is_empty() {
         return Err(invalid("build", "导出器构建版本缺失"));
     }
-    let catalog = traces::Catalog::bundled()?;
     let mut report = ImportReport {
         source: export.source.clone(),
         build: export.build.clone(),

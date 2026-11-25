@@ -9,9 +9,6 @@
 ```text
 core/account/
 ├── Cargo.toml
-├── data/
-│   ├── reliquary-traces-v4.json  # 已固定版本的行迹绑定
-│   └── s2-v4.7/                # 实际游玩配置所需的文档数值与模板
 ├── src/
 │   ├── lib.rs          # 公开类型
 │   ├── raw/            # 原始账号与实际持有资源
@@ -40,7 +37,7 @@ core/account/
 
 The root [Cargo workspace](../../../Cargo.toml) includes the account crate. The account generator uses it as a path dependency. Training bindings are planned under `research/sim_native/`.
 
-原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。
+原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。真实参考文件由[运行数据仓库](../../development/runtime-data.md)提供。
 
 `account_core::raw::validate_raw_account` 检查统一账号格式版本、原始练度和完整库存引用。读取原始账号 JSON 后可调用该入口；角色映射和生效面板计算由玩法转换按对应资料处理。
 
@@ -90,10 +87,10 @@ reliquary-archiver 导入入口已检查重复 ID、装备引用及部位冲突�
 
 ```powershell
 cargo run --locked -p account-core --example raw_account
-cargo run --locked -p account-core --example convert_playable -- <导出.json> <游玩配置.json>
+cargo run --locked -p account-core --example convert_playable -- <导出.json> <游玩配置.json> "$env:HYACIMICON_DATA_DIR/account/s2-v4.7" "$env:HYACIMICON_DATA_DIR/account/reliquary-traces-v4.json"
 cargo test --locked -p account-core
 cargo fmt --all -- --check
 cargo clippy --locked -p account-core --all-targets -- -D warnings
 ```
 
-测试样例为人工构造数据，覆盖空装、部分配装、闲置装备、同种光锥多个实例、多形态、不同遗器品质和强化等级，以及未知行迹信息。reliquary-archiver 实际文件导入结果见[导入验证](reliquary-import.md#验证结果)。
+公开测试使用人工构造数据，真实快照相关的完整转换、行迹导入与数值回归通过 `cargo test --locked -p account-core --features private-data-tests` 执行，需要先设置运行数据路径。reliquary-archiver 实际文件导入结果见[导入验证](reliquary-import.md#验证结果)。

@@ -23,7 +23,7 @@ Hyacimicon 提供两个应用入口，共用书册装帧、账号导入与档案
 | 桌面开发 | `npm run tauri dev` | `npm run tauri:research:dev` |
 | Windows 打包 | `npm run tauri build` | `npm run tauri:research:build` |
 
-玩家版独立入口为 `apps/src/player-main.ts`，研究版入口为 `apps/src/main.ts`。Vite 按构建模式选择入口；研究版 Tauri 配置使用独立应用标识、前端目录和可执行文件名，开启 Rust `research` 特性。两版生成到各自的 Cargo 目录：玩家版 `apps/src-tauri/target-player/`，研究版 `apps/src-tauri/target/`。玩家版默认不编译随机账号生成与游戏图像下载模块。账号导入仍使用内置行迹绑定；账号展示读取名称、ID 和命途对照，并不读取完整游戏数值文档。
+玩家版独立入口为 `apps/src/player-main.ts`，研究版入口为 `apps/src/main.ts`。Vite 按构建模式选择入口；研究版 Tauri 配置使用独立应用标识、前端目录和可执行文件名，开启 Rust `research` 特性。两版生成到各自的 Cargo 目录：玩家版 `apps/src-tauri/target-player/`，研究版 `apps/src-tauri/target/`。玩家版默认不编译随机账号生成与游戏图像下载模块。统一账号导入与展示可以直接使用保存的数据；Fribbels v4 导入需要外部行迹绑定。研究版生成和资料查询使用外部运行快照，配置方式见[运行数据说明](../../development/runtime-data.md#桌面版本)。
 
 研究版继续读取程序旁的 `accounts/` 目录。如果安装路径变化，将旧程序旁的 `accounts/` 复制到新研究版程序旁即可。玩家版的账号在程序旁的 `player-accounts/` 保存，已有账号可通过研究版导出统一账号 JSON，再导入玩家版。
 
