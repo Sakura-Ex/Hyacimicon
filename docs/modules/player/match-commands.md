@@ -1,6 +1,6 @@
 # 对局服务接入
 
-应用默认使用[演示服务](../../../apps/src/demo-match.ts)。前端已提供 [HTTP 与 Tauri 适配器](../../../apps/src/match-port.ts)。正式对局需要注册下表入口，并接入 Rust 会话与战斗服务。
+研究版默认使用[演示服务](../../../apps/src/demo-match.ts)。前端已提供 [HTTP 与 Tauri 适配器](../../../apps/src/match-port.ts)。正式对局需要注册下表入口，并接入 Rust 会话与战斗服务。
 
 ## 会话与显示
 

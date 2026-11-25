@@ -1,4 +1,4 @@
-﻿import { html, nothing } from "lit";
+import { html, nothing } from "lit";
 import { keyed } from "lit/directives/keyed.js";
 import "./scroll-list";
 import { art, icon, stats, type Spread, type Run } from "./folio";
@@ -13,6 +13,7 @@ export function accountView(
   run: Run,
   select: (a: Account) => void,
   remove: (id: string) => void,
+  research = true,
 ) {
   let query = "",
     characterId = "",
@@ -31,8 +32,9 @@ export function accountView(
     select(a);
   };
   const add = async (initial?: { request: Record<string, unknown>; seed: string }, mode: "import" | "generate" = "import") => {
+    if (!research && (initial || mode === "generate")) throw new Error("随机账号生成属于研究版。");
     managing = undefined;
-    const player = accountImportView(port, redraw, run, choose, () => change(() => (adding = undefined)), initial);
+    const player = accountImportView(port, redraw, run, choose, () => change(() => (adding = undefined)), initial, research);
     adding = player;
     redraw();
     if (initial) await player.loadCatalogue();
@@ -41,7 +43,7 @@ export function accountView(
   const manage = (account?: Account) => change(() => {
     managing = accountManager(port, redraw, run, select, remove,
       () => change(() => (managing = undefined)),
-      (request, seed) => add({ request, seed }), account?.id);
+      (request, seed) => add({ request, seed }), account?.id, research);
   });
   function view(account: Account | undefined, accounts: Account[], warnings: string[]): Spread {
     if (adding) return adding.render();

@@ -4,9 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420 --strictPort",
-    "build": "tsc --noEmit && vite build",
-    "tauri": "tauri",
+    "dev": "vite --mode player --host 127.0.0.1 --port 1420 --strictPort",
+    "dev:research": "vite --mode research --host 127.0.0.1 --port 1421 --strictPort",
+    "build": "tsc --noEmit && vite build --mode player",
+    "build:research": "tsc --noEmit && vite build --mode research",
+    "tauri:research:dev": "node scripts/edition-tauri.mjs research dev",
+    "tauri:research:build": "node scripts/edition-tauri.mjs research build",
+    "tauri": "node scripts/edition-tauri.mjs player",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {

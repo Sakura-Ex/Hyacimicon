@@ -1,4 +1,4 @@
-﻿import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import type { Account, AccountCatalogue, AccountOrigin, AccountPort, AccountSummary, Character, GenerationReport, ImportInspection, ImportReport, Item, Skill, Stat } from "./contracts";
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -88,7 +88,7 @@ function catalogue(value: unknown): value is AccountCatalogue {
   return record(value) && entries(value.characters) && entries(value.lightCones);
 }
 
-export function desktopAccounts(preview: AccountPort): AccountPort {
+export function desktopAccounts(preview?: AccountPort): AccountPort {
   return {
     async accounts() {
       const result: unknown = await invoke("player_accounts");
@@ -96,7 +96,7 @@ export function desktopAccounts(preview: AccountPort): AccountPort {
           !Array.isArray(result.warnings) || !result.warnings.every(warning => typeof warning === "string")) {
         throw new Error("账号服务返回了无法读取的账号列表。");
       }
-      return { accounts: [...result.accounts, ...(await preview.accounts()).accounts], warnings: result.warnings };
+      return { accounts: [...result.accounts, ...(preview ? (await preview.accounts()).accounts : [])], warnings: result.warnings };
     },
     async inspectAccount(fileName, json) {
       const result: unknown = await invoke("player_inspect_account", { fileName, json });

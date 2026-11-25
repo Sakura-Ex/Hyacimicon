@@ -1,4 +1,4 @@
-﻿import { html, nothing } from "lit";
+import { html, nothing } from "lit";
 import type { Account, AccountFileKind, AccountPort } from "./contracts";
 import { importReportView, inventorySummary } from "./account-import";
 import type { Run, Spread } from "./folio";
@@ -12,6 +12,7 @@ export function accountManager(
   dismiss: () => void,
   replay: (request: Record<string, unknown>, seed: string) => void,
   selected?: string,
+  research = true,
 ) {
   let selectedId = selected;
   let rename = "";
@@ -73,7 +74,7 @@ export function accountManager(
             <span><strong>${entry.name}</strong><small>${entry.source}</small></span>
             <small>${entry.characters.length} 名角色</small>
           </button>`)}
-        </div></scroll-list>` : html`<p class="account-lead">本地账号库为空。导入或生成账号后会显示在这里。</p>`}
+        </div></scroll-list>` : html`<p class="account-lead">本地账号库为空。添加账号后会显示在这里。</p>`}
         ${warnings.length ? html`<details class="account-warnings scroll-area">
           <summary>${warnings.length} 个本地文件无法读取</summary>
           <ul>${warnings.map(warning => html`<li>${warning}</li>`)}</ul>
@@ -117,7 +118,7 @@ export function accountManager(
           <button ?disabled=${pending} @click=${() => download(account.id, "report")}>导出报告</button>
           ${origin.kind === "imported" ? html`<button ?disabled=${pending} @click=${() => download(account.id, "original")}>导出原文件</button>`
             : html`<button ?disabled=${pending} @click=${() => download(account.id, "request")}>导出请求</button>
-              <button ?disabled=${pending} @click=${() => { close(); replay(origin.request, origin.seed); }}>按原参数再生成</button>`}
+              ${research ? html`<button ?disabled=${pending} @click=${() => { close(); replay(origin.request, origin.seed); }}>按原参数再生成</button>` : nothing}`}
         </div>
         ${error ? html`<p class="account-error" role="alert">${error}</p>` : nothing}
         ${exported ? html`<p class="account-provenance" role="status">已导出至 ${exported}</p>` : nothing}

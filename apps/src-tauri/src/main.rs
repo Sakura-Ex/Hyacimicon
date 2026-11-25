@@ -2,7 +2,9 @@
 
 mod account_storage;
 mod accounts;
+#[cfg(feature = "research")]
 mod game_image_cache;
+#[cfg(feature = "research")]
 mod game_images;
 
 use tauri::{Manager, PhysicalSize};
@@ -38,16 +40,18 @@ fn size_main_window(app: &tauri::App) -> tauri::Result<()> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .setup(|app| {
             if let Err(error) = size_main_window(app) {
                 eprintln!("无法按屏幕设置窗口大小，使用默认尺寸：{error}");
             }
             Ok(())
         })
+        .manage(accounts::AccountStore::default());
+    #[cfg(feature = "research")]
+    let builder = builder
         .register_uri_scheme_protocol("game-images", |_, request| game_images::serve(request))
         .manage(game_images::SyncLock::default())
-        .manage(accounts::AccountStore::default())
         .invoke_handler(tauri::generate_handler![
             accounts::player_accounts,
             accounts::player_inspect_account,
@@ -58,7 +62,17 @@ fn main() {
             accounts::player_delete_account,
             accounts::player_export_account,
             game_images::player_sync_game_images,
-        ])
+        ]);
+    #[cfg(not(feature = "research"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        accounts::player_accounts,
+        accounts::player_inspect_account,
+        accounts::player_import_account,
+        accounts::player_rename_account,
+        accounts::player_delete_account,
+        accounts::player_export_account,
+    ]);
+    builder
         .run(tauri::generate_context!())
         .expect("failed to run Hyacimicon");
 }

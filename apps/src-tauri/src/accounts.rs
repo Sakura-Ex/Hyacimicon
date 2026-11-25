@@ -3,9 +3,10 @@ use std::{collections::BTreeSet, path::Path, sync::OnceLock};
 use account_core::{
     import::reliquary::{import_reliquary_archive, ImportReport},
     raw::validate_raw_account,
-    reference::{GamePath, PlayableData},
+    reference::TraceCatalog,
     RawAccount, RelicSlot,
 };
+#[cfg(feature = "research")]
 use account_generator::{
     generate_account, AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, GENERATOR_VERSION,
 };
@@ -15,32 +16,41 @@ use uuid::Uuid;
 
 use crate::account_storage::{AccountFiles, Origin, StoredAccount};
 
-const CHARACTERS: &str = include_str!("../../../docs/game-data/character-data.md");
-const CONES: &str = include_str!("../../../docs/game-data/light-cone-data.md");
-const RELICS: &str = include_str!("../../../docs/game-data/relic-data.md");
+const CHARACTERS: &str = include_str!("../character-names.tsv");
+const CONES: &str = include_str!("../light-cone-names.tsv");
+const RELICS: &str = include_str!("../relic-set-names.tsv");
 
 #[derive(Default)]
 pub struct AccountStore {
-    data: OnceLock<Result<PlayableData, String>>,
+    data: OnceLock<Result<TraceCatalog, String>>,
+    #[cfg(feature = "research")]
     generator: OnceLock<Result<AccountReference, String>>,
 }
 
 fn account_files() -> Result<AccountFiles, String> {
     let exe = std::env::current_exe().map_err(|error| format!("无法定位程序文件：{error}"))?;
-    let directory = exe.parent().ok_or("无法定位程序目录")?.join("accounts");
+    let directory = exe
+        .parent()
+        .ok_or("无法定位程序目录")?
+        .join(if cfg!(feature = "research") {
+            "accounts"
+        } else {
+            "player-accounts"
+        });
     Ok(AccountFiles::new(directory))
 }
 
 impl AccountStore {
-    fn data(&self) -> Result<&PlayableData, String> {
+    fn data(&self) -> Result<&TraceCatalog, String> {
         self.data
             .get_or_init(|| {
-                PlayableData::bundled().map_err(|error| format!("读取账号资料失败：{error}"))
+                TraceCatalog::bundled().map_err(|error| format!("读取账号资料失败：{error}"))
             })
             .as_ref()
             .map_err(Clone::clone)
     }
 
+    #[cfg(feature = "research")]
     fn generator(&self) -> Result<&AccountReference, String> {
         self.generator
             .get_or_init(|| {
@@ -181,23 +191,22 @@ pub async fn player_import_account(
         let name = validated_name(&name)?;
         let id = Uuid::new_v4();
         let (raw, report) = parse_import(&json, &format!("import-{id}"))?;
-        app.state::<AccountStore>().save(
-            StoredAccount::new(
-                id,
-                name,
-                raw,
-                Origin::Imported {
-                    filename: source_filename(&file_name).into(),
-                    original_json: json,
-                    report,
-                },
-            ),
-        )
+        app.state::<AccountStore>().save(StoredAccount::new(
+            id,
+            name,
+            raw,
+            Origin::Imported {
+                filename: source_filename(&file_name).into(),
+                original_json: json,
+                report,
+            },
+        ))
     })
     .await
     .map_err(|error| format!("导入任务失败：{error}"))?
 }
 
+#[cfg(feature = "research")]
 #[tauri::command]
 pub async fn player_generate_account(
     app: AppHandle,
@@ -235,24 +244,23 @@ pub async fn player_generate_account(
         let config =
             serde_json::to_value(&request).map_err(|error| format!("保存生成参数失败：{error}"))?;
         let name = name.unwrap_or_else(|| format!("生成账号 {}", &id.simple().to_string()[..8]));
-        store.save(
-            StoredAccount::new(
-                id,
-                name,
-                generated.account,
-                Origin::Generated {
-                    request: config,
-                    seed: seed.to_string(),
-                    generator_version: GENERATOR_VERSION.into(),
-                    report,
-                },
-            ),
-        )
+        store.save(StoredAccount::new(
+            id,
+            name,
+            generated.account,
+            Origin::Generated {
+                request: config,
+                seed: seed.to_string(),
+                generator_version: GENERATOR_VERSION.into(),
+                report,
+            },
+        ))
     })
     .await
     .map_err(|error| format!("生成任务失败：{error}"))?
 }
 
+#[cfg(feature = "research")]
 #[tauri::command]
 pub async fn player_account_catalogue(app: AppHandle) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -343,24 +351,22 @@ pub fn player_export_account(id: Uuid, kind: String) -> Result<String, String> {
 
 fn catalogue_name<'a>(catalogue: &'a str, id: &str) -> Option<&'a str> {
     catalogue.lines().find_map(|line| {
-        let mut cells = line.strip_prefix("| ")?.split('|');
-        let key = cells.next()?.trim().strip_prefix('`')?.strip_suffix('`')?;
-        (key == id).then(|| cells.next().map(str::trim)).flatten()
+        let mut fields = line.split('\t');
+        let key = fields.next()?;
+        let name = fields.next()?;
+        (key == id).then_some(name)
     })
 }
 
-fn path_label(path: GamePath) -> &'static str {
-    match path {
-        GamePath::Warrior => "毁灭",
-        GamePath::Rogue => "巡猎",
-        GamePath::Mage => "智识",
-        GamePath::Shaman => "同谐",
-        GamePath::Warlock => "虚无",
-        GamePath::Knight => "存护",
-        GamePath::Priest => "丰饶",
-        GamePath::Memory => "记忆",
-        GamePath::Elation => "欢愉",
-    }
+fn catalogue_path(id: &str) -> Option<&'static str> {
+    CHARACTERS.lines().find_map(|line| {
+        let mut fields = line.split('\t');
+        if fields.next()? != id {
+            return None;
+        }
+        fields.next()?;
+        fields.next()
+    })
 }
 
 fn relic_art_key(slot: RelicSlot) -> (&'static str, u8) {
@@ -374,10 +380,7 @@ fn relic_art_key(slot: RelicSlot) -> (&'static str, u8) {
     }
 }
 
-fn display_account(
-    entry: &StoredAccount,
-    data: &PlayableData,
-) -> Value {
+fn display_account(entry: &StoredAccount, data: &TraceCatalog) -> Value {
     let raw = &entry.raw;
     let artwork = |path: String| {
         let safe = path[1..].split('/').all(|part| {
@@ -392,8 +395,8 @@ fn display_account(
     };
     let characters: Vec<_> = raw.characters.iter().map(|character| {
         let id = &character.character_id;
-        let reference = data.characters.iter().find(|entry| &entry.id == id);
-        let binding = character.ability_version.and_then(|version| data.traces.binding(id, version));
+
+        let binding = character.ability_version.and_then(|version| data.binding(id, version));
         let mut skills = Vec::new();
         if let Some(binding) = binding {
             for (key, tab) in [("basic", "普攻"), ("skill", "战技"), ("ult", "终结技"),
@@ -436,7 +439,7 @@ fn display_account(
             "id": id,
             "name": catalogue_name(CHARACTERS, id).map(str::to_owned).unwrap_or_else(|| format!("角色 {id}")),
             "image": artwork(format!("/avatars/head-{id}.png")).unwrap_or_default(),
-            "path": reference.and_then(|entry| entry.path).map(path_label).unwrap_or_default(),
+            "path": catalogue_path(id).unwrap_or_default(),
             "level": character.level, "ascension": character.promotion, "eidolons": character.eidolons,
             "stats": [], "skills": skills, "relics": relics,
         });
@@ -482,7 +485,7 @@ mod tests {
                 report: Some(imported.report),
             },
         );
-        let view = display_account(&entry, &PlayableData::bundled().expect("catalogue"));
+        let view = display_account(&entry, &TraceCatalog::bundled().expect("catalogue"));
         assert_eq!(view["id"], id.to_string());
         let characters = view["characters"].as_array().expect("display roster");
         assert_eq!(characters.len(), 3);

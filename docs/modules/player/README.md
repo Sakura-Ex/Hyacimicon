@@ -1,6 +1,6 @@
 # Windows 玩家界面
 
-[Hyacimicon](../../../apps/) 使用 Tauri 2、TypeScript 和 Lit。账号、对局和战斗在同一本书中切换。Windows 桌面版可导入、生成和管理本地账号。浏览器提供离线预览。对局支持开局、备战、模型观战和终局演示，战斗书签提供阵容预览。
+[Hyacimicon](../../../apps/) 使用 Tauri 2、TypeScript 和 Lit。分为玩家版和研究版，两者共用书册与账号界面。玩家版录入真实局面，研究版保留模拟对局、模型观战、随机账号生成和战斗预览。版本职责与完整启动命令见[玩家版与研究版](editions.md)。以下除特别说明外描述研究版的现有功能。
 
 ## 启动
 
@@ -9,10 +9,10 @@
 ```powershell
 cd apps
 npm ci
-npm run tauri dev
+npm run tauri:research:dev
 ```
 
-`npm run dev` 在浏览器预览，`npm run build` 检查类型并构建页面，`npm run tauri build` 生成 Windows 程序和 NSIS 安装包。
+`npm run dev:research` 在浏览器预览，`npm run build:research` 检查类型并构建页面，`npm run tauri:research:build` 生成研究版 Windows 程序和 NSIS 安装包。玩家版使用 `npm run dev`、`npm run build`、`npm run tauri build`。
 
 书封、折口与纸层共用可缩放的矢量轮廓，侧边书签由 CSS 绘制。桌面窗口启动时按 1700 × 960 的书册比例套入当前屏幕宽、高各 75% 的区域。启动后窗口大小固定，标题栏保留拖动、最小化和关闭。程序读取书本实际显示边界，按物理像素对齐当前屏幕中心，右侧书签和透明留白不参与计算。安装包包含 [apps/public](../../../apps/public/) 下的页首花饰与界面图标、应用图标和两套 Noto SC 字体，字体许可位于构建产物的 `licenses/`。
 
@@ -58,7 +58,7 @@ npm run tauri dev
 
 ### 游戏图像
 
-Windows 版安装并启动后校验程序旁的 `images/StarRailRes.pack`，按清单自动下载缺失或损坏的全部游戏图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/src-tauri/star-rail-images.tsv)，货币战争局内装备、消耗品、对局角色图、羁绊图标与敌人图像来自 [Nanoka 货币战争图像清单](../../../apps/src-tauri/nanoka-images.tsv)。图像供所有账号共用。仓库和安装包仅包含来源、路径、字节数与 Git blob 校验值，不打包任何游戏美术原图。
+研究版安装并启动后校验程序旁的 `images/StarRailRes.pack`，按清单自动下载缺失或损坏的全部游戏图像。角色头像、立绘、光锥、遗器来自 [StarRailRes 清单](../../../apps/src-tauri/star-rail-images.tsv)，货币战争局内装备、消耗品、对局角色图、羁绊图标与敌人图像来自 [Nanoka 货币战争图像清单](../../../apps/src-tauri/nanoka-images.tsv)。图像供所有账号共用。仓库和安装包仅包含来源、路径、字节数与 Git blob 校验值，不打包任何游戏美术原图。
 
 Rust 校验下载的 PNG，优先转成无损 WebP，再按条目尝试 Zstandard 压缩并写入容器。每一步保留体积更小且像素无损的结果。启动时复用旧 `images/StarRailRes/` 中有效的 PNG 或 WebP，归档提交后清理对应散文件。窗口按需读取容器中的图片。TypeScript 启动校验并显示进度，文件齐全时可离线启动。普通页面禁止框选和全选文字、拖出图片以及默认右键菜单，编辑字段保留选择、复制和粘贴。
 

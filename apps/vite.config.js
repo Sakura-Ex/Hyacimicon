@@ -1,8 +1,9 @@
 import { defineConfig } from "vite";
 import { readFileSync } from "node:fs";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
+    { name: "edition-entry", transformIndexHtml: { order: "pre", handler(html) { return mode === "research" ? html : html.replace("/src/main.ts", "/src/player-main.ts"); } } },
     {
       name: "bundle-font-licenses",
       generateBundle() {
@@ -20,5 +21,5 @@ export default defineConfig({
       },
     },
   ],
-  build: { emptyOutDir: true },
-});
+  build: { emptyOutDir: true, outDir: mode === "research" ? "dist-research" : "dist" },
+}));

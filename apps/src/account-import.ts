@@ -1,4 +1,4 @@
-﻿import { html, nothing } from "lit";
+import { html, nothing } from "lit";
 import type { Account, AccountCatalogue, AccountPort, AccountSummary, ImportInspection, ImportReport } from "./contracts";
 import type { Run, Spread } from "./folio";
 import "./account-import.css";
@@ -58,6 +58,7 @@ export function accountImportView(
   select: (account: Account) => void,
   dismiss: () => void,
   initial?: { request: Record<string, unknown>; seed: string },
+  research = true,
 ) {
   let mode: "import" | "generate" = initial ? "generate" : "import";
   let modeForm: "fields" | "json" = initial ? "json" : "fields";
@@ -92,7 +93,7 @@ export function accountImportView(
   }
 
   async function changeMode(next: typeof mode) {
-    if (pending || mode === next) return;
+    if (pending || mode === next || (!research && next === "generate")) return;
     mode = next;
     error = "";
     redraw();
@@ -333,7 +334,7 @@ export function accountImportView(
     tools: html`<div class="account-workspace-tools">
       <div role="group" aria-label="添加方式">
         <button aria-pressed=${mode === "import"} ?disabled=${pending} @click=${() => changeMode("import")}>文件导入</button>
-        <button aria-pressed=${mode === "generate"} ?disabled=${pending} @click=${() => changeMode("generate")}>随机生成</button>
+        ${research ? html`<button aria-pressed=${mode === "generate"} ?disabled=${pending} @click=${() => changeMode("generate")}>随机生成</button>` : nothing}
       </div>
       <button class="account-back" ?disabled=${pending} @click=${close}>← 返回档案</button>
     </div>`,

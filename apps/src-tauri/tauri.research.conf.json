@@ -1,0 +1,31 @@
+{
+  "productName": "Hyacimicon Research",
+  "mainBinaryName": "hyacimicon-research",
+  "identifier": "io.github.sakura-ex.hyacimicon.research",
+  "build": {
+    "beforeDevCommand": "npm run dev:research",
+    "beforeBuildCommand": "npm run build:research",
+    "devUrl": "http://127.0.0.1:1421",
+    "frontendDist": "../dist-research",
+    "features": ["research"]
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Hyacimicon 研究版",
+        "width": 1360,
+        "height": 768,
+        "resizable": false,
+        "maximizable": false,
+        "zoomHotkeysEnabled": false,
+        "center": true,
+        "decorations": false,
+        "dragDropEnabled": false,
+        "transparent": true,
+        "shadow": false,
+        "backgroundColor": "#00000000"
+      }
+    ]
+  }
+}

@@ -188,11 +188,11 @@ function draw() {
   else if (page === "account") spread = accountsPage(account, accounts ?? [], accountWarnings);
   else if (page === "match") spread = matchPage(account);
   else if (page === "battle") spread = battles.spread();
-  document.title = "Hyacimicon · " + spread.title;
+  document.title = "Hyacimicon 研究版 · " + spread.title;
   render(
     html`<div class="book">
         <div class="titlebar" data-tauri-drag-region>
-          <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon</div>
+          <div class="brand" data-tauri-drag-region>${icon("hyacimicon")} Hyacimicon · 研究版</div>
           <div class="titlebar-actions">
             ${developerPreview ? html`<button type="button" class="preview-active" ?disabled=${switchingDisabled}
               @click=${leaveDeveloperPreview}>退出预览</button>` : nothing}
