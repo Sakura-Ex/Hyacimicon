@@ -1,6 +1,6 @@
 //! 导入与实际配置转换共用的节点、技能及星魂加级资料。
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use serde::Deserialize;
 
@@ -31,7 +31,7 @@ pub struct TraceBinding {
     pub rank_bonuses: BTreeMap<u8, BTreeMap<String, u8>>,
 }
 
-/// 随程序提供的版本化行迹资料。
+/// 调用方提供的版本化行迹资料。
 #[derive(Debug, Deserialize)]
 pub struct TraceCatalog {
     /// 资料快照标识。
@@ -41,9 +41,9 @@ pub struct TraceCatalog {
 }
 
 impl TraceCatalog {
-    /// 读取内置行迹资料。
-    pub fn bundled() -> Result<Self, serde_json::Error> {
-        serde_json::from_str(include_str!("../../data/reliquary-traces-v4.json"))
+    /// 读取调用者指定的行迹资料。
+    pub fn from_path(path: &Path) -> Result<Self, super::ReferenceLoadError> {
+        super::read_json(path)
     }
 
     /// 查找某个角色能力版本。

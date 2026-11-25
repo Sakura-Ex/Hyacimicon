@@ -1,0 +1,20 @@
+{
+  "rarity": "Rank4",
+  "base_type": "Warrior",
+  "lightcones": [299991],
+  "teams": [],
+  "relics": {
+    "property_list3": ["AttackAddedRatio"],
+    "property_list4": ["AttackAddedRatio"],
+    "property_list5": ["AttackAddedRatio"],
+    "property_list6": ["AttackAddedRatio"],
+    "sub_affix_property_list": ["AttackAddedRatio", "CriticalChanceBase"],
+    "set4_id_list": [101],
+    "set2_id_list": [301]
+  },
+  "skill_trees": {
+    "999991001": {
+      "1": {"point_id": 999991001, "avatar_level_limit": 1, "avatar_promotion_limit": 0, "level_up_skill_id": [999991101], "pre_point": []}
+    }
+  }
+}

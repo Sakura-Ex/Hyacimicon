@@ -2,14 +2,14 @@
 
 use std::{env, error::Error, fs, io, path::PathBuf};
 
-use account_core::import::reliquary::import_reliquary_archive;
+use account_core::{import::reliquary::import_reliquary_archive, reference::TraceCatalog};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<_> = env::args_os().skip(1).collect();
-    if arguments.len() != 2 {
+    if arguments.len() != 3 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            "用法：import_reliquary <导出 JSON 路径> <输出目录>",
+            "用法：import_reliquary <导出 JSON 路径> <输出目录> <行迹 JSON>",
         )
         .into());
     }
@@ -21,7 +21,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "输入文件名应包含有效配置标识")
         })?;
-    let imported = import_reliquary_archive(&fs::read_to_string(input.as_path())?, config_id)?;
+    let catalog = TraceCatalog::from_path(&PathBuf::from(&arguments[2]))?;
+    let imported =
+        import_reliquary_archive(&fs::read_to_string(input.as_path())?, config_id, &catalog)?;
     fs::create_dir_all(&output)?;
     fs::write(
         output.join("account.json"),
