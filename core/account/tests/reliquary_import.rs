@@ -1,8 +1,10 @@
+#![cfg(feature = "private-data-tests")]
+
 //! 来源适配的固定预期、库存关系和错误路径。
 
 use account_core::{
     RAW_ACCOUNT_SCHEMA_VERSION, RelicMainStat, RelicSlot, RelicSubStat,
-    import::reliquary::{ImportError, import_reliquary_archive},
+    import::reliquary::{ImportError, ReliquaryImport, import_reliquary_archive},
 };
 use serde_json::{Value, json};
 
@@ -16,7 +18,7 @@ fn fixture() -> Value {
 
 /// 核对具体字段和失败原因，避免把其他解析错误当成预期拒绝。
 fn assert_field_error(value: Value, path: &str, reason: &str) {
-    let error = import_reliquary_archive(&value.to_string(), "fixture").unwrap_err();
+    let error = import_with_catalog(&value.to_string(), "fixture").unwrap_err();
     match error {
         ImportError::Field {
             path: actual_path,
@@ -31,7 +33,7 @@ fn assert_field_error(value: Value, path: &str, reason: &str) {
 
 #[test]
 fn imports_complete_inventory_and_keeps_source_fields_separate() {
-    let imported = import_reliquary_archive(EXPORT, "fixture").unwrap();
+    let imported = import_with_catalog(EXPORT, "fixture").unwrap();
     let account = &imported.account;
     assert_eq!(account.schema_version, RAW_ACCOUNT_SCHEMA_VERSION);
     assert_eq!(account.config_id, "fixture");
@@ -85,7 +87,7 @@ fn imports_complete_inventory_and_keeps_source_fields_separate() {
 
 #[test]
 fn binds_ability_versions_special_skills_and_all_trace_labels() {
-    let imported = import_reliquary_archive(EXPORT, "fixture").unwrap();
+    let imported = import_with_catalog(EXPORT, "fixture").unwrap();
     let welt = &imported.account.characters[0];
     assert_eq!(welt.ability_version, Some(1));
     assert_eq!(welt.traces.skill_levels["11004001"], 3);
@@ -117,7 +119,7 @@ fn preserves_missing_trace_data_as_unknown_with_paths() {
         .as_object_mut()
         .unwrap()
         .remove("skill");
-    let imported = import_reliquary_archive(&value.to_string(), "fixture").unwrap();
+    let imported = import_with_catalog(&value.to_string(), "fixture").unwrap();
     let welt = &imported.account.characters[0];
     assert!(!welt.traces.node_unlocks.contains_key("11004201"));
     assert!(!welt.traces.skill_levels.contains_key("11004002"));
@@ -280,7 +282,7 @@ fn rejects_only_percentage_substats_that_underflow_to_zero() {
     let mut value = fixture();
     value["relics"][0]["substats"][1]["value"] = json!(1e-320);
     value["relics"][0]["substats"][0]["value"] = json!(f64::from_bits(1));
-    let imported = import_reliquary_archive(&value.to_string(), "fixture").unwrap();
+    let imported = import_with_catalog(&value.to_string(), "fixture").unwrap();
     assert_eq!(
         imported.account.relics[0].substats[&RelicSubStat::DefPercent],
         1e-322
@@ -293,14 +295,14 @@ fn rejects_only_percentage_substats_that_underflow_to_zero() {
 
 #[test]
 fn reports_malformed_json_and_missing_required_fields() {
-    let error = import_reliquary_archive("{", "fixture").unwrap_err();
+    let error = import_with_catalog("{", "fixture").unwrap_err();
     assert!(matches!(error, ImportError::Json(_)));
     let mut value = fixture();
     value["characters"][0]
         .as_object_mut()
         .unwrap()
         .remove("level");
-    let error = import_reliquary_archive(&value.to_string(), "fixture").unwrap_err();
+    let error = import_with_catalog(&value.to_string(), "fixture").unwrap_err();
     match error {
         ImportError::Json(error) => assert!(error.to_string().contains("missing field `level`")),
         other => panic!("预期字段缺失错误，实际为 {other}"),
@@ -311,11 +313,16 @@ fn reports_malformed_json_and_missing_required_fields() {
 fn reports_unknown_extension_paths_without_retaining_source_values() {
     let mut value = fixture();
     value["characters"][0]["future_configuration"] = json!({"variant": 2});
-    let imported = import_reliquary_archive(&value.to_string(), "fixture").unwrap();
+    let imported = import_with_catalog(&value.to_string(), "fixture").unwrap();
     assert_eq!(imported.report.warnings.len(), 1);
     assert_eq!(
         imported.report.warnings[0].path,
         "characters[0].future_configuration"
     );
     assert!(imported.report.warnings[0].message.contains("待适配"));
+}
+
+mod support;
+fn import_with_catalog(input: &str, id: &str) -> Result<ReliquaryImport, ImportError> {
+    import_reliquary_archive(input, id, &support::trace_catalog())
 }

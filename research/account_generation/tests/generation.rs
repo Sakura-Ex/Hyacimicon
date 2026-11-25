@@ -1,26 +1,32 @@
 //! 验证账号、单角色与遗器生成结果及其约束和转换行为。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+#[cfg(feature = "private-data-tests")]
+use std::collections::BTreeSet;
 
+#[cfg(feature = "private-data-tests")]
 use account_core::{
-    RawAccount, RelicMainStat, RelicSlot, RelicSubStat,
+    RawAccount,
     playable::{
         CharacterOrigin,
         conversion::{ConversionRequest, convert_playable_account},
     },
-    reference::PlayableData,
+};
+use account_core::{RelicMainStat, RelicSlot, RelicSubStat};
+#[cfg(feature = "private-data-tests")]
+use account_generator::{
+    AccountRequest, CharacterSpec, LightConeSpec, generate_account, generate_character,
 };
 use account_generator::{
-    AccountReference, AccountRequest, ChaCha8Rng, CharacterSpec, GenerationError, LightConeSpec,
-    RelicRequest, RelicSpec, SeedableRng, generate_account, generate_character, generate_relic,
-    score_relic,
+    ChaCha8Rng, GenerationError, RelicRequest, RelicSpec, SeedableRng, generate_relic, score_relic,
 };
 
 /// 省略账号 ID 时，用同一种子可重放账号，所有光锥和遗器引用均使用生成的 ID。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn omitted_account_id_is_replayable_and_names_the_equipment_instances() {
     let request: AccountRequest = serde_json::from_str(r#"{"character_count": 1}"#).unwrap();
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let draw = |rng: &mut ChaCha8Rng| generate_account(&request, &reference, rng).unwrap();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
     let first = draw(&mut rng);
@@ -53,9 +59,10 @@ fn omitted_account_id_is_replayable_and_names_the_equipment_instances() {
 }
 
 /// 同一随机源连续生成空账号也会分别命名，显式传入空白名称仍属于无效请求。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn empty_accounts_get_individual_ids_and_explicit_blank_ids_are_invalid() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
     let request: AccountRequest = serde_json::from_str(r#"{"character_count": 0}"#).unwrap();
     let first = generate_account(&request, &reference, &mut rng).unwrap();
@@ -72,13 +79,14 @@ fn empty_accounts_get_individual_ids_and_explicit_blank_ids_are_invalid() {
 }
 
 /// 重放角色 1204 的 JSON 存档，检查原始遗器数值及转换后的效果命中与保存前完全一致。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn saved_account_preserves_relic_values_and_effect_hit_rate() {
     let raw = generate_character(
         "replay",
         "1204",
         &CharacterSpec::default(),
-        &AccountReference::bundled().unwrap(),
+        &support::account_reference(),
         1_000_000,
         &mut ChaCha8Rng::seed_from_u64(42),
     )
@@ -86,7 +94,7 @@ fn saved_account_preserves_relic_values_and_effect_hit_rate() {
     .account;
     let saved = serde_json::to_string_pretty(&raw).unwrap();
     let restored: RawAccount = serde_json::from_str(&saved).unwrap();
-    let data = PlayableData::bundled().unwrap();
+    let data = support::playable_data();
     let request = ConversionRequest {
         config_id: "playable".into(),
         character_aliases: BTreeMap::new(),
@@ -106,9 +114,10 @@ fn saved_account_preserves_relic_values_and_effect_hit_rate() {
 }
 
 /// 验证固定种子生成精确金数账号，并可序列化后转换为可玩配置。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn sample_has_exact_gold_and_converts_with_shared_account_core() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let request = AccountRequest {
         gold_count: Some(20.0),
         core_character_ids: vec!["1310".to_owned(), "1225".to_owned()],
@@ -139,7 +148,7 @@ fn sample_has_exact_gold_and_converts_with_shared_account_core() {
     let account: RawAccount = serde_json::from_str(&serialized).unwrap();
     let playable = convert_playable_account(
         &account,
-        &PlayableData::bundled().unwrap(),
+        &support::playable_data(),
         &ConversionRequest {
             config_id: "playable".to_owned(),
             character_aliases: BTreeMap::new(),
@@ -162,9 +171,10 @@ fn sample_has_exact_gold_and_converts_with_shared_account_core() {
 }
 
 /// 验证固定唯一光锥冲突返回无解，搜索预算为零时返回预算耗尽。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn fixed_light_cones_conflict_and_budget_exhaustion_are_reported() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let spec = CharacterSpec {
         light_cone: LightConeSpec {
             light_cone_id: Some("24000".to_owned()),
@@ -370,9 +380,10 @@ fn theoretical_relic_upper_bound_uses_legal_rolls_before_score_targets() {
 }
 
 /// 为流萤禁用中档强化，验证 60 人账号仍能在 400 金预算下生成 360 件遗器。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let request = AccountRequest {
         gold_count: Some(400.0),
         character_overrides: BTreeMap::from([(
@@ -394,9 +405,10 @@ fn full_roster_can_use_fallback_when_a_character_disables_middle_rolls() {
 }
 
 /// 验证全角色名单满足精确遗器均分、金数预算并转换为可玩账号。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn full_roster_meets_an_exact_score_and_converts() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let request = AccountRequest {
         gold_count: Some(400.0),
         min_mean_effective_rolls: Some(6.5),
@@ -412,7 +424,7 @@ fn full_roster_meets_an_exact_score_and_converts() {
     assert!(result.attempts <= request.max_attempts);
     let playable = convert_playable_account(
         &result.account,
-        &PlayableData::bundled().unwrap(),
+        &support::playable_data(),
         &ConversionRequest {
             config_id: "full-playable".to_owned(),
             character_aliases: BTreeMap::new(),
@@ -439,9 +451,10 @@ fn full_roster_meets_an_exact_score_and_converts() {
 }
 
 /// 验证完整角色候选范围在搜索预算内达到精确及窄区间低分目标。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn full_catalog_can_meet_exact_and_narrow_lower_score_targets_within_the_budget() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     for (min, max, attempts) in [(3.0, 3.0, 3_000), (2.99, 3.01, 10_000)] {
         let request = AccountRequest {
             gold_count: Some(120.0),
@@ -460,6 +473,7 @@ fn full_catalog_can_meet_exact_and_narrow_lower_score_targets_within_the_budget(
 }
 
 /// 验证小额预算下可组合低档和高档速度强化达到账号精确分数。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
     let mut pieces: Vec<_> = (1..=4)
@@ -497,7 +511,7 @@ fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
         max_attempts: 100,
         ..AccountRequest::new("mixed-tiers", 1)
     };
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let result =
         generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
     assert_eq!(result.account.relics[4].substats[&RelicSubStat::Spd], 2.0);
@@ -505,9 +519,10 @@ fn exact_score_can_combine_low_and_high_tiers_with_a_small_budget() {
 }
 
 /// 验证较宽账号分数区间会采样三种强化档位且结果保持在上下限内。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn wide_account_targets_sample_all_three_tiers_within_the_score_bounds() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut pieces = vec![RelicSpec {
         required_substats: vec![RelicSubStat::Spd],
         max_effective_rolls: Some(1.5),
@@ -589,9 +604,10 @@ fn exact_scored_piece_can_keep_numeric_variation_in_unscored_stats() {
 }
 
 /// 验证空账号可生成，固定统一星魂和光锥叠影时资源条件仍生效。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn empty_and_fixed_build_requests_preserve_resource_constraints() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let mut rng = ChaCha8Rng::seed_from_u64(42);
     let empty = generate_account(&AccountRequest::new("empty", 0), &reference, &mut rng).unwrap();
     assert!(empty.account.characters.is_empty());
@@ -633,6 +649,7 @@ fn empty_and_fixed_build_requests_preserve_resource_constraints() {
 }
 
 /// 验证账号品质档按角色 ID 顺序汇总报告分数，并拒绝不可达档位。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn account_tier_uses_the_scores_reported_in_character_id_order() {
     use RelicSubStat::{AtkPercent, BreakEffect, CritDmg, CritRate, Def, EffectRes, Spd};
@@ -674,7 +691,7 @@ fn account_tier_uses_the_scores_reported_in_character_id_order() {
             },
         );
     }
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     request.relic_quality_tier = Some(2);
     let result =
         generate_account(&request, &reference, &mut ChaCha8Rng::seed_from_u64(42)).unwrap();
@@ -698,9 +715,10 @@ fn account_tier_uses_the_scores_reported_in_character_id_order() {
 }
 
 /// 验证单角色生成保留指定等级、光锥配置及早期行迹状态。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn individual_character_keeps_explicit_equipment_and_early_traces() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let spec = CharacterSpec {
         level: 20,
         promotion: 0,
@@ -729,7 +747,7 @@ fn individual_character_keeps_explicit_equipment_and_early_traces() {
     assert_eq!(generated.account.light_cones[0].superimposition, 3);
     convert_playable_account(
         &generated.account,
-        &PlayableData::bundled().unwrap(),
+        &support::playable_data(),
         &ConversionRequest {
             config_id: "early-playable".to_owned(),
             character_aliases: BTreeMap::new(),
@@ -739,9 +757,10 @@ fn individual_character_keeps_explicit_equipment_and_early_traces() {
 }
 
 /// 验证零权重遗器可在每件一次的搜索预算内完成生成。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn zero_weight_relics_fit_exactly_one_attempt_per_piece() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let request = AccountRequest {
         gold_count: Some(0.5),
         character_pool: Some(vec!["1004".to_owned()]),
@@ -761,3 +780,6 @@ fn zero_weight_relics_fit_exactly_one_attempt_per_piece() {
     assert_eq!(generated.mean_effective_rolls(), 0.0);
     assert_eq!(generated.attempts, 7);
 }
+
+#[cfg(feature = "private-data-tests")]
+mod support;

@@ -1,4 +1,8 @@
-use std::{collections::BTreeSet, path::Path, sync::OnceLock};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use account_core::{
     import::reliquary::{import_reliquary_archive, ImportReport},
@@ -8,7 +12,8 @@ use account_core::{
 };
 #[cfg(feature = "research")]
 use account_generator::{
-    generate_account, AccountReference, AccountRequest, ChaCha8Rng, SeedableRng, GENERATOR_VERSION,
+    generate_account, AccountReference, AccountRequest, ChaCha8Rng, ReferenceOverrides,
+    SeedableRng, GENERATOR_VERSION,
 };
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
@@ -27,6 +32,26 @@ pub struct AccountStore {
     generator: OnceLock<Result<AccountReference, String>>,
 }
 
+fn runtime_data_root() -> Result<PathBuf, String> {
+    let root = match std::env::var_os("HYACIMICON_DATA_DIR") {
+        Some(path) if !path.is_empty() => PathBuf::from(path),
+        _ => std::env::current_exe()
+            .map_err(|error| format!("无法定位程序文件：{error}"))?
+            .parent()
+            .ok_or("无法定位程序目录")?
+            .join("runtime-data"),
+    };
+    if !root.is_dir() {
+        return Err(format!("未设置有效运行数据目录：{}。请配置 HYACIMICON_DATA_DIR 或程序旁的 runtime-data；统一账号 JSON 可以直接导入。", root.display()));
+    }
+    Ok(root)
+}
+
+fn load_trace_catalog(root: &Path) -> Result<TraceCatalog, String> {
+    let path = root.join("account/reliquary-traces-v4.json");
+    TraceCatalog::from_path(&path).map_err(|error| format!("读取账号资料失败：{error}"))
+}
+
 fn account_files() -> Result<AccountFiles, String> {
     let exe = std::env::current_exe().map_err(|error| format!("无法定位程序文件：{error}"))?;
     let directory = exe
@@ -43,9 +68,7 @@ fn account_files() -> Result<AccountFiles, String> {
 impl AccountStore {
     fn data(&self) -> Result<&TraceCatalog, String> {
         self.data
-            .get_or_init(|| {
-                TraceCatalog::bundled().map_err(|error| format!("读取账号资料失败：{error}"))
-            })
+            .get_or_init(|| load_trace_catalog(&runtime_data_root()?))
             .as_ref()
             .map_err(Clone::clone)
     }
@@ -54,7 +77,13 @@ impl AccountStore {
     fn generator(&self) -> Result<&AccountReference, String> {
         self.generator
             .get_or_init(|| {
-                AccountReference::bundled().map_err(|error| format!("读取生成器资料失败：{error}"))
+                let root = runtime_data_root()?;
+                AccountReference::from_dir(
+                    &root.join("account-generation"),
+                    Some(self.data()?),
+                    &ReferenceOverrides::default(),
+                )
+                .map_err(|error| format!("读取生成器资料失败：{error}"))
             })
             .as_ref()
             .map_err(Clone::clone)
@@ -67,11 +96,15 @@ impl AccountStore {
     }
 
     fn display(&self, entry: &StoredAccount) -> Result<Value, String> {
-        Ok(display_account(entry, self.data()?))
+        Ok(display_account(entry, self.data().ok()))
     }
 }
 
-fn parse_import(json: &str, config_id: &str) -> Result<(RawAccount, Option<ImportReport>), String> {
+fn parse_import(
+    json: &str,
+    config_id: &str,
+    store: &AccountStore,
+) -> Result<(RawAccount, Option<ImportReport>), String> {
     #[derive(serde::Deserialize)]
     struct Format {
         schema_version: Option<u32>,
@@ -85,8 +118,11 @@ fn parse_import(json: &str, config_id: &str) -> Result<(RawAccount, Option<Impor
         validate_raw_account(&raw).map_err(|error| error.to_string())?;
         Ok((raw, None))
     } else {
-        let imported =
-            import_reliquary_archive(input, config_id).map_err(|error| error.to_string())?;
+        let catalog = store
+            .data()
+            .map_err(|error| format!("Fribbels v4 导入需要对应版本的行迹绑定资料。{error}"))?;
+        let imported = import_reliquary_archive(input, config_id, catalog)
+            .map_err(|error| error.to_string())?;
         Ok((imported.account, Some(imported.report)))
     }
 }
@@ -170,9 +206,13 @@ pub async fn player_accounts(app: AppHandle) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn player_inspect_account(file_name: String, json: String) -> Result<Value, String> {
+pub async fn player_inspect_account(
+    app: AppHandle,
+    file_name: String,
+    json: String,
+) -> Result<Value, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let (raw, report) = parse_import(&json, "inspection")?;
+        let (raw, report) = parse_import(&json, "inspection", &app.state::<AccountStore>())?;
         let name: String = import_name(&file_name).chars().take(100).collect();
         Ok(json!({ "name": name, "summary": account_summary(&raw), "report": report }))
     })
@@ -190,8 +230,9 @@ pub async fn player_import_account(
     tauri::async_runtime::spawn_blocking(move || {
         let name = validated_name(&name)?;
         let id = Uuid::new_v4();
-        let (raw, report) = parse_import(&json, &format!("import-{id}"))?;
-        app.state::<AccountStore>().save(StoredAccount::new(
+        let store = app.state::<AccountStore>();
+        let (raw, report) = parse_import(&json, &format!("import-{id}"), &store)?;
+        store.save(StoredAccount::new(
             id,
             name,
             raw,
@@ -380,7 +421,7 @@ fn relic_art_key(slot: RelicSlot) -> (&'static str, u8) {
     }
 }
 
-fn display_account(entry: &StoredAccount, data: &TraceCatalog) -> Value {
+fn display_account(entry: &StoredAccount, data: Option<&TraceCatalog>) -> Value {
     let raw = &entry.raw;
     let artwork = |path: String| {
         let safe = path[1..].split('/').all(|part| {
@@ -396,7 +437,7 @@ fn display_account(entry: &StoredAccount, data: &TraceCatalog) -> Value {
     let characters: Vec<_> = raw.characters.iter().map(|character| {
         let id = &character.character_id;
 
-        let binding = character.ability_version.and_then(|version| data.binding(id, version));
+        let binding = character.ability_version.and_then(|version| data?.binding(id, version));
         let mut skills = Vec::new();
         if let Some(binding) = binding {
             for (key, tab) in [("basic", "普攻"), ("skill", "战技"), ("ult", "终结技"),
@@ -413,6 +454,15 @@ fn display_account(entry: &StoredAccount, data: &TraceCatalog) -> Value {
                     skills.push(json!({ "group": "行迹节点", "tab": key, "title": null,
                         "level": null, "description": if *unlocked { "已解锁" } else { "未解锁" }, "scaling": [] }));
                 }
+            }
+        } else {
+            for (node, level) in &character.traces.skill_levels {
+                skills.push(json!({ "group": "角色技能", "tab": format!("节点 {node}"), "title": null,
+                    "level": level, "description": "", "scaling": [] }));
+            }
+            for (node, unlocked) in &character.traces.node_unlocks {
+                skills.push(json!({ "group": "行迹节点", "tab": format!("节点 {node}"), "title": null,
+                    "level": null, "description": if *unlocked { "已解锁" } else { "未解锁" }, "scaling": [] }));
             }
         }
         let cone = character.light_cone_instance_id.as_ref()
@@ -476,20 +526,107 @@ mod tests {
     fn raw_export_can_be_reimported_and_invalid_inventory_is_rejected() {
         let input = include_str!("../../../core/account/tests/fixtures/raw_account.json");
         let expected: RawAccount = serde_json::from_str(input).expect("raw fixture");
-        let (mut raw, report) = parse_import(input, "inspection").expect("reimport raw account");
+        let store = AccountStore::default();
+        store
+            .data
+            .set(Err("runtime data unavailable".into()))
+            .unwrap();
+        let (mut raw, report) =
+            parse_import(input, "inspection", &store).expect("reimport raw account");
         assert_eq!(raw, expected);
         assert!(report.is_none());
+        let entry = StoredAccount::new(
+            Uuid::new_v4(),
+            "fixture".into(),
+            raw.clone(),
+            Origin::Imported {
+                filename: "fixture.json".into(),
+                original_json: input.into(),
+                report: None,
+            },
+        );
+        let view = store.display(&entry).expect("display without runtime data");
+        assert_eq!(
+            view["characters"].as_array().unwrap().len(),
+            raw.characters.len()
+        );
+        assert!(view["characters"][0]["skills"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|skill| skill["tab"].as_str().unwrap().starts_with("节点 ")));
         raw.characters[0].light_cone_instance_id = Some("missing-instance".into());
         let wrong = serde_json::to_string(&raw).expect("encode invalid account");
-        let error = parse_import(&wrong, "inspection").expect_err("decline missing reference");
+        let error =
+            parse_import(&wrong, "inspection", &store).expect_err("decline missing reference");
         assert!(error.contains("missing-instance") && error.contains("不存在"));
     }
 
     #[test]
+    fn fribbels_import_requires_an_explicit_catalog_and_accepts_a_synthetic_one() {
+        let source = include_str!("../tests/fixtures/synthetic-reliquary.json");
+        let unavailable = AccountStore::default();
+        unavailable
+            .data
+            .set(Err("runtime data unavailable".into()))
+            .unwrap();
+        assert!(parse_import(source, "test", &unavailable)
+            .unwrap_err()
+            .contains("行迹绑定"));
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../core/account/tests/fixtures/reference/traces.json");
+        let store = AccountStore::default();
+        store
+            .data
+            .set(Ok(TraceCatalog::from_path(&path).unwrap()))
+            .unwrap();
+        let (raw, report) = parse_import(source, "test", &store).unwrap();
+        assert_eq!(raw.characters[0].traces.skill_levels["999991001"], 2);
+        assert_eq!(report.unwrap().trace_bindings_snapshot, "synthetic-traces");
+    }
+
+    #[test]
+    fn runtime_trace_file_errors_identify_missing_and_malformed_paths() {
+        let root = std::env::temp_dir().join(format!("hyacimicon-data-test-{}", Uuid::new_v4()));
+        let file = root.join("account/reliquary-traces-v4.json");
+        let missing = load_trace_catalog(&root).unwrap_err();
+        assert!(missing.contains(&file.display().to_string()));
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "invalid json").unwrap();
+        let malformed = load_trace_catalog(&root).unwrap_err();
+        assert!(malformed.contains(&file.display().to_string()));
+        std::fs::remove_file(&file).unwrap();
+        std::fs::remove_dir(file.parent().unwrap()).unwrap();
+        std::fs::remove_dir(&root).unwrap();
+    }
+
+    #[cfg(all(feature = "research", feature = "private-data-tests"))]
+    #[test]
+    fn research_generator_loads_and_reuses_external_snapshot() {
+        let store = AccountStore::default();
+        let reference = store.generator().expect("configure private runtime data");
+        assert!(reference.character_ids().count() > 0);
+        assert!(reference.light_cone_ids().count() > 0);
+        assert!(std::ptr::eq(reference, store.generator().unwrap()));
+        let generated = generate_account(
+            &AccountRequest::new("external-snapshot", 1),
+            reference,
+            &mut ChaCha8Rng::seed_from_u64(42),
+        )
+        .unwrap();
+        assert_eq!(generated.account.game_version.as_deref(), Some("4.7"));
+        assert_eq!(generated.account.characters.len(), 1);
+    }
+
+    #[cfg(feature = "private-data-tests")]
+    #[test]
     fn fribbels_fixture_retains_roster_and_loadout() {
+        let store = AccountStore::default();
+        let catalog = store.data().expect("configure private runtime data");
         let imported = import_reliquary_archive(
             include_str!("../../../core/account/tests/fixtures/reliquary_v4.json"),
             "fixture",
+            catalog,
         )
         .expect("import fixture");
         let id = Uuid::new_v4();
@@ -503,7 +640,7 @@ mod tests {
                 report: Some(imported.report),
             },
         );
-        let view = display_account(&entry, &TraceCatalog::bundled().expect("catalogue"));
+        let view = display_account(&entry, Some(catalog));
         assert_eq!(view["id"], id.to_string());
         let characters = view["characters"].as_array().expect("display roster");
         assert_eq!(characters.len(), 3);

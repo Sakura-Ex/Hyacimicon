@@ -7,17 +7,19 @@
 在仓库根目录运行：
 
 ```powershell
-cargo run --locked -p account-core --example import_reliquary -- "local-data/archive.json" "local-data/account-import"
+cargo run --locked -p account-core --example import_reliquary -- "local-data/archive.json" "local-data/account-import" "$env:HYACIMICON_DATA_DIR/account/reliquary-traces-v4.json"
 ```
 
-第一个参数是来源文件，第二个是输出目录。示例用来源文件名分配配置 ID，向目录写入 `account.json` 和 `report.json`；再次使用相同目录时更新这两个文件。终端显示角色与库存数量、闲置数量和待补齐项。真实玩家数据及输出保存在已忽略的本地目录。
+第一个参数是来源文件，第二个是输出目录，第三个是运行时行迹绑定 JSON。示例用来源文件名分配配置 ID，向目录写入 `account.json` 和 `report.json`；再次使用相同目录时更新这两个文件。终端显示角色与库存数量、闲置数量和待补齐项。真实玩家数据及输出保存在已忽略的本地目录。
 
 库接口为：
 
 ```rust
-use account_core::import::reliquary::import_reliquary_archive;
+use account_core::{import::reliquary::import_reliquary_archive, reference::TraceCatalog};
+use std::path::Path;
 
-let imported = import_reliquary_archive(&source_json, "account-config-001")?;
+let catalog = TraceCatalog::from_path(Path::new("docs/game-data/runtime/account/reliquary-traces-v4.json"))?;
+let imported = import_reliquary_archive(&source_json, "account-config-001", &catalog)?;
 ```
 
 `source_json` 为已读取的来源 JSON 字符串，配置 ID 由调用方分配。返回 `ReliquaryImport`：
@@ -53,7 +55,7 @@ let imported = import_reliquary_archive(&source_json, "account-config-001")?;
 
 技能等级由导出器直接从账号技能树等级写出，导出时没有叠加星魂等级。`ability_version` 来自技能树版本，增强角色按该版本绑定到对应节点 ID。
 
-随 crate 提供的最小绑定资料为 `core/account/data/reliquary-traces-v4.json`：
+运行时传入的绑定资料位于私有运行数据目录 `account/reliquary-traces-v4.json`：
 
 - 快照 ID：`reliquary-traces-4.7-dfdfe3337bcf`；条目类别：`character_trace_binding`；条目 ID：`角色 ID:能力版本`。
 - 游戏资料版本：4.7；来源提交：`dfdfe3337bcfa14f000074d2dae7058118193ea6`。

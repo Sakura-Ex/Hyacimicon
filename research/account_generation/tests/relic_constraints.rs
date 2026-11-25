@@ -4,9 +4,11 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use account_core::{RelicInstance, RelicMainStat as Main, RelicSlot as Slot, RelicSubStat as Sub};
 use account_generator::{
-    AccountReference, ChaCha8Rng, CharacterSpec, GenerationError, RelicRequest, RelicSpec,
-    SeedableRng, generate_character, generate_character_relics, generate_relic, score_relic,
+    ChaCha8Rng, GenerationError, RelicRequest, RelicSpec, SeedableRng, generate_character_relics,
+    generate_relic, score_relic,
 };
+#[cfg(feature = "private-data-tests")]
+use account_generator::{CharacterSpec, generate_character};
 
 /// 仅允许中档副词条强化数值。
 const MID: [f64; 3] = [0.0, 1.0, 0.0];
@@ -397,6 +399,7 @@ fn scoring_weights_use_a_signed_hundred_point_scale() {
 }
 
 /// 当六件理论最高分为 36 时，检查第二档成品低于 18 分，第三档成品至少 18 分。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
     // 三次中档速度约为 3 分，三次中档暴击恰好为 3 分。六件理论上限为 36。
@@ -415,7 +418,7 @@ fn a_half_strength_set_is_assigned_to_just_one_quality_tier() {
         tier_weights: MID,
         ..Default::default()
     };
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     for tier in [2, 3] {
         let spec = CharacterSpec {
             relic_quality_tier: Some(tier),
@@ -571,9 +574,10 @@ fn any_positive_tier_weight_is_still_eligible_for_exact_search() {
 }
 
 /// 验证各角色品质档共用合法分数上限并应用显式分数覆盖。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn all_character_quality_tiers_use_the_same_legal_upper_and_apply_score_overrides() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let ratios = [0.0, 0.35, 0.5, 0.65, 0.8, 1.0];
     let mut spec = CharacterSpec {
         relics: Some(RelicRequest {
@@ -681,6 +685,7 @@ fn rounded_piece_limits_still_allow_the_requested_set_total() {
 }
 
 /// 验证连结绳主词条与必需副词条冲突时直接判定无解。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
     let spec = CharacterSpec {
@@ -700,7 +705,7 @@ fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
             "rope",
             "1310",
             &spec,
-            &AccountReference::bundled().unwrap(),
+            &support::account_reference(),
             3,
             &mut ChaCha8Rng::seed_from_u64(42)
         ),
@@ -709,6 +714,7 @@ fn a_conflicting_rope_is_rejected_before_spending_the_remaining_budget() {
 }
 
 /// 验证第三档品质可达到高档合法分数上限的一半。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
     let per_piece = 3.0 * 0.0648 / 0.058320003;
@@ -726,7 +732,7 @@ fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
         tier_weights: [0.0, 0.0, 1.0],
         ..Default::default()
     };
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     let generate = |tier| {
         generate_character(
             "half",
@@ -751,9 +757,10 @@ fn half_of_the_high_roll_maximum_belongs_to_the_third_tier() {
 }
 
 /// 分别只给暴击率或速度计分，检验第五档在仅允许高档数值时能达到六件遗器的理论最高分。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn graduation_tier_can_reach_the_high_roll_maximum() {
-    let reference = AccountReference::bundled().unwrap();
+    let reference = support::account_reference();
     for stat in [Sub::CritRate, Sub::Spd] {
         let mut request = RelicRequest {
             pieces: (1..=6)
@@ -789,6 +796,7 @@ fn graduation_tier_can_reach_the_high_roll_maximum() {
 }
 
 /// 各副词条权重均取 `1e-8` 且只允许中档数值时，第五档成品仍须达到六件理论最高分的 80%。
+#[cfg(feature = "private-data-tests")]
 #[test]
 fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
     let spec = CharacterSpec {
@@ -804,7 +812,7 @@ fn fifth_tier_accepts_a_positive_upper_in_normalized_score_units() {
         "normalized",
         "1310",
         &spec,
-        &AccountReference::bundled().unwrap(),
+        &support::account_reference(),
         500,
         &mut ChaCha8Rng::seed_from_u64(42),
     )
@@ -922,3 +930,6 @@ fn welt_crit_upgrades_vary_independently_of_speed_and_hit_rate_upgrades() {
     }
     assert_eq!(observed, expected);
 }
+
+#[cfg(feature = "private-data-tests")]
+mod support;
