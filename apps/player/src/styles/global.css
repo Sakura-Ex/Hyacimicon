@@ -1,0 +1,124 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--hsr-void);
+  color: var(--hsr-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-image:
+    radial-gradient(ellipse 68% 54% at 14% -6%, rgba(84, 96, 178, 0.34), transparent 62%),
+    radial-gradient(ellipse 56% 52% at 88% 96%, rgba(108, 69, 148, 0.28), transparent 60%),
+    radial-gradient(ellipse 42% 38% at 50% 42%, rgba(44, 52, 98, 0.26), transparent 72%),
+    linear-gradient(180deg, #0b0e1a 0%, #121629 55%, #0d1122 100%);
+  background-attachment: fixed;
+  overflow-x: hidden;
+}
+
+/* Faint architectural astral grid */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 50% 40%, rgba(0, 0, 0, 0.85), transparent 85%);
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--hsr-gold);
+  outline-offset: 2px;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom subtle Star Rail scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(163, 168, 196, 0.35) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(163, 168, 196, 0.32);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(237, 208, 154, 0.52);
+}
+
+@keyframes hsr-pulse-gold {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(237, 208, 154, 0.45), 0 0 14px rgba(237, 208, 154, 0.28);
+  }
+  50% {
+    box-shadow: 0 0 0 2px rgba(255, 240, 199, 0.85), 0 0 24px rgba(237, 208, 154, 0.55);
+  }
+}
+
+@keyframes hsr-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

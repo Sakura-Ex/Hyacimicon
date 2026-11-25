@@ -1,0 +1,71 @@
+:root {
+  color-scheme: dark;
+
+  /* Surface & Cosmic Obsidian Hierarchy */
+  --hsr-void: #0b0e1a;
+  --hsr-bg: #121629;
+  --hsr-surface: #1a1f38;
+  --hsr-surface-elevated: #232946;
+  --hsr-glass: rgba(17, 21, 38, 0.82);
+  --hsr-glass-strong: rgba(14, 18, 33, 0.92);
+  --hsr-glass-soft: rgba(27, 32, 56, 0.62);
+
+  /* Ink & Accent Palette */
+  --hsr-ink: #f2f1fa;
+  --hsr-ink-warm: #f6efe0;
+  --hsr-muted: #a3a8c4;
+  --hsr-dim: #737999;
+
+  --hsr-gold: #edd09a;
+  --hsr-gold-bright: #fff0c7;
+  --hsr-gold-deep: #b8924f;
+  --hsr-violet: #c2b1ff;
+  --hsr-cyan: #8ce5e5;
+  --hsr-crimson: #ef7c8e;
+  --hsr-emerald: #6bd4a5;
+
+  /* Hairlines & Glows */
+  --hsr-line: rgba(255, 255, 255, 0.11);
+  --hsr-line-strong: rgba(255, 255, 255, 0.22);
+  --hsr-line-gold: rgba(237, 208, 154, 0.36);
+  --hsr-line-violet: rgba(194, 177, 255, 0.36);
+  --hsr-glow-gold: 0 0 22px rgba(237, 208, 154, 0.26);
+  --hsr-glow-violet: 0 0 22px rgba(194, 177, 255, 0.26);
+
+  /* Official Currency Wars Fee Tier Gradients */
+  --fee-1-top: #606570;
+  --fee-1-bottom: #343842;
+  --fee-2-top: #406a56;
+  --fee-2-bottom: #293f36;
+  --fee-3-top: #3d6588;
+  --fee-3-bottom: #293d5b;
+  --fee-4-top: #70528c;
+  --fee-4-bottom: #3c3158;
+  --fee-5-top: #897351;
+  --fee-5-bottom: #433846;
+  --fee-7-top: #a78455;
+  --fee-7-bottom: #44334a;
+
+  /* Trait Tiers */
+  --tier-inactive: #4d526b;
+  --tier-bronze: #9b7c62;
+  --tier-silver: #b8bdc5;
+  --tier-gold: #d2b160;
+  --tier-prismatic: linear-gradient(135deg, #8dd9d9 0%, #e3abde 50%, #e8d999 100%);
+
+  /* Crystal Qualities */
+  --crystal-white: #dce3f0;
+  --crystal-blue: #6bb6ff;
+  --crystal-gold: #f0c869;
+  --crystal-prismatic: linear-gradient(135deg, #8cf0ef 0%, #d9a7f5 52%, #ffe299 100%);
+
+  /* Signature HSR Chamfer Clip-Paths */
+  --clip-cut-sm: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+  --clip-cut-md: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+  --clip-cut-lg: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  --clip-env-card: polygon(11.33% 0, 100% 0, 100% 100%, 0 100%, 0 8.63%);
+
+  /* Typography */
+  --font-sans: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, sans-serif;
+  --font-display: "Microsoft YaHei UI", "Segoe UI", Georgia, serif;
+}
