@@ -3,10 +3,12 @@
 pub mod character;
 pub mod equipment;
 pub mod stats;
+pub(crate) mod validation;
 
 pub use character::{CharacterConfig, TraceConfig};
 pub use equipment::{InvalidRelicSlot, LightConeInstance, RelicInstance, RelicSlot};
 pub use stats::{RelicMainStat, RelicSubStat};
+pub use validation::{RawAccountError, validate_raw_account};
 
 use serde::{Deserialize, Serialize};
 

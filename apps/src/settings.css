@@ -1,0 +1,90 @@
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+.titlebar-actions .preview-active {
+  color: var(--wine);
+  background: #eddedf;
+}
+.player-settings {
+  width: min(43rem, 88vw);
+  max-height: min(42rem, 82vh);
+  padding: 0;
+  color: var(--ink);
+  background: #fbf6f3;
+  border: 1px solid #cfbac4;
+  border-radius: 0.65rem;
+  box-shadow: 0 1rem 3rem #4b35444d;
+}
+.player-settings[open] {
+  display: flex;
+  flex-direction: column;
+}
+.player-settings::backdrop {
+  background: #33223058;
+}
+.settings-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.2rem 0.72rem;
+  border-bottom: 1px solid var(--line);
+}
+.settings-heading h2 {
+  margin: 0;
+}
+.settings-scroll {
+  min-height: 0;
+  padding: 0.8rem 1.2rem 1.15rem;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+.settings-toggle input {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: var(--wine);
+}
+.settings-toggle small {
+  display: block;
+}
+.settings-previews {
+  border-top: 1px solid var(--line);
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+}
+.settings-previews h3,
+.settings-previews h4 {
+  margin: 0;
+}
+.settings-previews h3 {
+  font-size: 1.32rem;
+}
+.settings-search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.42rem 0 0.7rem;
+}
+.settings-search input {
+  min-width: 0;
+  flex: 1;
+}
+.settings-preview-group + .settings-preview-group {
+  margin-top: 0.7rem;
+}
+.settings-preview-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.34rem;
+  margin-top: 0.28rem;
+}
+.settings-preview-group button {
+  text-align: left;
+  padding: 0.28rem 0.52rem;
+}

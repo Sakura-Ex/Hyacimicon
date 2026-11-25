@@ -189,11 +189,7 @@ fn bounded(value: u8, min: u8, max: u8, path: &str) -> Result<(), ImportError> {
 
 /// 检查角色及光锥等级和突破阶段是否相容。
 fn progression(level: u8, promotion: u8, path: &str) -> Result<(), ImportError> {
-    bounded(promotion, 0, 6, &format!("{path}.ascension"))?;
-    let min = if promotion == 0 {
-        1
-    } else {
-        10 + promotion * 10
-    };
-    bounded(level, min, 20 + promotion * 10, &format!("{path}.level"))
+    let (min, max) = crate::raw::validation::level_range(promotion)
+        .ok_or_else(|| invalid(format!("{path}.ascension"), "数值应在 0～6 范围内"))?;
+    bounded(level, min, max, &format!("{path}.level"))
 }

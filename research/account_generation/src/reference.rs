@@ -187,6 +187,16 @@ struct TraceLevel {
 
 /// 创建外部的生成参考资料。
 impl AccountReference {
+    /// 返回当前参考快照支持的角色 ID。
+    pub fn character_ids(&self) -> impl Iterator<Item = &str> {
+        self.characters.keys().map(String::as_str)
+    }
+
+    /// 返回当前参考快照支持的光锥 ID。
+    pub fn light_cone_ids(&self) -> impl Iterator<Item = &str> {
+        self.light_cones.keys().map(String::as_str)
+    }
+
     /// 加载外部资料目录。调用方可提供配套行迹资料以识别能力版本。
     ///
     /// 目录需包含 `source-manifest.json`、`character.json`、`character/<角色 ID>.json`

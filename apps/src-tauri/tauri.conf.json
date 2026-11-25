@@ -1,0 +1,42 @@
+{
+  "productName": "Hyacimicon",
+  "version": "0.1.0",
+  "identifier": "io.github.sakura-ex.hyacimicon",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Hyacimicon",
+        "width": 1360,
+        "height": 768,
+        "resizable": false,
+        "maximizable": false,
+        "zoomHotkeysEnabled": false,
+        "center": true,
+        "decorations": false,
+        "dragDropEnabled": false,
+        "transparent": true,
+        "shadow": false,
+        "backgroundColor": "#00000000"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' asset: data: game-images: http://game-images.localhost; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}

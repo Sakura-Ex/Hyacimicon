@@ -40,6 +40,18 @@ cargo test --workspace --locked --features account-generator/private-data-tests
 
 该 feature 仅启用依赖真实快照的测试；资料仍在运行时读取。缺少或无权限访问资料时，私有回归明确失败。发布产物无需嵌入这些 JSON。
 
+## 桌面版本
+
+玩家版直接读取统一账号 JSON，显示已保存的原始节点与装备，不需要运行数据目录。Fribbels v4 来源标签转换需要配套行迹绑定资料，配置后两版均支持该导入方式。
+
+研究版的账号生成与资料查询使用指定外部快照，运行前设置 `HYACIMICON_DATA_DIR`。`npm run tauri:research:dev` 在未设置该变量时可自动选用已初始化的 `docs/game-data/runtime`。直接启动构建后的程序时也可以把有权使用的运行目录放在可执行文件旁，目录名为 `runtime-data`。缺少资料时相关研究功能显示错误，账号保存和查看等独立功能仍可工作。更新目录后重启程序以重新加载资料。
+
+桌面公开测试无需真实数据；配置资料路径后可额外执行真实导入回归：
+
+```powershell
+cargo test --manifest-path apps/src-tauri/Cargo.toml --locked --features research,private-data-tests
+```
+
 ## 更新
 
 先更新并提交私有数据仓库对应快照，再更新主仓库固定引用。新版本可以放在独立目录；当前工具示例使用 `s2-v4.7`。运行 JSON 不提交到公开代码仓库。

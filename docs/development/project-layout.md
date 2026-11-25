@@ -19,7 +19,9 @@ Hyacimicon/
 │   ├── training/
 │   └── evaluation/
 └── apps/
-    └── player/
+    ├── src/
+    ├── src-tauri/
+    └── tests/
 ```
 
 | 目录 | 职责与依赖 |
@@ -31,7 +33,7 @@ Hyacimicon/
 | `core/decision/` | 用可见局面和可用资源构造模型输入，通过 `core/run/` 评估候选操作，输出运营或战斗建议。 |
 | `research/sim_native/` | 用 PyO3 提供训练和评估共用的 Python 模拟接口，依赖 Rust 模拟核心。 |
 | `research/training/`、`research/evaluation/` | 通过 `sim_native` 调用模拟，采集轨迹、训练模型、回放对局和比较策略。 |
-| `apps/player/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
+| `apps/` | 接收玩家账号数据和当前局面，调用核心接口，展示建议并记录玩家反馈。 |
 
 候选操作在整局状态副本上试算。实际对局达到正式结算条件时，由 `core/run/` 将结果写入当前整局状态一次。
 
@@ -46,7 +48,9 @@ Hyacimicon/
 
 ## 构建配置
 
-Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，Rust 依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
+核心和研究模块的 Rust crate 在各自目录维护 `Cargo.toml`，并加入仓库根 `Cargo.toml` 的 workspace。共用包配置和依赖版本在根清单维护，依赖统一由根 `Cargo.lock` 锁定。`account-generator` 通过 `version.workspace = true` 继承根清单中的项目版本。
+
+桌面应用的 Cargo 清单与锁文件放在 `apps/src-tauri/`。它通过路径依赖调用根工作区中的库，前端从 `apps/` 执行 npm 命令。
 
 Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.toml`。各模块在使用说明中提供安装、运行和验证命令。
 

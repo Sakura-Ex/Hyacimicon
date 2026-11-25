@@ -39,6 +39,8 @@ Rust crate 通过根 `Cargo.toml` 的 workspace 管理。`research/account_gener
 
 原始账号类型继续通过 `account_core::RawAccount` 等根入口使用。实际配置类型位于 `account_core::playable`，转换入口位于 `account_core::playable::conversion`，计算资料位于 `account_core::reference`。真实参考文件由[运行数据仓库](../../development/runtime-data.md)提供。
 
+`account_core::raw::validate_raw_account` 检查统一账号格式版本、原始练度和完整库存引用。读取原始账号 JSON 后可调用该入口；角色映射和生效面板计算由玩法转换按对应资料处理。
+
 ## 统一配置
 
 | 类型 | 保存内容 |
