@@ -48,7 +48,7 @@
 | `s2-v4.7/manifest.json` | 游戏版本、赛季和资料快照 ID |
 | `reliquary-traces-v4.json` | 导入与转换共用的节点、实际技能 ID 和星魂加级关系 |
 
-数值口径见[角色基础数据](../../game-data/character-data.md)、[光锥基础数据](../../game-data/light-cone-data.md)、[试用与映射](../../game-data/character-trial-mapping.md)及[小行迹表](../../game-data/currency-wars-minor-traces.md)。节点与常驻属性采用 [TurnBasedGameData 4.7 固定配置](https://github.com/DimbreathBot/TurnBasedGameData/tree/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput)。局内形态、星级、强度和伤害修正的共用数值见[货币战争角色数据](../../game-data/currency-wars-character-data.md)，由后续模块使用。
+数值口径见[角色基础数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/character-data.md)、[光锥基础数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/light-cone-data.md)、[试用与映射](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/character-trial-mapping.md)及[小行迹表](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/currency-wars-minor-traces.md)。节点与常驻属性采用 [TurnBasedGameData 4.7 固定配置](https://github.com/DimbreathBot/TurnBasedGameData/tree/dfdfe3337bcfa14f000074d2dae7058118193ea6/ExcelOutput)。局内形态、星级、强度和伤害修正的共用数值见[货币战争角色数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/currency-wars-character-data.md)，由后续模块使用。
 
 ## 转换规则
 

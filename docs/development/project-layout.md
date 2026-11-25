@@ -56,7 +56,7 @@ Python 模拟扩展的规划构建配置位于 `research/sim_native/pyproject.to
 | --- | --- |
 | `tests/<模块>/`、`examples/<模块>/` | Python 模块的自动测试和调用示例，目录名与模块对应。 |
 | Rust crate 内的 `tests/`、`tests/fixtures/` 和 `examples/` | 对应 crate 的集成测试、测试样例和可运行示例。单元测试放在源码旁。 |
-| `docs/project/`、`docs/game-data/`、`docs/development/`、`docs/modules/<模块>/` | 分别存放项目架构与规则、共用游戏数值、开发规范、模块设计与使用说明。 |
+| `docs/project/`、`docs/game-data/`、`docs/development/`、`docs/modules/<模块>/` | 分别存放项目架构与规则、私有精确规则与数值（Git 子模块）、开发规范、模块设计与使用说明。 |
 | `local-data/`、`runs/`、`checkpoints/` | 本地输入、运行记录和模型权重等产物，跨仓库资料按 [AGENTS.md](../../AGENTS.md) 的分工维护。 |
 
 各模块的示例和测试通过对应模块的公开接口调用实现。

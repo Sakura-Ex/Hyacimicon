@@ -30,4 +30,4 @@ seed=42 gold=20 mean_effective_rolls=4.5333 attempts=94
 | 核对推荐数据、生成规则与装备实例限制 | [生成设计](design.md) |
 | 接入实际配置转换 | [账号数据流](data-flow.md) |
 
-查阅游戏条目时使用[角色数据](../../game-data/character-data.md)、[光锥数据](../../game-data/light-cone-data.md)和[五星遗器数据](../../game-data/relic-data.md)。
+查阅游戏条目时使用[角色数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/character-data.md)、[光锥数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/light-cone-data.md)和[五星遗器数据](https://github.com/Sakura-Ex/Hyacimicon-rules/blob/main/relic-data.md)。
