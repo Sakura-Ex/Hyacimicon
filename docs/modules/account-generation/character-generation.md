@@ -6,10 +6,13 @@
 
 ```rust
 use account_generator::{
-    AccountReference, ChaCha8Rng, CharacterSpec, LightConeSpec, SeedableRng, generate_character,
+    AccountReference, ChaCha8Rng, CharacterSpec, LightConeSpec, ReferenceOverrides, SeedableRng, generate_character,
 };
+use account_core::reference::TraceCatalog;
+use std::path::Path;
 
-let reference = AccountReference::bundled()?;
+let traces = TraceCatalog::from_path(Path::new("docs/game-data/runtime/account/reliquary-traces-v4.json"))?;
+let reference = AccountReference::from_dir(Path::new("docs/game-data/runtime/account-generation"), Some(&traces), &ReferenceOverrides::default())?;
 let spec = CharacterSpec {
     eidolons: 2,
     light_cone: LightConeSpec {
@@ -23,7 +26,7 @@ let result = generate_character("firefly-21", "1310", &spec, &reference, 100_000
 let raw = result.account;
 ```
 
-`config_id` 关联后续实际配置，也是装备实例 ID 的前缀。参考资料可在多次调用间复用。按[账号生成说明](account-generation.md#调用-rust-接口)加载内置或外部快照。
+`config_id` 关联后续实际配置，也是装备实例 ID 的前缀。参考资料可在多次调用间复用。按[账号生成说明](account-generation.md#调用-rust-接口)加载外部快照。
 
 ## 角色与光锥
 

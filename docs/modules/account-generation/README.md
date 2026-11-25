@@ -1,13 +1,13 @@
 # 账号生成器
 
-`account-generator` 用参考资料、生成条件和随机源生成模拟账号。输出的 `RawAccount` 保存持有角色、光锥与遗器实例，以及装备关系。生成器位于 `research/account_generation/`，构建时嵌入 4.7 参考资料。
+`account-generator` 用参考资料、生成条件和随机源生成模拟账号。输出的 `RawAccount` 保存持有角色、光锥与遗器实例，以及装备关系。生成器位于 `research/account_generation/`，运行时加载指定参考快照。
 
 ## 运行默认样例
 
-在仓库根目录用 Cargo 运行：
+按[运行数据说明](../../development/runtime-data.md)初始化数据目录后，在仓库根目录用 Cargo 运行：
 
 ```powershell
-cargo run --locked -p account-generator --example generate_account
+cargo run --locked -p account-generator --example generate_account -- "$env:HYACIMICON_DATA_DIR/account-generation" "$env:HYACIMICON_DATA_DIR/account/reliquary-traces-v4.json"
 ```
 
 默认请求使用种子 42，生成 12 名角色、20 金、每件遗器平均有效词条 4.5～5 的账号。标准输出是 `RawAccount` JSON，可检查 `game_version` 为 `4.7`、`characters` 有 12 项。标准错误最后一行显示：

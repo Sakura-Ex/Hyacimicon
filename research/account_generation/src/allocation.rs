@@ -750,7 +750,7 @@ pub(super) fn distribute(total: f64, bounds: &[(f64, f64)], weights: &[f64]) -> 
 }
 
 /// 覆盖队友匹配和候选回溯边界的分配单元测试。
-#[cfg(test)]
+#[cfg(all(test, feature = "private-data-tests"))]
 mod tests {
     use super::*;
     use crate::{ChaCha8Rng, LightConeSpec, SeedableRng, generate_account};
@@ -758,7 +758,7 @@ mod tests {
     /// 验证一个队友不能同时填入同一推荐队伍的多个位置。
     #[test]
     fn preferred_teammates_only_fill_one_recommended_slot_per_character() {
-        let mut reference = AccountReference::bundled().unwrap();
+        let mut reference = crate::private_test_data::account_reference();
         reference.characters.get_mut("1004").unwrap().teams = vec![Team {
             members: vec!["1005".into(), "1103".into()],
             backups: [vec!["8009".into()], vec!["8009".into()], Vec::new()],
@@ -789,7 +789,7 @@ mod tests {
     /// 验证队伍选择和配装评分失败时会回溯尝试其他候选。
     #[test]
     fn roster_retries_when_the_first_choice_cannot_complete_equipment_or_score() {
-        let mut reference = AccountReference::bundled().unwrap();
+        let mut reference = crate::private_test_data::account_reference();
         reference.characters.get_mut("1004").unwrap().teams = vec![Team {
             members: vec!["1005".into()],
             backups: std::array::from_fn(|_| Vec::new()),
