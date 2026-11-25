@@ -7,7 +7,7 @@
 下图约定各模块的位置，表格说明职责与依赖。模块的实现状态、内部结构、接口和验证方式集中在各自的模块文档，通过[模块文档入口](../modules/README.md)查阅。
 
 ```text
-hsr-currency-wars-ai/
+Hyacimicon/
 ├── core/
 │   ├── account/
 │   ├── battle/

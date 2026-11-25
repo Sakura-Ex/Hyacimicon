@@ -4,7 +4,7 @@
 
 ## 主分支保护
 
-主分支 `main` 已启用 [GitHub 保护规则](https://github.com/Sakura-Ex/hsr-currency-wars-ai/rules/26374665)。所有改动在独立分支提交，通过 PR 合并到 `main`；至少获得一位评审批准，并通过相关检查后，使用 squash merge 合并。
+主分支 `main` 已启用 [GitHub 保护规则](https://github.com/Sakura-Ex/Hyacimicon/rules/26374665)。所有改动在独立分支提交，通过 PR 合并到 `main`；至少获得一位评审批准，并通过相关检查后，使用 squash merge 合并。
 
 ## 开发前同步
 
